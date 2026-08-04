@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "简历快填 ResumeQuickFill",
+  "version": "1.5.0",
+  "description": "在各企业招聘网站一键填充申请表单:自动识别中英文字段、注入简历附件。数据全部保存在本地,不做任何网络请求,不自动提交。",
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab",
+    "clipboardWrite",
+    "unlimitedStorage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "简历快填"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "resume-quickfill@local",
+      "strict_min_version": "115.0"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 自定义控件(React ATS 风格)</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h2 { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+    .lbl { width: 170px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    input { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    /* 仿 antd:外层 div 承载交互,内部 input 是 readonly 占位 */
+    .ant-select, .ant-picker, .ant-cascader {
+      flex: 1; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 10px;
+      background: #fff; color: #9ca3af; cursor: pointer; user-select: none;
+    }
+    .ant-select input, .ant-picker input, .ant-cascader input {
+      border: none; padding: 0; width: 100%; outline: none;
+    }
+    .rt { flex: 1; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 10px; min-height: 60px; background: #fff; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:19px">自定义控件测试页</h1>
+  <p style="color:#9ca3af;font-size:12.5px">模拟 Moka / 北森等 React ATS:下拉、日期、级联均非原生 <code>&lt;select&gt;</code>,内部 input 为 readonly。诊断扫描必须让它们现形。</p>
+
+  <h2>原生控件(应正常填充,作为对照)</h2>
+  <div class="row"><span class="lbl">姓名</span><input id="n-name"></div>
+  <div class="row"><span class="lbl">手机号码</span><input id="n-phone"></div>
+
+  <h2>自定义控件(引擎填不了,但必须被诊断到)</h2>
+  <div class="row"><span class="lbl">性别</span>
+    <div class="ant-select" id="w-gender" role="combobox" aria-expanded="false"><input readonly placeholder="请选择"></div>
+  </div>
+  <div class="row"><span class="lbl">最高学历</span>
+    <div class="ant-select" id="w-degree" role="combobox" aria-expanded="false"><input readonly placeholder="请选择"></div>
+  </div>
+  <div class="row"><span class="lbl">出生日期</span>
+    <div class="ant-picker" id="w-birth"><input readonly placeholder="请选择日期"></div>
+  </div>
+  <div class="row"><span class="lbl">意向工作城市</span>
+    <div class="ant-cascader" id="w-city" role="combobox"><input readonly placeholder="请选择城市"></div>
+  </div>
+  <div class="row"><span class="lbl">是否接受调剂</span>
+    <div class="ant-radio-group" id="w-adjust" role="radiogroup"><span>是</span> <span>否</span></div>
+  </div>
+  <div class="row"><span class="lbl">自我评价</span>
+    <div class="rt" id="w-intro" contenteditable="true"></div>
+  </div>
+
+  <h2>已有值的自定义下拉(不应报成空)</h2>
+  <div class="row"><span class="lbl">政治面貌</span>
+    <div class="ant-select" id="w-pol" role="combobox"><input readonly value="中共党员"><span>中共党员</span></div>
+  </div>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

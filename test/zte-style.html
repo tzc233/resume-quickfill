@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 中兴校招表单结构</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; max-width: 860px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h2 { font-size: 15px; margin: 22px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .blk { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: #fcfcfd; }
+    .row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+    .lbl { width: 190px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    input, select, textarea { flex: 1; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    .rng { display: flex; gap: 6px; flex: 1; align-items: center; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:19px">中兴「未来领军」表单结构(按真实字段顺序复刻)</h1>
+
+  <h2>申请信息</h2>
+  <div class="row"><span class="lbl">意向工作城市</span><input id="a-city"></div>
+  <div class="row"><span class="lbl">上传简历</span><input id="a-resume" type="file" accept=".pdf,.doc,.docx"></div>
+  <div class="row"><span class="lbl">上传照片</span><input id="a-photo" type="file" accept="image/*"></div>
+
+  <h2>个人信息</h2>
+  <div class="row"><span class="lbl">姓名</span><input id="p-name"></div>
+  <div class="row"><span class="lbl">姓名拼音（如:Li Xiaolong/Li Lin)</span><input id="p-pinyin"></div>
+  <div class="row"><span class="lbl">手机号码</span><input id="p-phone"></div>
+  <div class="row"><span class="lbl">邮箱</span><input id="p-email"></div>
+  <div class="row"><span class="lbl">证件号码</span><input id="p-id"></div>
+  <div class="row"><span class="lbl">出生日期 (年龄)</span><input id="p-birth" type="date"></div>
+  <div class="row"><span class="lbl">性别</span>
+    <select id="p-gender"><option value="">请选择</option><option>男</option><option>女</option></select></div>
+  <div class="row"><span class="lbl">籍贯</span><input id="p-hometown"></div>
+  <div class="row"><span class="lbl">民族</span><input id="p-ethnic"></div>
+  <div class="row"><span class="lbl">毕业年份</span><input id="p-gradyear"></div>
+  <div class="row"><span class="lbl">最高学历</span>
+    <select id="p-degree"><option value="">请选择</option><option>本科</option><option>硕士</option><option>博士</option></select></div>
+  <div class="row"><span class="lbl">最高学历院校所在城市</span><input id="p-schoolcity"></div>
+  <div class="row"><span class="lbl">最近毕业专业</span><input id="p-lastmajor"></div>
+  <div class="row"><span class="lbl">意向工作地1</span><input id="p-city1"></div>
+  <div class="row"><span class="lbl">意向工作地2</span><input id="p-city2"></div>
+  <div class="row"><span class="lbl">兴趣爱好</span><input id="p-hobby"></div>
+  <div class="row"><span class="lbl">国籍</span><input id="p-nation"></div>
+  <div class="row"><span class="lbl">出生国家</span><input id="p-birthcountry"></div>
+
+  <h2>教育背景</h2>
+  <div class="blk">
+    <div class="row"><span class="lbl">就读时间</span>
+      <div class="rng"><input id="e1-t1" type="month"><span>-</span><input id="e1-t2" type="month"></div></div>
+    <div class="row"><span class="lbl">学校名称</span><input id="e1-school"></div>
+    <div class="row"><span class="lbl">学院／系</span><input id="e1-college"></div>
+    <div class="row"><span class="lbl">专业名称</span><input id="e1-major"></div>
+    <div class="row"><span class="lbl">学历</span>
+      <select id="e1-degree"><option value="">请选择</option><option>学士</option><option>硕士</option><option>博士</option></select></div>
+    <div class="row"><span class="lbl">学历类型（校招）</span><input id="e1-edutype"></div>
+    <div class="row"><span class="lbl">学习形式</span><input id="e1-form"></div>
+    <div class="row"><span class="lbl">是否最高学历</span>
+      <select id="e1-highest"><option value="">请选择</option><option>是</option><option>否</option></select></div>
+    <div class="row"><span class="lbl">实验室名称</span><input id="e1-lab"></div>
+    <div class="row"><span class="lbl">导师姓名</span><input id="e1-advisor"></div>
+    <div class="row"><span class="lbl">研究方向</span><input id="e1-research"></div>
+    <div class="row"><span class="lbl">成绩排名</span><input id="e1-rank"></div>
+    <div class="row"><span class="lbl">GPA分数</span><input id="e1-gpa"></div>
+    <div class="row"><span class="lbl">GPA总分</span><input id="e1-gpatotal"></div>
+  </div>
+  <div class="blk">
+    <div class="row"><span class="lbl">就读时间</span>
+      <div class="rng"><input id="e2-t1" type="month"><span>-</span><input id="e2-t2" type="month"></div></div>
+    <div class="row"><span class="lbl">学校名称</span><input id="e2-school"></div>
+    <div class="row"><span class="lbl">学院／系</span><input id="e2-college"></div>
+    <div class="row"><span class="lbl">专业名称</span><input id="e2-major"></div>
+    <div class="row"><span class="lbl">学历</span>
+      <select id="e2-degree"><option value="">请选择</option><option>学士</option><option>硕士</option><option>博士</option></select></div>
+    <div class="row"><span class="lbl">是否最高学历</span>
+      <select id="e2-highest"><option value="">请选择</option><option>是</option><option>否</option></select></div>
+    <div class="row"><span class="lbl">成绩排名</span><input id="e2-rank"></div>
+    <div class="row"><span class="lbl">GPA分数</span><input id="e2-gpa"></div>
+    <div class="row"><span class="lbl">GPA总分</span><input id="e2-gpatotal"></div>
+  </div>
+
+  <h2>校园工作经历</h2>
+  <div class="row"><span class="lbl">校园工作经历描述及成果</span><textarea id="campus" rows="2"></textarea></div>
+
+  <h2>实习经历</h2>
+  <div class="blk">
+    <div class="row"><span class="lbl">起止时间</span>
+      <div class="rng"><input id="w1-t1" type="month"><span>-</span><input id="w1-t2" type="month">
+      <label><input type="checkbox" id="w1-now">至今</label></div></div>
+    <div class="row"><span class="lbl">公司名称</span><input id="w1-company"></div>
+    <div class="row"><span class="lbl">职位名称</span><input id="w1-title"></div>
+    <div class="row"><span class="lbl">实习使用技能</span><input id="w1-skills"></div>
+    <div class="row"><span class="lbl">经历描述及成果</span><textarea id="w1-desc" rows="2"></textarea></div>
+  </div>
+  <div class="blk">
+    <div class="row"><span class="lbl">起止时间</span>
+      <div class="rng"><input id="w2-t1" type="month"><span>-</span><input id="w2-t2" type="month">
+      <label><input type="checkbox" id="w2-now">至今</label></div></div>
+    <div class="row"><span class="lbl">公司名称</span><input id="w2-company"></div>
+    <div class="row"><span class="lbl">职位名称</span><input id="w2-title"></div>
+    <div class="row"><span class="lbl">实习使用技能</span><input id="w2-skills"></div>
+    <div class="row"><span class="lbl">经历描述及成果</span><textarea id="w2-desc" rows="2"></textarea></div>
+  </div>
+
+  <h2>项目经验</h2>
+  <div class="blk">
+    <div class="row"><span class="lbl">起止时间</span>
+      <div class="rng"><input id="j1-t1" type="month"><span>-</span><input id="j1-t2" type="month"></div></div>
+    <div class="row"><span class="lbl">项目名称</span><input id="j1-name"></div>
+    <div class="row"><span class="lbl">项目中职责</span><input id="j1-role"></div>
+    <div class="row"><span class="lbl">项目描述及成果</span><textarea id="j1-desc" rows="2"></textarea></div>
+  </div>
+
+  <h2>论文</h2>
+  <div class="blk">
+    <div class="row"><span class="lbl">论文名称</span><input id="r1-name"></div>
+    <div class="row"><span class="lbl">论文类型</span><input id="r1-type"></div>
+    <div class="row"><span class="lbl">作者顺序</span><input id="r1-order"></div>
+    <div class="row"><span class="lbl">发表时间</span><input id="r1-date" type="month"></div>
+    <div class="row"><span class="lbl">论文链接</span><input id="r1-url"></div>
+    <div class="row"><span class="lbl">论文描述</span><textarea id="r1-desc" rows="2"></textarea></div>
+  </div>
+  <div class="blk">
+    <div class="row"><span class="lbl">论文名称</span><input id="r2-name"></div>
+    <div class="row"><span class="lbl">论文类型</span><input id="r2-type"></div>
+    <div class="row"><span class="lbl">作者顺序</span><input id="r2-order"></div>
+    <div class="row"><span class="lbl">发表时间</span><input id="r2-date" type="month"></div>
+    <div class="row"><span class="lbl">论文链接</span><input id="r2-url"></div>
+    <div class="row"><span class="lbl">论文描述</span><textarea id="r2-desc" rows="2"></textarea></div>
+  </div>
+
+  <h2>竞赛</h2>
+  <div class="blk">
+    <div class="row"><span class="lbl">参赛时间</span>
+      <div class="rng"><input id="c1-t1" type="month"><span>-</span><input id="c1-t2" type="month"></div></div>
+    <div class="row"><span class="lbl">竞赛名称</span><input id="c1-name"></div>
+    <div class="row"><span class="lbl">竞赛类型</span><input id="c1-type"></div>
+    <div class="row"><span class="lbl">竞赛成绩</span><input id="c1-result"></div>
+    <div class="row"><span class="lbl">竞赛描述</span><textarea id="c1-desc" rows="2"></textarea></div>
+  </div>
+
+  <h2>荣誉奖项（含奖学金）</h2>
+  <div class="blk">
+    <div class="row"><span class="lbl">获奖时间</span><input id="d1-date" type="month"></div>
+    <div class="row"><span class="lbl">奖项名称</span><input id="d1-name"></div>
+    <div class="row"><span class="lbl">奖项类型</span><input id="d1-type"></div>
+    <div class="row"><span class="lbl">奖项成绩</span><input id="d1-result"></div>
+    <div class="row"><span class="lbl">奖项描述</span><textarea id="d1-desc" rows="2"></textarea></div>
+  </div>
+
+  <h2>编程语言能力</h2>
+  <div class="blk">
+    <div class="row"><span class="lbl">编程语言名称</span><input id="g1-name"></div>
+    <div class="row"><span class="lbl">掌握程度</span><input id="g1-level"></div>
+  </div>
+
+  <h2>外语能力</h2>
+  <div class="blk">
+    <div class="row"><span class="lbl">语言种类</span><input id="l1-name"></div>
+    <div class="row"><span class="lbl">认证类型</span><input id="l1-cert"></div>
+    <div class="row"><span class="lbl">成绩</span><input id="l1-score"></div>
+  </div>
+
+  <h2>技能证书</h2>
+  <div class="row"><span class="lbl">技能证书</span><textarea id="s-cert" rows="2"></textarea></div>
+
+  <h2>自我描述</h2>
+  <div class="row"><span class="lbl">自我评价</span><textarea id="s-intro" rows="3"></textarea></div>
+
+  <h2>隐私声明</h2>
+  <div class="row"><label><input type="checkbox" id="ack">本人承诺所填写信息真实、完整</label></div>
+  <div class="row"><label><input type="checkbox" id="agree">我已阅读并同意《隐私协议》</label></div>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

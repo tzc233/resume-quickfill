@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 自动展开经历区块</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 880px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h2 { font-size: 15px; margin: 18px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 6px 0; width: 800px; }
+    .lab { width: 170px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 560px; flex-shrink: 0; }
+    input, textarea { width: 100%; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    .blk { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; background: #fcfcfd; width: 800px; }
+    .addbtn { border: 1px dashed #a5b4fc; background: #eef2ff; color: #4f46e5;
+      border-radius: 8px; padding: 5px 14px; font: inherit; cursor: pointer; margin-bottom: 12px; }
+    .danger { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c;
+      border-radius: 8px; padding: 5px 14px; font: inherit; cursor: pointer; margin: 0 6px 12px 0; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">自动展开经历区块</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  每个区域默认只有 1 段,靠「+ 添加」展开。档案里有 2 段教育、2 段实习、3 篇论文。<br>
+  页面上另放了几个<strong>不该被点</strong>的按钮(提交/删除/上传/搜索),用来验证误点防护。
+</p>
+
+<h2>教育经历</h2>
+<div id="edu-list">
+  <div class="blk">
+    <div class="item"><span class="lab">学校名称</span><div class="ctl"><input class="edu-school"></div></div>
+    <div class="item"><span class="lab">专业名称</span><div class="ctl"><input class="edu-major"></div></div>
+  </div>
+</div>
+<button class="addbtn" data-add="edu">+ 添加教育经历</button>
+
+<h2>实习经历(按钮文字只写「添加」,需靠位置判断归属)</h2>
+<div id="work-list">
+  <div class="blk">
+    <div class="item"><span class="lab">公司名称</span><div class="ctl"><input class="work-company"></div></div>
+    <div class="item"><span class="lab">职位名称</span><div class="ctl"><input class="work-title"></div></div>
+    <div class="item"><span class="lab">工作描述</span><div class="ctl"><textarea class="work-desc" rows="2"></textarea></div></div>
+  </div>
+</div>
+<button class="addbtn" data-add="work">+ 添加</button>
+
+<h2>论文(档案 3 篇,页面 1 块)</h2>
+<div id="paper-list">
+  <div class="blk">
+    <div class="item"><span class="lab">论文名称</span><div class="ctl"><input class="paper-name"></div></div>
+    <div class="item"><span class="lab">作者顺序</span><div class="ctl"><input class="paper-order"></div></div>
+  </div>
+</div>
+<button class="addbtn" data-add="paper">+ 新增一篇论文</button>
+
+<h2>竞赛(档案只有 1 项,不该被展开)</h2>
+<div id="comp-list">
+  <div class="blk">
+    <div class="item"><span class="lab">竞赛名称</span><div class="ctl"><input class="comp-name"></div></div>
+  </div>
+</div>
+<button class="addbtn" data-add="comp">+ 添加竞赛</button>
+
+<h2>不该被点的按钮</h2>
+<button class="danger" id="btn-submit">提交申请</button>
+<button class="danger" id="btn-del">删除本段</button>
+<button class="danger" id="btn-upload">上传附件</button>
+<button class="danger" id="btn-search">搜索职位</button>
+<button class="danger" id="btn-addfav">添加到收藏夹</button>
+
+<script>
+/* 计数:验证「不该被点的按钮」一次都没被触发 */
+window.BAD_CLICKS = [];
+for (const id of ['btn-submit', 'btn-del', 'btn-upload', 'btn-search', 'btn-addfav']) {
+  document.getElementById(id).addEventListener('click', () => window.BAD_CLICKS.push(id));
+}
+
+const TPL = {
+  edu: `<div class="item"><span class="lab">学校名称</span><div class="ctl"><input class="edu-school"></div></div>
+        <div class="item"><span class="lab">专业名称</span><div class="ctl"><input class="edu-major"></div></div>`,
+  work: `<div class="item"><span class="lab">公司名称</span><div class="ctl"><input class="work-company"></div></div>
+         <div class="item"><span class="lab">职位名称</span><div class="ctl"><input class="work-title"></div></div>
+         <div class="item"><span class="lab">工作描述</span><div class="ctl"><textarea class="work-desc" rows="2"></textarea></div></div>`,
+  paper: `<div class="item"><span class="lab">论文名称</span><div class="ctl"><input class="paper-name"></div></div>
+          <div class="item"><span class="lab">作者顺序</span><div class="ctl"><input class="paper-order"></div></div>`,
+  comp: `<div class="item"><span class="lab">竞赛名称</span><div class="ctl"><input class="comp-name"></div></div>`,
+};
+
+for (const btn of document.querySelectorAll('[data-add]')) {
+  btn.addEventListener('click', () => {
+    const k = btn.dataset.add;
+    const blk = document.createElement('div');
+    blk.className = 'blk';
+    blk.innerHTML = TPL[k];
+    document.getElementById(`${k}-list`).appendChild(blk);
+  });
+}
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

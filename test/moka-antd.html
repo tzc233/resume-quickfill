@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · Moka antd 真实结构与填错陷阱</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; max-width: 820px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h2 { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    /* 固定像素宽度:浏览器面板隐藏时视口宽为 0,弹性布局会塌缩成零宽而失真 */
+    .item { display: flex; align-items: center; gap: 10px; margin: 7px 0; width: 760px; }
+    .item > .lab { width: 200px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 520px; flex-shrink: 0; }
+    input, textarea { width: 100%; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    /* antd Select:值在 span 里,input 是空的搜索框 —— 标签提取的主要陷阱 */
+    /* 贴合真实 antd:search 层绝对定位铺满 selector,内部 input 有真实宽度 */
+    .ant-select { border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 9px; background: #fff; display: flex; width: 520px; }
+    .ant-select-selector { display: flex; width: 500px; align-items: center; position: relative; min-height: 22px; }
+    .ant-select-selection-item { color: #1f2937; }
+    .ant-select-selection-search { position: absolute; inset: 0; }
+    .ant-select-selection-search input { border: none; padding: 0; width: 100%; height: 100%; background: transparent; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">Moka antd 结构复刻 + 填错陷阱</h1>
+
+<h2>陷阱区(这些字段都<strong>不该</strong>被填)</h2>
+<div class="item"><span class="lab">页面顶部职位搜索</span>
+  <div class="ctl"><input id="t-search" placeholder="输入职位关键字"></div></div>
+<div class="item"><span class="lab">校园工作经历描述及成果</span>
+  <div class="ctl"><textarea id="t-campus" rows="2" placeholder="可参考起止时间，校园组织名称，职位，经历成果等分条书写"></textarea></div></div>
+<div class="item"><span class="lab">导师姓名</span>
+  <div class="ctl"><input id="t-advisor"></div></div>
+<div class="item"><span class="lab">专利名称</span><div class="ctl"><input id="t-patname"></div></div>
+<div class="item"><span class="lab">专利编号</span><div class="ctl"><input id="t-patno"></div></div>
+<div class="item"><span class="lab">专利描述</span><div class="ctl"><textarea id="t-patdesc" rows="2"></textarea></div></div>
+<div class="item"><span class="lab">软件名称</span><div class="ctl"><input id="t-softname"></div></div>
+<div class="item"><span class="lab">软件概述</span><div class="ctl"><textarea id="t-softdesc" rows="2"></textarea></div></div>
+
+<h2>antd 下拉:值在 span,input 为空(标签在更上层)</h2>
+<div class="item"><span class="lab">学校名称</span>
+  <div class="ctl"><div class="ant-select"><div class="ant-select-selector">
+    <span class="ant-select-selection-item">示例大学</span>
+    <span class="ant-select-selection-search"><input id="a-school" autocomplete="off"></span>
+  </div></div></div></div>
+<div class="item"><span class="lab">学院／系</span>
+  <div class="ctl"><div class="ant-select"><div class="ant-select-selector">
+    <span class="ant-select-selection-item">硕士</span>
+    <span class="ant-select-selection-search"><input id="a-college" autocomplete="off"></span>
+  </div></div></div></div>
+<div class="item"><span class="lab">研究方向</span>
+  <div class="ctl"><div class="ant-select"><div class="ant-select-selector">
+    <span class="ant-select-selection-item">2024</span>
+    <span class="ant-select-selection-search"><input id="a-research" autocomplete="off"></span>
+  </div></div></div></div>
+<div class="item"><span class="lab">实验室名称</span>
+  <div class="ctl"><div class="ant-select"><div class="ant-select-selector">
+    <span class="ant-select-selection-item">项未填写</span>
+    <span class="ant-select-selection-search"><input id="a-lab" autocomplete="off"></span>
+  </div></div></div></div>
+
+<h2>正常字段(对照)</h2>
+<div class="item"><span class="lab">姓名</span><div class="ctl"><input id="n-name"></div></div>
+<div class="item"><span class="lab">手机号</span><div class="ctl"><input id="n-phone"></div></div>
+<div class="item"><span class="lab">公司名称</span><div class="ctl"><input id="n-company"></div></div>
+<div class="item"><span class="lab">职位名称</span><div class="ctl"><input id="n-title"></div></div>
+<div class="item"><span class="lab">论文名称</span><div class="ctl"><input id="n-paper"></div></div>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

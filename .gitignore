@@ -1,0 +1,15 @@
+# 个人档案备份 —— 内含手机号、邮箱、简历 PDF,甚至可能有证件号,绝不能进仓库
+resume-quickfill-*.json
+*-backup*.json
+profile.json
+
+# 打包产物
+简历快填-*.zip
+*.zip
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

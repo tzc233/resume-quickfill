@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 跨浏览器适配层</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; max-width: 860px; margin: 24px auto; padding: 0 16px; }
+    .case { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; background: #fff; }
+    code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:19px">跨浏览器适配层</h1>
+  <p style="color:#9ca3af;font-size:12.5px">
+    分别模拟 Chrome(只有 <code>chrome</code>,Promise 风格)与 Firefox(有 <code>browser</code>,且带
+    <code>getBrowserInfo</code>),验证 <code>api.js</code> 在两种环境下都取到正确的命名空间与权限行为。
+  </p>
+  <div id="out"></div>
+
+<script>
+/* 每个用例重新执行 api.js —— 它是 IIFE,重复执行会用新环境重新绑定 */
+window.rqfRunCrossBrowserTests = async () => {
+  const checks = {};
+  const log = [];
+
+  const loadApi = async () => {
+    const src = await (await fetch('../api.js?t=' + performance.now())).text();
+    (0, eval)(src);
+  };
+
+  // ---------- 场景一:Chrome(无 browser,chrome.* 返回 Promise) ----------
+  let requested = false;
+  delete window.browser;
+  window.chrome = {
+    runtime: { id: 'x' },                       // Chrome 没有 getBrowserInfo
+    storage: { local: { async get() { return { tag: 'chrome' }; } } },
+    permissions: {
+      async contains() { return true; },        // Chrome 安装即授予 host_permissions
+      async request() { requested = true; return true; },
+    },
+  };
+  await loadApi();
+  checks['Chrome_取到chrome命名空间'] = (await window.rqfApi.storage.local.get()).tag === 'chrome';
+  checks['Chrome_不判定为Firefox'] = window.rqfIsFirefox === false;
+  checks['Chrome_已有权限直接放行'] = (await window.rqfEnsureHost()) === true;
+  checks['Chrome_不弹权限请求'] = requested === false;
+  log.push(`Chrome:namespace=chrome, isFirefox=${window.rqfIsFirefox}, requested=${requested}`);
+
+  // ---------- 场景二:Firefox 已授权 ----------
+  requested = false;
+  window.browser = {
+    runtime: { id: 'x', getBrowserInfo: async () => ({ name: 'Firefox' }) },
+    storage: { local: { async get() { return { tag: 'firefox' }; } } },
+    permissions: {
+      async contains() { return true; },
+      async request() { requested = true; return true; },
+    },
+  };
+  await loadApi();
+  checks['Firefox_优先取browser命名空间'] = (await window.rqfApi.storage.local.get()).tag === 'firefox';
+  checks['Firefox_正确识别为Firefox'] = window.rqfIsFirefox === true;
+  checks['Firefox_已授权时不再打扰'] = (await window.rqfEnsureHost()) === true && requested === false;
+  checks['Firefox_提示文案指向about_addons'] = window.rqfNoHostMessage().includes('about:addons');
+  log.push(`Firefox(已授权):namespace=browser, isFirefox=${window.rqfIsFirefox}, requested=${requested}`);
+
+  // ---------- 场景三:Firefox 未授权,用户同意 ----------
+  requested = false;
+  window.browser.permissions = {
+    async contains() { return false; },
+    async request(p) { requested = JSON.stringify(p.origins); return true; },
+  };
+  await loadApi();
+  checks['Firefox_未授权时发起请求'] = (await window.rqfEnsureHost()) === true
+    && requested === '["<all_urls>"]';
+  log.push(`Firefox(未授权→同意):requested=${requested}`);
+
+  // ---------- 场景四:Firefox 未授权,用户拒绝 ----------
+  window.browser.permissions = {
+    async contains() { return false; },
+    async request() { return false; },
+  };
+  await loadApi();
+  checks['Firefox_用户拒绝时返回false'] = (await window.rqfEnsureHost()) === false;
+
+  // ---------- 场景五:permissions API 缺失(旧版)不应崩 ----------
+  window.browser.permissions = undefined;
+  await loadApi();
+  checks['无permissions_API时放行不崩'] = (await window.rqfEnsureHost()) === true;
+
+  // ---------- 引擎本身零浏览器 API ----------
+  const engine = await (await fetch('../content.js?t=' + performance.now())).text();
+  checks['引擎不依赖任何浏览器API'] = !/\b(chrome|browser)\.(storage|tabs|runtime|scripting|downloads|permissions)\b/.test(engine);
+
+  const out = document.getElementById('out');
+  out.innerHTML = log.map((l) => `<div class="case">${l}</div>`).join('');
+  const fails = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k);
+  const r = { page: 'cross-browser.html', pass: fails.length === 0, total: Object.keys(checks).length, fails };
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:sticky;top:0;z-index:9;padding:8px 14px;color:#fff;font-size:13px;'
+    + `background:${r.pass ? '#16a34a' : '#dc2626'}`;
+  bar.textContent = r.pass ? `✅ ${r.total} 项断言全部通过` : `❌ 失败:${fails.join('、')}`;
+  document.body.prepend(bar);
+  try { parent.postMessage({ __rqf: true, ...r }, '*'); } catch { }
+  return r;
+};
+
+if (/[?&]run=1/.test(location.search)) window.rqfRunCrossBrowserTests();
+</script>
+</body>
+</html>

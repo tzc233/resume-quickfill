@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · Moka 年/月拆分日期</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; max-width: 820px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h2 { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+    .item > .lab { width: 150px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { flex: 1; display: flex; align-items: center; gap: 6px; }
+    input, textarea { padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    .ymbox { display: flex; align-items: center; gap: 3px; }
+    .ymbox input { width: 70px; }
+    .full { flex: 1; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">Moka 年/月拆分日期</h1>
+<p style="color:#9ca3af;font-size:12.5px">日期不是 <code>type=month</code>,而是两个文本框 + 「年」「月」单位后缀。一段经历共四个框:起始年、起始月、结束年、结束月。</p>
+
+<h2>教育背景</h2>
+<div class="item"><span class="lab">就读时间</span><div class="ctl">
+  <span class="ymbox"><input id="e1-sy"><span>年</span></span>
+  <span class="ymbox"><input id="e1-sm"><span>月</span></span>
+  <span>-</span>
+  <span class="ymbox"><input id="e1-ey"><span>年</span></span>
+  <span class="ymbox"><input id="e1-em"><span>月</span></span>
+</div></div>
+<div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="e1-school" class="full"></div></div>
+<div class="item"><span class="lab">专业名称</span><div class="ctl"><input id="e1-major" class="full"></div></div>
+
+<div class="item"><span class="lab">就读时间</span><div class="ctl">
+  <span class="ymbox"><input id="e2-sy"><span>年</span></span>
+  <span class="ymbox"><input id="e2-sm"><span>月</span></span>
+  <span>-</span>
+  <span class="ymbox"><input id="e2-ey"><span>年</span></span>
+  <span class="ymbox"><input id="e2-em"><span>月</span></span>
+</div></div>
+<div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="e2-school" class="full"></div></div>
+<div class="item"><span class="lab">专业名称</span><div class="ctl"><input id="e2-major" class="full"></div></div>
+
+<h2>实习经历(第一段在职,结束时间勾「至今」)</h2>
+<div class="item"><span class="lab">起止时间</span><div class="ctl">
+  <span class="ymbox"><input id="w1-sy"><span>年</span></span>
+  <span class="ymbox"><input id="w1-sm"><span>月</span></span>
+  <span>-</span>
+  <span class="ymbox"><input id="w1-ey"><span>年</span></span>
+  <span class="ymbox"><input id="w1-em"><span>月</span></span>
+  <label><input type="checkbox" id="w1-now">至今</label>
+</div></div>
+<div class="item"><span class="lab">公司名称</span><div class="ctl"><input id="w1-company" class="full"></div></div>
+<div class="item"><span class="lab">职位名称</span><div class="ctl"><input id="w1-title" class="full"></div></div>
+<div class="item"><span class="lab">实习使用技能</span><div class="ctl"><input id="w1-skills" class="full"></div></div>
+<div class="item"><span class="lab">经历描述及成果</span><div class="ctl"><textarea id="w1-desc" rows="2" class="full"></textarea></div></div>
+
+<div class="item"><span class="lab">起止时间</span><div class="ctl">
+  <span class="ymbox"><input id="w2-sy"><span>年</span></span>
+  <span class="ymbox"><input id="w2-sm"><span>月</span></span>
+  <span>-</span>
+  <span class="ymbox"><input id="w2-ey"><span>年</span></span>
+  <span class="ymbox"><input id="w2-em"><span>月</span></span>
+  <label><input type="checkbox" id="w2-now">至今</label>
+</div></div>
+<div class="item"><span class="lab">公司名称</span><div class="ctl"><input id="w2-company" class="full"></div></div>
+<div class="item"><span class="lab">职位名称</span><div class="ctl"><input id="w2-title" class="full"></div></div>
+<div class="item"><span class="lab">实习使用技能</span><div class="ctl"><input id="w2-skills" class="full"></div></div>
+<div class="item"><span class="lab">经历描述及成果</span><div class="ctl"><textarea id="w2-desc" rows="2" class="full"></textarea></div></div>
+
+<h2>项目经验</h2>
+<div class="item"><span class="lab">起止时间</span><div class="ctl">
+  <span class="ymbox"><input id="j1-sy"><span>年</span></span>
+  <span class="ymbox"><input id="j1-sm"><span>月</span></span>
+  <span>-</span>
+  <span class="ymbox"><input id="j1-ey"><span>年</span></span>
+  <span class="ymbox"><input id="j1-em"><span>月</span></span>
+</div></div>
+<div class="item"><span class="lab">项目名称</span><div class="ctl"><input id="j1-name" class="full"></div></div>
+<div class="item"><span class="lab">项目中职责</span><div class="ctl"><textarea id="j1-role" rows="2" class="full"></textarea></div></div>
+<div class="item"><span class="lab">项目描述及成果</span><div class="ctl"><textarea id="j1-desc" rows="2" class="full"></textarea></div></div>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 备份提醒判据</title>
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; max-width: 820px; margin: 24px auto; padding: 0 16px; }
+    .case { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 14px; margin-bottom: 10px; background: #fff; }
+    .case h3 { font-size: 13px; margin: 0 0 6px; color: #374151; }
+    code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:19px">备份提醒判据</h1>
+  <p style="color:#9ca3af;font-size:12.5px">用假的存储桩驱动 <code>backup.js</code>,验证四种状态与提示条渲染。</p>
+  <div id="cases"></div>
+
+<script>
+const DAY = 86400000;
+// 假的扩展存储:每个用例注入不同的时间戳。
+// backup.js 走的是 api.js 的适配层,所以这里伪造 rqfApi 而非 chrome。
+let FAKE = {};
+window.rqfApi = { storage: { local: { async get() { return FAKE; } } } };
+</script>
+<script src="../backup.js"></script>
+<script>
+const CASES = [
+  { name: '从未备份过(含简历)', st: { profile: {}, resumeFile: { name: 'a.pdf' } },
+    expect: { level: 'warn', has: '从未备份' } },
+  { name: '档案改过但没备份', st: { profile: {}, lastBackupAt: Date.now() - 3 * DAY, profileUpdatedAt: Date.now() - 1 * DAY },
+    expect: { level: 'warn', has: '改动尚未备份' } },
+  { name: '超过 30 天没备份', st: { profile: {}, lastBackupAt: Date.now() - 45 * DAY, profileUpdatedAt: Date.now() - 60 * DAY },
+    expect: { level: 'info', has: '45 天' } },
+  { name: '刚备份过(不该打扰)', st: { profile: {}, lastBackupAt: Date.now() - 2 * DAY, profileUpdatedAt: Date.now() - 5 * DAY },
+    expect: { level: 'ok' } },
+  { name: '还没建档案(不该提醒)', st: {}, expect: { level: null } },
+];
+
+window.rqfRunBackupTests = async () => {
+  const box = document.getElementById('cases');
+  box.innerHTML = '';
+  const checks = {};
+  for (const c of CASES) {
+    FAKE = c.st;
+    const s = await window.rqfBackupStatus();
+    const div = document.createElement('div');
+    div.className = 'case';
+    div.innerHTML = `<h3>${c.name}</h3>`;
+    const host = document.createElement('div');
+    await window.rqfRenderBackup(host, () => { });
+    div.appendChild(host);
+    if (!s) div.insertAdjacentHTML('beforeend', '<div style="color:#9ca3af;font-size:12px">(无提示)</div>');
+    box.appendChild(div);
+
+    const lvl = s ? s.level : null;
+    checks[`${c.name}_等级`] = lvl === c.expect.level;
+    if (c.expect.has) checks[`${c.name}_文案`] = !!(s && s.text.includes(c.expect.has));
+    // 只有 warn / info 才渲染出提示条
+    checks[`${c.name}_提示条`] = (lvl === 'warn' || lvl === 'info') ? !host.hidden : host.hidden;
+  }
+  const fails = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k);
+  const r = { page: 'backup-status.html', pass: fails.length === 0, total: Object.keys(checks).length, fails };
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:sticky;top:0;z-index:9;padding:8px 14px;color:#fff;font-size:13px;'
+    + `background:${r.pass ? '#16a34a' : '#dc2626'}`;
+  bar.textContent = r.pass ? `✅ ${r.total} 项断言全部通过` : `❌ 失败:${fails.join('、')}`;
+  document.body.prepend(bar);
+  try { parent.postMessage({ __rqf: true, ...r }, '*'); } catch { }
+  return r;
+};
+
+if (/[?&]run=1/.test(location.search)) window.rqfRunBackupTests();
+</script>
+</body>
+</html>

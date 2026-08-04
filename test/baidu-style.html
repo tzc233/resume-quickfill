@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 百度校招表单结构</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h2 { font-size: 15px; margin: 18px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 7px 0; width: 820px; }
+    .lab { width: 210px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 560px; flex-shrink: 0; }
+    input, textarea { width: 100%; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    .blk { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; background: #fcfcfd; width: 820px; }
+    .ant-select { width: 560px; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 9px; background: #fff; display: flex; }
+    .ant-select-selector { display: flex; width: 540px; align-items: center; position: relative; min-height: 22px; }
+    .ant-select-selection-search { position: absolute; inset: 0; }
+    .ant-select-selection-search input { border: none; padding: 0; width: 100%; height: 100%; background: transparent; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">百度校招表单结构(按真实字段命名复刻)</h1>
+
+<h2>基本信息</h2>
+<div class="item"><span class="lab">真实姓名</span><div class="ctl"><input id="b-name"></div></div>
+<div class="item"><span class="lab">大陆11位手机号码</span><div class="ctl"><input id="b-phone"></div></div>
+<div class="item"><span class="lab">预计毕业时间</span><div class="ctl"><input id="b-grad"></div></div>
+<div class="item"><span class="lab">证件号码</span><div class="ctl"><input id="b-id"></div></div>
+<div class="item"><span class="lab">将简历内容解析到下方表单？解析填充并覆盖</span>
+  <div class="ctl"><input id="b-resume" type="file" accept=".pdf,.doc,.docx"></div></div>
+<div class="item"><span class="lab">上传照片</span><div class="ctl"><input id="b-photo" type="file" accept="image/*"></div></div>
+
+<h2>教育经历(学校是下拉组件,且已被百度的简历解析预填)</h2>
+<div class="blk">
+  <div class="item"><span class="lab">学校</span><div class="ctl">
+    <div class="ant-select" role="combobox"><div class="ant-select-selector">
+      <span class="ant-select-selection-item">示例大学</span>
+      <span class="ant-select-selection-search"><input id="e1-school-inner" readonly></span>
+    </div></div></div></div>
+  <div class="item"><span class="lab">开始时间</span><div class="ctl"><input id="e1-start"></div></div>
+  <div class="item"><span class="lab">结束时间</span><div class="ctl"><input id="e1-end"></div></div>
+  <div class="item"><span class="lab">你的绩点</span><div class="ctl"><input id="e1-gpa" type="number"></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">学校</span><div class="ctl">
+    <div class="ant-select" role="combobox"><div class="ant-select-selector">
+      <span class="ant-select-selection-item">样例学院</span>
+      <span class="ant-select-selection-search"><input id="e2-school-inner" readonly></span>
+    </div></div></div></div>
+  <div class="item"><span class="lab">开始时间</span><div class="ctl"><input id="e2-start"></div></div>
+  <div class="item"><span class="lab">结束时间</span><div class="ctl"><input id="e2-end"></div></div>
+  <div class="item"><span class="lab">你的绩点</span><div class="ctl"><input id="e2-gpa" type="number"></div></div>
+</div>
+
+<h2>学术成果(每篇一块)</h2>
+<div class="blk">
+  <div class="item"><span class="lab">论文名称</span><div class="ctl"><input id="r1-name"></div></div>
+  <div class="item"><span class="lab">会议/期刊名称</span><div class="ctl"><input id="r1-venue"></div></div>
+  <div class="item"><span class="lab">论文链接</span><div class="ctl"><input id="r1-url"></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">论文名称</span><div class="ctl"><input id="r2-name"></div></div>
+  <div class="item"><span class="lab">会议/期刊名称</span><div class="ctl"><input id="r2-venue"></div></div>
+  <div class="item"><span class="lab">论文链接</span><div class="ctl"><input id="r2-url"></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">论文名称</span><div class="ctl"><input id="r3-name"></div></div>
+  <div class="item"><span class="lab">会议/期刊名称</span><div class="ctl"><input id="r3-venue"></div></div>
+  <div class="item"><span class="lab">论文链接</span><div class="ctl"><input id="r3-url"></div></div>
+</div>
+
+<h2>工作/实习经历</h2>
+<div class="blk">
+  <div class="item"><span class="lab">company name0</span><div class="ctl"><input id="w1-company"></div></div>
+  <div class="item"><span class="lab">开始时间</span><div class="ctl"><input id="w1-start"></div></div>
+  <div class="item"><span class="lab">结束时间</span><div class="ctl"><input id="w1-end"></div></div>
+  <div class="item"><span class="lab">所在部门</span><div class="ctl"><input id="w1-dept"></div></div>
+  <div class="item"><span class="lab">职位名称</span><div class="ctl"><input id="w1-title"></div></div>
+  <div class="item"><span class="lab">工作描述</span><div class="ctl"><textarea id="w1-desc" rows="2"></textarea></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">company name1</span><div class="ctl"><input id="w2-company"></div></div>
+  <div class="item"><span class="lab">开始时间</span><div class="ctl"><input id="w2-start"></div></div>
+  <div class="item"><span class="lab">结束时间</span><div class="ctl"><input id="w2-end"></div></div>
+  <div class="item"><span class="lab">所在部门</span><div class="ctl"><input id="w2-dept"></div></div>
+  <div class="item"><span class="lab">职位名称</span><div class="ctl"><input id="w2-title"></div></div>
+  <div class="item"><span class="lab">工作描述</span><div class="ctl"><textarea id="w2-desc" rows="2"></textarea></div></div>
+</div>
+
+<h2>项目经历(职务与职责是两个字段)</h2>
+<div class="blk">
+  <div class="item"><span class="lab">项目名称</span><div class="ctl"><input id="p1-name"></div></div>
+  <div class="item"><span class="lab">项目职务</span><div class="ctl"><input id="p1-role"></div></div>
+  <div class="item"><span class="lab">开始时间</span><div class="ctl"><input id="p1-start"></div></div>
+  <div class="item"><span class="lab">结束时间</span><div class="ctl"><input id="p1-end"></div></div>
+  <div class="item"><span class="lab">项目描述</span><div class="ctl"><textarea id="p1-desc" rows="2"></textarea></div></div>
+  <div class="item"><span class="lab">项目职责</span><div class="ctl"><textarea id="p1-duty" rows="2"></textarea></div></div>
+</div>
+
+<h2>获奖情况(六个独立输入框,每个一条)</h2>
+<div class="item"><span class="lab">奖项说明</span><div class="ctl"><input id="a1"></div></div>
+<div class="item"><span class="lab">奖项说明</span><div class="ctl"><input id="a2"></div></div>
+<div class="item"><span class="lab">奖项说明</span><div class="ctl"><input id="a3"></div></div>
+<div class="item"><span class="lab">奖项说明</span><div class="ctl"><input id="a4"></div></div>
+<div class="item"><span class="lab">奖项说明</span><div class="ctl"><input id="a5"></div></div>
+<div class="item"><span class="lab">奖项说明</span><div class="ctl"><input id="a6"></div></div>
+
+<h2>作品集(档案里没有,不应被项目描述顺手填掉)</h2>
+<div class="item"><span class="lab">作品描述</span><div class="ctl"><input id="port-desc"></div></div>
+<div class="item"><span class="lab">portfolio address</span><div class="ctl"><input id="port-url"></div></div>
+
+<h2>协议</h2>
+<div class="item"><label><input type="checkbox" id="agree">我已阅读并同意</label></div>
+<div class="item"><label><input type="checkbox" id="no-award">无获奖信息</label></div>
+<div class="item"><label><input type="checkbox" id="no-paper">无学术成果</label></div>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

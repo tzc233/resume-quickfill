@@ -1,0 +1,158 @@
+{
+  "_说明": [
+    "这是「简历快填」的档案模板。填好后在插件的 ⚙️ 档案 →「导入备份」里选中本文件即可。",
+    "以 _ 开头的键只是注释,插件会忽略,可以删掉也可以留着。",
+    "所有列表(教育/工作/项目/论文/竞赛/荣誉/外语/编程语言)都按【时间倒序】填,第一条是最新/最高的那条。",
+    "不确定或简历里没有的字段,留空字符串即可 —— 插件会明确跳过,不会瞎填。",
+    "简历附件不在本文件里,请在 ⚙️ 档案 页面单独上传 PDF。"
+  ],
+  "profile": {
+    "basic": {
+      "fullName": "张三",
+      "namePinyin": "Zhang San",
+      "firstNameEn": "San",
+      "lastNameEn": "Zhang",
+      "gender": "",
+      "birthday": "",
+      "idNumber": "",
+      "politicalStatus": "",
+      "ethnicity": "",
+      "hometown": "",
+      "nationality": "中国",
+      "birthCountry": "",
+      "hobbies": "",
+      "phone": "13800138000",
+      "email": "you@example.com",
+      "wechat": "",
+      "city": "上海",
+      "cityPath": "上海/上海市",
+      "expectedCity": "上海",
+      "expectedCityPath": "上海/上海市",
+      "expectedCity2": "",
+      "expectedSalary": "",
+      "yearsExp": "应届生",
+      "availableDate": "",
+      "gradYear": "2027",
+      "highestSchoolCity": "上海",
+      "lastMajor": "计算机科学与技术"
+    },
+
+    "_教育": "时间倒序,第一条即最高学历。「本科院校」类字段会按 degree 自动定位到对应那条。",
+    "education": [
+      {
+        "school": "某某大学",
+        "degree": "硕士",
+        "major": "计算机科学与技术",
+        "college": "计算机学院",
+        "startTime": "2024-09",
+        "endTime": "2027-06",
+        "city": "上海",
+        "isHighest": "是",
+        "eduType": "统招",
+        "studyForm": "全日制",
+        "rank": "",
+        "gpaScore": "",
+        "gpaTotal": "",
+        "lab": "",
+        "advisor": "",
+        "research": ""
+      },
+      {
+        "school": "某某学院",
+        "degree": "学士",
+        "major": "计算机科学与技术",
+        "college": "信息学院",
+        "startTime": "2020-09",
+        "endTime": "2024-06",
+        "city": "",
+        "isHighest": "否",
+        "eduType": "统招",
+        "studyForm": "全日制",
+        "rank": "2/30",
+        "gpaScore": "3.63",
+        "gpaTotal": "4.00",
+        "lab": "",
+        "advisor": "",
+        "research": ""
+      }
+    ],
+
+    "_工作": "在职的那条 endTime 写「至今」。日期框填不进「至今」会被明确跳过,配套的勾选框请自行勾。",
+    "work": [
+      {
+        "company": "某某科技",
+        "title": "算法实习生",
+        "dept": "",
+        "startTime": "2026-04",
+        "endTime": "至今",
+        "skills": "PyTorch / RAG",
+        "desc": "一段话讲清做了什么、用了什么方法、拿到什么可量化结果。"
+      }
+    ],
+
+    "projects": [
+      {
+        "name": "某某项目",
+        "role": "负责人 / 核心开发",
+        "startTime": "2024-09",
+        "endTime": "2025-12",
+        "desc": "项目背景、你的方案、最终效果。",
+        "duty": "百度等表单会把「项目职责」单列;只有一栏时会自动与 role 互相兜底。"
+      }
+    ],
+
+    "_论文": "中兴、百度会把论文拆成名称/类型/作者顺序/发表时间/链接/描述若干独立字段,所以按结构化存;只给一个文本框的表单会自动拼成整段文字。",
+    "papers": [
+      {
+        "name": "论文英文标题",
+        "type": "会议或期刊名(可注明 CCF A / SCI 一区)",
+        "authorOrder": "第一作者",
+        "date": "2026-05",
+        "url": "",
+        "desc": "一句话说明研究内容。"
+      }
+    ],
+
+    "competitions": [
+      { "name": "某某竞赛", "type": "国家级", "result": "二等奖", "startTime": "", "endTime": "", "desc": "" }
+    ],
+
+    "_荣誉": "奖学金、优秀学生等。百度用「奖项说明」作为每条的唯一输入框,会取 name。",
+    "awards": [
+      { "name": "某某一等奖学金", "type": "校级奖学金", "result": "一等", "date": "", "desc": "" }
+    ],
+
+    "languages": [
+      { "name": "英语", "cert": "CET-6", "score": "" }
+    ],
+
+    "progLangs": [
+      { "name": "Python", "level": "熟练" }
+    ],
+
+    "patents": [],
+    "softwares": [],
+
+    "skills": "分条写:掌握的框架、方法、工具。",
+    "campusWork": "学生组织、社团、助教等经历,没有就留空。",
+    "intro": "自我介绍,会被填入「自我评价 / 个人简介 / Summary」类字段。建议 150–300 字,包含身份、方向、代表成果、技能栈。",
+
+    "links": {
+      "github": "",
+      "homepage": "",
+      "linkedin": ""
+    },
+
+    "_自定义问答": "优先级高于内置规则,用来覆盖内置识别或补充内置没覆盖的字段。触发关键词用逗号分隔,字段标签包含任一关键词就填入 a 的内容。",
+    "custom": [
+      {
+        "q": "本科院校, 第一学历",
+        "a": "某某学院 · 计算机科学与技术 · 学士(2020.09–2024.06)"
+      },
+      {
+        "q": "核心课程, 主修课程",
+        "a": "数据结构与算法、计算机网络、操作系统、机器学习"
+      }
+    ]
+  }
+}

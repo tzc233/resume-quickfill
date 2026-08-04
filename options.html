@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>简历快填 · 个人档案</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="options">
+  <main class="wrap">
+    <h1>📝 简历快填 · 个人档案</h1>
+    <p class="sub">以下信息只保存在你本机浏览器中(chrome.storage.local),插件不发起任何网络请求。填得越全,自动填充命中率越高。</p>
+
+    <div id="backup-bar" hidden></div>
+
+    <section class="card">
+      <h2>基本信息</h2>
+      <div class="grid">
+        <label>姓名(中文)<input data-path="basic.fullName" placeholder="张三"></label>
+        <label>姓名拼音(姓在前)<input data-path="basic.namePinyin" placeholder="Zhang San"></label>
+        <label>名 First Name(拼音/英文)<input data-path="basic.firstNameEn" placeholder="San"></label>
+        <label>姓 Last Name(拼音/英文)<input data-path="basic.lastNameEn" placeholder="Zhang"></label>
+        <label>性别
+          <select data-path="basic.gender">
+            <option value=""></option><option>男</option><option>女</option>
+          </select>
+        </label>
+        <label>出生日期<input type="date" data-path="basic.birthday"></label>
+        <label>政治面貌
+          <select data-path="basic.politicalStatus">
+            <option value=""></option><option>中共党员</option><option>中共预备党员</option><option>共青团员</option><option>民主党派</option><option>群众</option>
+          </select>
+        </label>
+        <label>民族<input data-path="basic.ethnicity" placeholder="汉族"></label>
+        <label>籍贯<input data-path="basic.hometown"></label>
+        <label>国籍<input data-path="basic.nationality" placeholder="中国"></label>
+        <label>出生国家<input data-path="basic.birthCountry"></label>
+        <label>兴趣爱好<input data-path="basic.hobbies"></label>
+        <label>毕业年份<input data-path="basic.gradYear" placeholder="2027"></label>
+        <label>最高学历院校所在城市<input data-path="basic.highestSchoolCity" placeholder="上海"></label>
+        <label>最近毕业专业<input data-path="basic.lastMajor"></label>
+        <label>手机号<input data-path="basic.phone" placeholder="13800138000"></label>
+        <label>邮箱<input data-path="basic.email" placeholder="you@example.com"></label>
+        <label>微信号<input data-path="basic.wechat"></label>
+        <label>现居城市<input data-path="basic.city" placeholder="北京"></label>
+        <label>现居城市·级联路径<input data-path="basic.cityPath" placeholder="上海/上海市/浦东新区"></label>
+        <label>工作年限<input data-path="basic.yearsExp" placeholder="3 / 应届生"></label>
+        <label>到岗时间<input data-path="basic.availableDate" placeholder="一个月内 / 随时"></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>求职意向</h2>
+      <div class="grid">
+        <label>期望城市<input data-path="basic.expectedCity" placeholder="上海"></label>
+        <label>期望城市·级联路径<input data-path="basic.expectedCityPath" placeholder="上海/上海市/浦东新区"></label>
+        <label>期望城市 2(表单有「意向工作地2」时用)<input data-path="basic.expectedCity2"></label>
+        <label>期望薪资<input data-path="basic.expectedSalary" placeholder="35k-45k × 15"></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>证件信息</h2>
+      <p class="hint">⚠️ 证件号码属敏感信息,保存后以<strong>明文</strong>存在浏览器本地存储中。国内表单几乎必填,但要不要存由你决定——不填的话每次手动输入即可,其余字段照常自动填充。</p>
+      <div class="grid">
+        <label>证件号码(身份证)<input data-path="basic.idNumber" autocomplete="off"></label>
+      </div>
+    </section>
+
+    <section class="card" data-list="education">
+      <h2>教育经历</h2>
+      <p class="hint">按<strong>时间倒序</strong>填写(最高学历排第一条)。遇到可重复添加的教育区块时,插件会按顺序逐条填入;「本科院校」这类带学历限定的字段会自动定位到对应学历那条。</p>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一段教育经历</button>
+    </section>
+
+    <section class="card" data-list="work">
+      <h2>工作 / 实习经历</h2>
+      <p class="hint">按<strong>时间倒序</strong>填写(最近一段排第一条)。</p>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一段工作/实习经历</button>
+    </section>
+
+    <section class="card" data-list="projects">
+      <h2>项目经历</h2>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一段项目经历</button>
+    </section>
+
+    <section class="card" data-list="papers">
+      <h2>论文 / 科研成果</h2>
+      <p class="hint">中兴、华为等校招表单会把论文拆成「论文名称 / 类型 / 作者顺序 / 发表时间 / 链接 / 描述」六个独立字段,所以这里按结构化存。表单只给一个文本框时,插件会自动拼成整段文字填入。</p>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一篇论文</button>
+    </section>
+
+    <section class="card" data-list="competitions">
+      <h2>竞赛经历</h2>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一项竞赛</button>
+    </section>
+
+    <section class="card" data-list="awards">
+      <h2>荣誉奖项 / 奖学金</h2>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一项荣誉</button>
+    </section>
+
+    <section class="card" data-list="languages">
+      <h2>外语能力</h2>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一门外语</button>
+    </section>
+
+    <section class="card" data-list="progLangs">
+      <h2>编程语言能力</h2>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一门编程语言</button>
+    </section>
+
+    <section class="card" data-list="patents">
+      <h2>专利</h2>
+      <p class="hint">没有专利就留空——留空时插件会明确跳过表单里的专利字段,而不是拿论文内容去填。</p>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一项专利</button>
+    </section>
+
+    <section class="card" data-list="softwares">
+      <h2>软件著作权</h2>
+      <div class="list"></div>
+      <button class="ghost add-btn">+ 添加一项软著</button>
+    </section>
+
+    <section class="card">
+      <h2>其他文本字段</h2>
+      <label class="full">专业技能 / 技能证书<textarea rows="4" data-path="skills"></textarea></label>
+      <label class="full">校园工作经历<textarea rows="3" data-path="campusWork" placeholder="学生组织、社团、助教等"></textarea></label>
+    </section>
+
+    <section class="card">
+      <h2>在线链接</h2>
+      <div class="grid">
+        <label>GitHub<input data-path="links.github" placeholder="https://github.com/…"></label>
+        <label>个人主页 / 博客<input data-path="links.homepage"></label>
+        <label>LinkedIn<input data-path="links.linkedin"></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>自我介绍 / 自我评价</h2>
+      <label class="full"><textarea rows="6" data-path="intro" placeholder="将被填入「自我介绍 / 自我评价 / Summary / Cover Letter」类字段"></textarea></label>
+    </section>
+
+    <section class="card">
+      <h2>自定义问答</h2>
+      <p class="hint">用于各家网站的个性化问题,<strong>优先级高于内置规则</strong>,可用来纠正内置识别。「触发关键词」用逗号分隔,只要字段标签包含任一关键词,就填入对应内容。例如关键词「为什么, why join」。</p>
+      <div id="qa-list"></div>
+      <button id="qa-add" class="ghost">+ 添加一条问答</button>
+    </section>
+
+    <section class="card">
+      <h2>简历附件</h2>
+      <div id="resume-info" class="hint">未上传。上传后,遇到「上传简历 / Resume / CV / 附件」类控件会自动注入该文件。</div>
+      <div class="row-btns">
+        <label class="file-btn">选择简历文件(PDF/Word,≤ 8MB)<input type="file" id="resume-file" accept=".pdf,.doc,.docx" hidden></label>
+        <button id="resume-del" class="ghost danger" hidden>删除已存简历</button>
+      </div>
+    </section>
+
+    <div class="save-bar">
+      <button id="btn-save" class="primary">💾 保存档案</button>
+      <button id="btn-export" class="ghost">导出备份 JSON</button>
+      <label class="file-btn ghost-like">导入备份<input type="file" id="btn-import" accept=".json" hidden></label>
+      <span id="toast" class="toast"></span>
+    </div>
+  </main>
+  <script src="api.js"></script>
+  <script src="backup.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

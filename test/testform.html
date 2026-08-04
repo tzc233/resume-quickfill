@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 模拟招聘申请表</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h1 { font-size: 20px; } h2 { font-size: 15px; margin: 22px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+    .lbl { width: 150px; flex-shrink: 0; color: #374151; }
+    input, select, textarea { flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    textarea { width: 100%; }
+    .note { color: #9ca3af; font-size: 12px; }
+    button { padding: 8px 18px; border: none; border-radius: 8px; background: #4f46e5; color: #fff; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>模拟招聘申请表(插件测试沙盒)</h1>
+  <p class="note">混合了 label[for] / div 标签 / 纯 placeholder / name 属性 / aria-label 等常见表单写法,用于验证识别引擎。</p>
+  <form onsubmit="return false">
+    <h2>基本信息</h2>
+    <div class="row"><label class="lbl" for="q1">姓名 *</label><input id="q1"></div>
+    <div class="row"><span class="lbl">手机号码</span><input id="q2"></div>
+    <div class="row"><span class="lbl">邮箱</span><input id="q3" placeholder="请输入邮箱"></div>
+    <div class="row"><label class="lbl" for="q4">微信号</label><input id="q4"></div>
+    <div class="row"><span class="lbl">出生日期</span><input id="q5" type="date"></div>
+    <div class="row"><span class="lbl">性别</span>
+      <label><input type="radio" name="g" id="r-m">男</label>
+      <label><input type="radio" name="g" id="r-f">女</label>
+    </div>
+    <div class="row"><span class="lbl">现居城市</span><input id="q6"></div>
+    <div class="row"><span class="lbl">期望城市</span><input id="q7"></div>
+    <div class="row"><span class="lbl">期望薪资</span><input id="q8"></div>
+    <div class="row"><span class="lbl">工作年限</span><input id="q9" type="number"></div>
+    <div class="row"><span class="lbl">到岗时间</span><input id="q10"></div>
+    <div class="row"><span class="lbl">紧急联系人电话</span><input id="q11"></div>
+    <div class="row"><span class="lbl">政治面貌</span>
+      <select id="q31"><option value="">请选择</option><option>群众</option><option>共青团员</option><option>中共党员</option></select>
+    </div>
+    <div class="row"><span class="lbl">本科院校</span><input id="q32"></div>
+    <div class="row"><span class="lbl">科研成果 / 论文发表</span><textarea id="q33" rows="2"></textarea></div>
+    <div class="row"><span class="lbl">所获奖项</span><textarea id="q34" rows="2"></textarea></div>
+    <div class="row"><span class="lbl">英语水平</span><input id="q35"></div>
+    <div class="row"><span class="lbl">姓名(已填测试)</span><input id="q30" value="请勿覆盖"></div>
+
+    <h2>English Section (Workday-style)</h2>
+    <div class="row"><label class="lbl" for="q12">First Name</label><input id="q12"></div>
+    <div class="row"><label class="lbl" for="q13">Last Name</label><input id="q13"></div>
+    <div class="row"><span class="lbl">Email Address</span><input id="q14" placeholder="Enter your email address"></div>
+    <div class="row"><label class="lbl" for="q15">Gender</label>
+      <select id="q15"><option value="">Select...</option><option value="male">Male</option><option value="female">Female</option></select>
+    </div>
+
+    <h2>教育背景</h2>
+    <div class="row"><span class="lbl">毕业院校</span><input id="q16"></div>
+    <div class="row"><span class="lbl">学历</span>
+      <select id="q17"><option value="">请选择</option><option value="1">大专</option><option value="2">本科</option><option value="3">硕士</option><option value="4">博士</option></select>
+    </div>
+    <div class="row"><span class="lbl">专业</span><input id="q18"></div>
+    <div class="row"><span class="lbl">GPA</span><input id="q19"></div>
+    <div class="row"><span class="lbl">毕业时间</span><input id="q20" type="month"></div>
+
+    <h2>工作经历</h2>
+    <div class="row"><span class="lbl">当前公司</span><input id="q21"></div>
+    <div class="row"><span class="lbl">职位名称</span><input id="q22"></div>
+    <div class="row"><span class="lbl">应聘职位</span><input id="q23" placeholder="应填目标岗位,插件不应乱填"></div>
+    <div class="row"><span class="lbl">工作职责</span><textarea id="q24" rows="2"></textarea></div>
+
+    <h2>更多信息</h2>
+    <div class="row"><span class="lbl">自我评价</span><textarea id="q25" rows="3"></textarea></div>
+    <div class="row"><span class="lbl">为什么想加入我们?</span><textarea id="q26" rows="2"></textarea></div>
+    <div class="row"><span class="lbl">GitHub</span><input id="q27" aria-label="GitHub" type="url"></div>
+    <div class="row"><span class="lbl">个人主页</span><input id="q28" type="url"></div>
+    <div class="row"><input id="q29" name="linkedin_url" placeholder="LinkedIn URL(仅靠 name 属性识别)"></div>
+
+    <h2>附件与协议</h2>
+    <div class="row"><span class="lbl">上传头像</span><input id="f-avatar" type="file" accept="image/*"></div>
+    <div class="row"><span class="lbl">上传简历</span><input id="f-resume" type="file" accept=".pdf,.doc,.docx"></div>
+    <div class="row"><label><input type="checkbox" id="agree">我已阅读并同意《隐私协议》(插件不应勾选)</label></div>
+
+    <button type="submit">提交(测试页无动作)</button>
+  </form>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

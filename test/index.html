@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>简历快填 · 回归测试</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 14px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      max-width: 940px; margin: 28px auto; padding: 0 18px; color: #1f2937; background: #f8fafc; }
+    h1 { font-size: 21px; margin: 0 0 4px; }
+    .sub { color: #6b7280; font-size: 13px; margin: 0 0 18px; }
+    button { font: inherit; cursor: pointer; border: none; border-radius: 10px;
+      padding: 9px 18px; background: #4f46e5; color: #fff; }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: .5; cursor: default; }
+    #summary { margin: 14px 0; font-weight: 600; font-size: 15px; }
+    table { width: 100%; border-collapse: collapse; background: #fff;
+      border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+    th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+    th { background: #f8fafc; color: #6b7280; font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    .ok { color: #16a34a; font-weight: 600; }
+    .bad { color: #dc2626; font-weight: 600; }
+    .wait { color: #9ca3af; }
+    .fails { color: #dc2626; font-size: 12px; }
+    a { color: #4f46e5; }
+    /* 不能用 display:none —— 那样 iframe 内所有元素尺寸为 0,
+       引擎的可见性判断会把整页字段都判掉。移到屏幕外但保留真实布局。 */
+    iframe { position: fixed; left: -10000px; top: 0; width: 1200px; height: 1000px; border: 0; }
+    .note { margin-top: 18px; color: #6b7280; font-size: 12.5px; }
+  </style>
+</head>
+<body>
+  <h1>简历快填 · 回归测试</h1>
+  <p class="sub">每张测试页复刻一种真实 ATS 的表单结构。点下面的按钮会在隐藏 iframe 里逐页加载、注入引擎、填充并跑断言。</p>
+
+  <button id="run">▶︎ 运行全部测试</button>
+  <div id="summary"></div>
+
+  <table>
+    <thead><tr><th style="width:190px">测试页</th><th style="width:90px">结果</th><th style="width:70px">断言</th><th>覆盖场景 / 失败项</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <p class="note">
+    单独调试某一页:直接打开 <code>页面.html?run=1</code>,结果会显示在该页顶部横幅。<br>
+    测试档案在 <code>run.js</code> 的 <code>RQF_TEST_PROFILE</code>,断言在同文件的 <code>CHECKS</code>,全部是合成数据。
+  </p>
+
+  <div id="frames"></div>
+
+<script>
+const PAGES = [
+  ['testform.html',      '各种表单写法混排,含不该被填的反例字段'],
+  ['moka-style.html',    'Moka 布局:锚点在前,起止时间在区块末尾'],
+  ['zte-style.html',     '中兴校招:时间区间在锚点之前,论文/竞赛/荣誉均为结构化区块'],
+  ['moka-ym.html',       '日期拆成「年」「月」两个文本框,一段经历四个框'],
+  ['moka-antd.html',     'antd DOM 结构 + 四类填错陷阱'],
+  ['baidu-style.html',   '百度校招:奖项说明多框、项目职务/职责分列、会议期刊'],
+  ['antd-live.html',     '可交互 antd 下拉:点击展开 → 语义匹配 → 点选'],
+  ['antd-datetime.html', '可交互日历与城市级联'],
+  ['expand-blocks.html',  '自动点「+ 添加」展开区块,并防误点提交/删除'],
+  ['backup-status.html',  '备份提醒判据(从未备份 / 改过没备份 / 超 30 天)'],
+  ['cross-browser.html',  '跨浏览器适配层:Chrome / Firefox 命名空间与权限'],
+  ['custom-widgets.html','诊断:自定义控件能否被扫描看见'],
+];
+
+const rows = document.getElementById('rows');
+const cells = {};
+for (const [file, desc] of PAGES) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><a href="${file}?run=1" target="_blank">${file}</a></td>`
+    + `<td class="wait" data-k="status">待运行</td><td data-k="total"></td><td data-k="desc">${desc}</td>`;
+  rows.appendChild(tr);
+  cells[file] = {
+    status: tr.querySelector('[data-k=status]'),
+    total: tr.querySelector('[data-k=total]'),
+    desc: tr.querySelector('[data-k=desc]'),
+    defaultDesc: desc,
+  };
+}
+
+const results = {};
+window.addEventListener('message', (e) => {
+  const r = e.data;
+  if (!r || !r.__rqf || !cells[r.page]) return;
+  results[r.page] = r;
+  const c = cells[r.page];
+  c.status.textContent = r.pass ? '✅ 通过' : '❌ 失败';
+  c.status.className = r.pass ? 'ok' : 'bad';
+  c.total.textContent = r.total ?? '';
+  c.desc.innerHTML = r.pass ? c.defaultDesc
+    : `<span class="fails">失败:${(r.fails || []).join('、') || r.error || '未知'}</span>`;
+});
+
+document.getElementById('run').addEventListener('click', async () => {
+  const btn = document.getElementById('run');
+  btn.disabled = true;
+  const box = document.getElementById('frames');
+  box.innerHTML = '';
+  for (const k of Object.keys(results)) delete results[k];
+  for (const [file] of PAGES) {
+    cells[file].status.textContent = '运行中…';
+    cells[file].status.className = 'wait';
+    cells[file].total.textContent = '';
+    cells[file].desc.textContent = cells[file].defaultDesc;
+  }
+
+  // 逐页跑:并行会让多个 antd 浮层同时存在,选项匹配可能串台
+  for (const [file] of PAGES) {
+    const f = document.createElement('iframe');
+    f.src = `${file}?run=1&t=${performance.now()}`;
+    box.appendChild(f);
+    await new Promise((res) => {
+      const t = setTimeout(res, 8000);
+      const on = (e) => {
+        if (e.data && e.data.__rqf && e.data.page === file) {
+          clearTimeout(t); window.removeEventListener('message', on); res();
+        }
+      };
+      window.addEventListener('message', on);
+      f.addEventListener('load', () => setTimeout(() => { }, 0));
+    });
+  }
+
+  const all = PAGES.map(([f]) => results[f]).filter(Boolean);
+  const passed = all.filter((r) => r.pass).length;
+  const asserts = all.reduce((s, r) => s + (r.total || 0), 0);
+  const ver = all.find((r) => r.version)?.version || '?';
+  const el = document.getElementById('summary');
+  const allPass = passed === PAGES.length && all.length === PAGES.length;
+  el.className = allPass ? 'ok' : 'bad';
+  el.textContent = allPass
+    ? `✅ ${PAGES.length} 张页面全部通过,共 ${asserts} 项断言(引擎 ${ver})`
+    : `❌ ${passed}/${PAGES.length} 页通过,共 ${asserts} 项断言(引擎 ${ver})`;
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>

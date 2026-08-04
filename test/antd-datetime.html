@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 可交互 antd 日期与级联</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h2 { font-size: 15px; margin: 18px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 8px 0; width: 800px; }
+    .lab { width: 180px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 560px; flex-shrink: 0; }
+    .ant-picker, .ant-cascader { width: 560px; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 4px 9px; background: #fff; display: flex; cursor: pointer; min-height: 30px; align-items: center; }
+    .ant-picker input, .ant-cascader input { border: none; outline: none; width: 100%; background: transparent; }
+    .ant-picker-selection-item, .ant-cascader-selection-item { color: #1f2937; }
+    .ant-picker-dropdown, .ant-cascader-dropdown { position: absolute; z-index: 60; background: #fff;
+      border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 6px; }
+    .ant-picker-dropdown[hidden], .ant-cascader-dropdown[hidden] { display: none; }
+    table.cal { border-collapse: collapse; }
+    .ant-picker-cell { width: 34px; height: 28px; text-align: center; cursor: pointer; border-radius: 4px; font-size: 12.5px; }
+    .ant-picker-cell:hover { background: #eef2ff; }
+    .cal-head { display: flex; justify-content: space-between; padding: 2px 6px 6px; font-size: 12.5px; color: #6b7280; }
+    .cascader-cols { display: flex; }
+    .ant-cascader-menu { min-width: 130px; max-height: 200px; overflow: auto; border-right: 1px solid #f3f4f6; padding: 2px; }
+    .ant-cascader-menu-item { padding: 4px 10px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+    .ant-cascader-menu-item:hover { background: #eef2ff; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">可交互 antd 日期与级联</h1>
+<p style="color:#9ca3af;font-size:12.5px">日期格子带 <code>title="2027-06-15"</code>(与真实 antd 一致);级联逐列展开,点叶子才写值。</p>
+
+<h2>日期</h2>
+<div class="item"><span class="lab">出生日期</span><div class="ctl" data-dp="birth" data-mode="date" data-year="2000"></div></div>
+<div class="item"><span class="lab">毕业时间</span><div class="ctl" data-dp="grad" data-mode="month" data-year="2027"></div></div>
+<div class="item"><span class="lab">获奖时间</span><div class="ctl" data-dp="award" data-mode="month" data-year="2022"></div></div>
+<div class="item"><span class="lab">发表时间(已有值,不应被覆盖)</span><div class="ctl" data-dp="pub" data-mode="month" data-year="2024" data-value="2020-01"></div></div>
+
+<h2>级联</h2>
+<div class="item"><span class="lab">意向工作城市</span><div class="ctl" data-cas="city1"></div></div>
+<div class="item"><span class="lab">现居城市</span><div class="ctl" data-cas="city2"></div></div>
+
+<script>
+/* ---------------- 日期选择器 ---------------- */
+for (const host of document.querySelectorAll('[data-dp]')) {
+  const mode = host.dataset.mode;
+  const box = document.createElement('div');
+  box.className = 'ant-picker';
+  box.innerHTML = `<span class="ant-picker-selection-item"></span><input readonly placeholder="请选择日期">`;
+  const item = box.querySelector('.ant-picker-selection-item');
+  if (host.dataset.value) item.textContent = host.dataset.value;
+
+  const dd = document.createElement('div');
+  dd.className = 'ant-picker-dropdown';
+  dd.hidden = true;
+  const baseYear = Number(host.dataset.year) || 2026;
+  let year = baseYear;
+
+  const render = () => {
+    dd.innerHTML = '';
+    const head = document.createElement('div');
+    head.className = 'cal-head';
+    head.innerHTML = `<span class="prev" style="cursor:pointer">‹ 上一年</span><b>${year}</b><span class="next" style="cursor:pointer">下一年 ›</span>`;
+    head.querySelector('.prev').addEventListener('mousedown', (e) => { e.preventDefault(); year--; render(); });
+    head.querySelector('.next').addEventListener('mousedown', (e) => { e.preventDefault(); year++; render(); });
+    dd.appendChild(head);
+
+    const tbl = document.createElement('table');
+    tbl.className = 'cal';
+    const cells = [];
+    if (mode === 'month') {
+      for (let m = 1; m <= 12; m++) cells.push([`${year}-${String(m).padStart(2,'0')}`, m + '月']);
+    } else {
+      // 简化:只渲染当年 6 月,足以验证 title 精确命中
+      for (let d = 1; d <= 30; d++) cells.push([`${year}-06-${String(d).padStart(2,'0')}`, String(d)]);
+    }
+    let tr = document.createElement('tr');
+    cells.forEach(([title, txt], i) => {
+      if (i && i % 6 === 0) { tbl.appendChild(tr); tr = document.createElement('tr'); }
+      const td = document.createElement('td');
+      td.className = 'ant-picker-cell';
+      td.setAttribute('title', title);
+      td.setAttribute('role', 'gridcell');
+      td.textContent = txt;
+      td.addEventListener('mousedown', (e) => { e.preventDefault(); item.textContent = title; dd.hidden = true; });
+      tr.appendChild(td);
+    });
+    tbl.appendChild(tr);
+    dd.appendChild(tbl);
+  };
+
+  box.addEventListener('mousedown', () => {
+    document.querySelectorAll('.ant-picker-dropdown,.ant-cascader-dropdown').forEach(d => { if (d !== dd) d.hidden = true; });
+    year = baseYear; render();
+    const r = box.getBoundingClientRect();
+    dd.style.left = (r.left + scrollX) + 'px';
+    dd.style.top = (r.bottom + scrollY + 4) + 'px';
+    dd.hidden = false;
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') dd.hidden = true; });
+  document.body.appendChild(dd);
+  host.appendChild(box);
+}
+
+/* ---------------- 级联选择 ---------------- */
+const CITY_TREE = {
+  '北京': { '北京市': ['东城区', '西城区', '朝阳区'] },
+  '上海': { '上海市': ['黄浦区', '徐汇区', '浦东新区'] },
+  '广东': { '广州市': ['天河区', '越秀区'], '深圳市': ['南山区', '福田区'] },
+};
+
+for (const host of document.querySelectorAll('[data-cas]')) {
+  const box = document.createElement('div');
+  box.className = 'ant-cascader';
+  box.setAttribute('role', 'combobox');
+  box.innerHTML = `<span class="ant-cascader-selection-item"></span><input readonly placeholder="请选择城市">`;
+  const item = box.querySelector('.ant-cascader-selection-item');
+
+  const dd = document.createElement('div');
+  dd.className = 'ant-cascader-dropdown';
+  dd.hidden = true;
+  const cols = document.createElement('div');
+  cols.className = 'cascader-cols';
+  dd.appendChild(cols);
+  document.body.appendChild(dd);
+
+  const path = [];
+  const renderCols = () => {
+    cols.innerHTML = '';
+    const levels = [Object.keys(CITY_TREE)];
+    if (path[0]) levels.push(Object.keys(CITY_TREE[path[0]] || {}));
+    if (path[0] && path[1]) levels.push((CITY_TREE[path[0]] || {})[path[1]] || []);
+    levels.forEach((opts, li) => {
+      const menu = document.createElement('div');
+      menu.className = 'ant-cascader-menu';
+      opts.forEach((o) => {
+        const it = document.createElement('div');
+        it.className = 'ant-cascader-menu-item';
+        it.textContent = o;
+        it.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          path.length = li; path.push(o);
+          if (li === 2) { item.textContent = path.join(' / '); dd.hidden = true; }
+          else renderCols();
+        });
+        menu.appendChild(it);
+      });
+      cols.appendChild(menu);
+    });
+  };
+
+  box.addEventListener('mousedown', () => {
+    document.querySelectorAll('.ant-picker-dropdown,.ant-cascader-dropdown').forEach(d => { if (d !== dd) d.hidden = true; });
+    path.length = 0; renderCols();
+    const r = box.getBoundingClientRect();
+    dd.style.left = (r.left + scrollX) + 'px';
+    dd.style.top = (r.bottom + scrollY + 4) + 'px';
+    dd.hidden = false;
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') dd.hidden = true; });
+  host.appendChild(box);
+}
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

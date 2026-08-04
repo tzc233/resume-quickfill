@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>简历快填</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="popup">
+  <header class="pop-head">
+    <div class="brand">📝 简历快填</div>
+    <button id="btn-opts" class="icon-btn" title="编辑个人档案">⚙️ 档案</button>
+  </header>
+
+  <div id="backup-bar" hidden></div>
+  <button id="btn-fill" class="primary big">⚡ 一键填充当前页面</button>
+  <button id="btn-scan" class="ghost wide">🔍 扫描字段清单(不填写,复制到剪贴板)</button>
+  <button id="btn-check" class="ghost wide">🩺 档案自检(看插件里实际存了什么)</button>
+  <div id="status" class="status">识别中英文表单字段,只填空白项,不覆盖已有内容。</div>
+  <div id="result" class="result"></div>
+
+  <div class="divider">快速复制(点击即复制,用于无法自动识别的字段)</div>
+  <div id="chips" class="chips"></div>
+
+  <footer class="pop-foot">数据仅存本地 · 不自动提交 · 协议勾选与验证码请自行完成</footer>
+  <script src="api.js"></script>
+  <script src="backup.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
