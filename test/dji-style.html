@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 大疆校招表单结构</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    .section-title { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; font-weight: 600; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 6px 0; width: 820px; }
+    .lab { width: 200px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 560px; flex-shrink: 0; }
+    input, textarea { width: 100%; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    .blk { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; background: #fcfcfd; width: 820px; }
+    .ymbox { display: flex; align-items: center; gap: 3px; }
+    .ymbox input { width: 70px; }
+    .rng { display: flex; gap: 6px; align-items: center; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">大疆校招表单结构(按真实区块与字段命名复刻)</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  重点:<strong>赛事经验</strong>与<strong>获奖经历</strong>是两个独立区块,而「获奖经历」整块只有一栏叫「描述」;
+  「语言能力」只有「语言证书及成绩」;「论文/期刊」是「名称/描述/成果」。这些标签本身无信息量,只有区块标题能定性。
+</p>
+
+<div class="section-title">个人信息</div>
+<div class="item"><span class="lab">姓名</span><div class="ctl"><input id="p-name"></div></div>
+<div class="item"><span class="lab">手机号码</span><div class="ctl"><input id="p-phone"></div></div>
+<div class="item"><span class="lab">邮箱</span><div class="ctl"><input id="p-email"></div></div>
+<div class="item"><span class="lab">当前所在国家</span><div class="ctl"><input id="p-country"></div></div>
+<div class="item"><span class="lab">当前所在地</span><div class="ctl"><input id="p-city"></div></div>
+<div class="item"><span class="lab">招聘信息来源</span><div class="ctl"><input id="p-source"></div></div>
+
+<div class="section-title">教育背景</div>
+<div class="blk">
+  <div class="item"><span class="lab">就读时间</span><div class="ctl rng">
+    <span class="ymbox"><input id="e1-sy"><span>年</span></span>
+    <span class="ymbox"><input id="e1-sm"><span>月</span></span><span>-</span>
+    <span class="ymbox"><input id="e1-ey"><span>年</span></span>
+    <span class="ymbox"><input id="e1-em"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="e1-school"></div></div>
+  <div class="item"><span class="lab">院系</span><div class="ctl"><input id="e1-college"></div></div>
+  <div class="item"><span class="lab">专业名称</span><div class="ctl"><input id="e1-major"></div></div>
+  <div class="item"><span class="lab">成绩排名</span><div class="ctl"><input id="e1-rank"></div></div>
+  <div class="item"><span class="lab">是否有实验室经历</span><div class="ctl"><input id="e1-haslab"></div></div>
+  <div class="item"><span class="lab">所在实验室全称</span><div class="ctl"><input id="e1-lab"></div></div>
+  <div class="item"><span class="lab">实验室级别</span><div class="ctl"><input id="e1-lablevel"></div></div>
+  <div class="item"><span class="lab">所在实验室负责老师</span><div class="ctl"><input id="e1-advisor"></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">就读时间</span><div class="ctl rng">
+    <span class="ymbox"><input id="e2-sy"><span>年</span></span>
+    <span class="ymbox"><input id="e2-sm"><span>月</span></span><span>-</span>
+    <span class="ymbox"><input id="e2-ey"><span>年</span></span>
+    <span class="ymbox"><input id="e2-em"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="e2-school"></div></div>
+  <div class="item"><span class="lab">专业名称</span><div class="ctl"><input id="e2-major"></div></div>
+  <div class="item"><span class="lab">成绩排名</span><div class="ctl"><input id="e2-rank"></div></div>
+</div>
+
+<div class="section-title">实习经历</div>
+<div class="blk">
+  <div class="item"><span class="lab">起止时间</span><div class="ctl rng">
+    <span class="ymbox"><input id="w1-sy"><span>年</span></span>
+    <span class="ymbox"><input id="w1-sm"><span>月</span></span><span>-</span>
+    <span class="ymbox"><input id="w1-ey"><span>年</span></span>
+    <span class="ymbox"><input id="w1-em"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">公司名称</span><div class="ctl"><input id="w1-company"></div></div>
+  <div class="item"><span class="lab">职位名称</span><div class="ctl"><input id="w1-title"></div></div>
+  <div class="item"><span class="lab">工作职责</span><div class="ctl"><textarea id="w1-desc" rows="2"></textarea></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">起止时间</span><div class="ctl rng">
+    <span class="ymbox"><input id="w2-sy"><span>年</span></span>
+    <span class="ymbox"><input id="w2-sm"><span>月</span></span><span>-</span>
+    <span class="ymbox"><input id="w2-ey"><span>年</span></span>
+    <span class="ymbox"><input id="w2-em"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">公司名称</span><div class="ctl"><input id="w2-company"></div></div>
+  <div class="item"><span class="lab">职位名称</span><div class="ctl"><input id="w2-title"></div></div>
+  <div class="item"><span class="lab">工作职责</span><div class="ctl"><textarea id="w2-desc" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">赛事经验</div>
+<div class="blk">
+  <div class="item"><span class="lab">开始时间</span><div class="ctl rng">
+    <span class="ymbox"><input id="c1-sy"><span>年</span></span>
+    <span class="ymbox"><input id="c1-sm"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">结束时间</span><div class="ctl rng">
+    <span class="ymbox"><input id="c1-ey"><span>年</span></span>
+    <span class="ymbox"><input id="c1-em"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">赛事名称</span><div class="ctl"><input id="c1-name"></div></div>
+  <div class="item"><span class="lab">赛事描述</span><div class="ctl"><textarea id="c1-desc" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">项目经验</div>
+<div class="blk">
+  <div class="item"><span class="lab">起止时间</span><div class="ctl rng">
+    <span class="ymbox"><input id="j1-sy"><span>年</span></span>
+    <span class="ymbox"><input id="j1-sm"><span>月</span></span><span>-</span>
+    <span class="ymbox"><input id="j1-ey"><span>年</span></span>
+    <span class="ymbox"><input id="j1-em"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">项目名称</span><div class="ctl"><input id="j1-name"></div></div>
+  <div class="item"><span class="lab">项目描述</span><div class="ctl"><textarea id="j1-desc" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">获奖经历</div>
+<div class="blk">
+  <div class="item"><span class="lab">描述</span><div class="ctl"><textarea id="a1-desc" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">语言能力</div>
+<div class="blk">
+  <div class="item"><span class="lab">语言证书及成绩</span><div class="ctl"><input id="l1-cs"></div></div>
+</div>
+
+<div class="section-title">自我描述</div>
+<div class="item"><span class="lab">补充说明</span><div class="ctl"><textarea id="s-intro" rows="3"></textarea></div></div>
+
+<div class="section-title">论文/期刊</div>
+<div class="blk">
+  <div class="item"><span class="lab">名称</span><div class="ctl"><input id="r1-name"></div></div>
+  <div class="item"><span class="lab">描述</span><div class="ctl"><textarea id="r1-desc" rows="2"></textarea></div></div>
+  <div class="item"><span class="lab">成果</span><div class="ctl"><input id="r1-result"></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">名称</span><div class="ctl"><input id="r2-name"></div></div>
+  <div class="item"><span class="lab">描述</span><div class="ctl"><textarea id="r2-desc" rows="2"></textarea></div></div>
+  <div class="item"><span class="lab">成果</span><div class="ctl"><input id="r2-result"></div></div>
+</div>
+
+<div class="section-title">作品附件</div>
+<div class="item"><span class="lab">上传简历</span><div class="ctl"><input id="f-resume" type="file" accept=".pdf,.doc,.docx"></div></div>
+<div class="item"><span class="lab">上传照片</span><div class="ctl"><input id="f-photo" type="file" accept="image/*"></div></div>
+
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.5.0';
+  const VERSION = '1.6.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -51,7 +51,8 @@
     { k: 'hometown',  re: /籍贯|户口所在地|native place|hometown/i },
     { k: 'prCountry', re: /永久居留权|永居|permanent residen/i },
     { k: 'otherNationality', re: /其他国籍/i },
-    { k: 'nationality', re: /国籍|nationality/i, ex: /其他|出生|居留/i },
+    { k: 'nationality', re: /国籍|当前所在国家|所在国家|nationality/i, ex: /其他|出生|居留/i },
+    { k: 'sourceChannel', re: /招聘信息来源|信息来源|获知渠道|来源渠道/i },
     { k: 'hobbies',   re: /兴趣爱好|个人爱好|^爱好$|hobb/i },
     { k: 'gradYear',  re: /毕业年份|毕业届别|graduation year/i },
     { k: 'highestSchoolCity', re: /院校所在城市|学校所在城市|学校所在地/i },
@@ -80,8 +81,11 @@
     // 「最高学历」归入基本信息,恒指向第一段教育经历,不受经历区块顺序影响
     { k: 'degree',     re: /最高学历|最高学位|highest (education|degree)/i },
     { k: 'edu.degree', re: /学历|学位|degree|education level|qualification/i },
-    { k: 'edu.lab',      re: /实验室/i },
-    { k: 'edu.advisor',  re: /导师|指导教师|supervisor|advisor/i },
+    // 顺序要紧:三条都含「实验室」,笼统的那条必须垫底
+    { k: 'edu.hasLab',   re: /是否有?实验室|有无实验室/i },
+    { k: 'edu.labLevel', re: /实验室级别|实验室层次/i },
+    { k: 'edu.lab',      re: /实验室(全称|名称)?/i },
+    { k: 'edu.advisor',  re: /导师|指导教师|指导老师|负责老师|supervisor|advisor/i },
     { k: 'edu.research', re: /研究方向|研究领域|research (interest|direction)/i },
     { k: 'edu.rank',     re: /成绩排名|专业排名|年级排名|排名|\brank\b/i },
     { k: 'edu.gpaTotal', re: /gpa\s*总分|总分|满分/i },
@@ -118,11 +122,12 @@
     { k: 'paper.desc', re: /论文描述|文章描述/i },
 
     /* ---- 竞赛(锚点:竞赛名称) ---- */
-    { k: 'comp.name', a: 1, re: /竞赛名称|比赛名称/i },
-    { k: 'comp.type', re: /竞赛类型|比赛类型/i },
-    { k: 'comp.result', re: /竞赛成绩|比赛成绩|竞赛结果/i },
-    { k: 'comp.desc', re: /竞赛描述|比赛描述/i },
-    { k: 'comp.timeRange', r: 1, re: /参赛时间|比赛时间|竞赛时间/i },
+    // 大疆用「赛事」而非「竞赛」——不收这个词,整个赛事区块都会落到通配规则上
+    { k: 'comp.name', a: 1, re: /竞赛名称|比赛名称|赛事名称/i },
+    { k: 'comp.type', re: /竞赛类型|比赛类型|赛事类型/i },
+    { k: 'comp.result', re: /竞赛成绩|比赛成绩|竞赛结果|赛事成绩|获奖等级/i },
+    { k: 'comp.desc', re: /竞赛描述|比赛描述|赛事描述/i },
+    { k: 'comp.timeRange', r: 1, re: /参赛时间|比赛时间|竞赛时间|赛事时间/i },
 
     /* ---- 荣誉奖项(锚点:奖项名称) ---- */
     // 百度用「奖项说明」作为每条荣誉的唯一输入框;不认它就会掉进整段文本兜底,
@@ -150,7 +155,8 @@
 
     /* ---- 外语能力(锚点:语言种类) ---- */
     { k: 'lang.name', a: 1, re: /语言种类|语种|外语语言/i },
-    { k: 'lang.cert', re: /认证类型|证书类型|考试类型/i },
+    { k: 'lang.certScore', re: /语言证书及成绩|证书及成绩|证书与成绩/i },
+    { k: 'lang.cert', re: /认证类型|证书类型|考试类型|语言证书/i },
     { k: 'lang.score', re: /^成绩$|语言成绩|外语成绩|考试成绩/i },
 
     /* ---- 编程语言能力(锚点:编程语言名称) ---- */
@@ -184,6 +190,41 @@
     // 「作品描述」属于作品集,档案里没有对应项,不能让它顺着上下文捡到项目描述
     { k: '*.desc',      re: /描述|内容|简介|说明|description/i, ex: /作品|portfolio|简历解析|解析填充/i },
   ];
+
+  /* ---------- 区块标题 → 经历域 ----------
+   * 有些表单的区块整个只有一个泛化字段:大疆的「获奖经历」只有一栏「描述」,
+   * 「语言能力」只有一栏「语言证书及成绩」。这类标签本身没有信息量,
+   * 只有区块标题能区分它属于哪一类 —— 靠前后邻居猜必然出错。
+   */
+  const SECTION_DOMAIN = [
+    [/教育背景|教育经历|学习经历|院校信息/, 'edu'],
+    [/实习经历|工作经历|职业经历|实习与工作/, 'work'],
+    [/赛事|竞赛|比赛/, 'comp'],
+    [/项目经验|项目经历|科研项目/, 'proj'],
+    [/获奖经历|获奖情况|荣誉奖项|荣誉与奖项|奖励情况/, 'award'],
+    [/论文|期刊|学术成果|发表情况/, 'paper'],
+
+    // prog 必须排在 lang 之前:「编程语言能力」同时含「语言能力」
+    [/编程语言/, 'prog'],
+    [/语言能力|外语能力|语言水平/, 'lang'],
+    [/自我描述|自我评价|个人描述|个人陈述/, 'self'],
+    [/专利/, 'patent'],
+    [/软件著作/, 'soft'],
+  ];
+
+  /* 泛化标签 → 该域的规范字段。「描述」在获奖区块是 award.desc,在论文区块是 paper.desc。 */
+  const GENERIC_ROLE = [
+    [/^名称$|^标题$|^项目$/, 'name'],
+    [/^描述$|^简介$|^说明$|^详情$|^内容$|^补充说明$/, 'desc'],
+    [/^成果$|^结果$|^等级$/, 'result'],
+    [/^时间$|^日期$/, 'date'],
+  ];
+  // 各域对「result」这一角色的实际字段名不同
+  const ROLE_FIELD = { paper: { result: 'type' }, edu: { result: 'rank' } };
+  /* 表单把两个字段并成一栏时,由档案现有字段拼出来 */
+  const COMPUTED = {
+    'lang.certScore': (e) => [e.cert, e.score].filter(Boolean).join(' '),
+  };
 
   const LIST_OF = {
     edu: 'education', work: 'work', proj: 'projects', paper: 'papers', comp: 'competitions',
@@ -598,6 +639,42 @@
     return items;
   };
 
+  /* ---------- 区块标题扫描 ----------
+   * 收集页面上像「区块标题」的元素及其对应的经历域,按 DOM 顺序排好,
+   * 之后任一字段都能查到「我落在哪个区块里」。
+   */
+  const HEADING_SEL = 'h1,h2,h3,h4,h5,h6,legend,'
+    + '[class*="title" i],[class*="header" i],[class*="section" i],[class*="subtitle" i]';
+
+  const scanSections = () => {
+    const out = [];
+    for (const el of document.querySelectorAll(HEADING_SEL)) {
+      const t = clean(el.textContent || '');
+      /* 长度上限按可信度分级:真正的标题标签(h1~h6/legend)语义明确,
+       * 允许带括号说明(「实习经历(第一段在职…)」);仅靠 class 名匹配上的
+       * 放宽了容易把整段说明文字误当标题。 */
+      const isRealHeading = /^(H[1-6]|LEGEND)$/.test(el.tagName);
+      if (!t || t.length > (isRealHeading ? 40 : 20)) continue;
+      const hit = SECTION_DOMAIN.find(([re]) => re.test(t));
+      if (!hit) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 && r.height < 2) continue;
+      out.push({ el, dom: hit[1], text: t });
+    }
+    return out;
+  };
+
+  /** 某元素落在哪个区块下:取 DOM 顺序上最近的一个前置标题 */
+  const sectionDomOf = (el, sections) => {
+    let dom = null;
+    for (const s of sections) {
+      // 标题在该元素之前 → 候选;继续往后找更近的
+      if (s.el.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) dom = s.dom;
+      else break;
+    }
+    return dom;
+  };
+
   /* ---------- 可见性与元素收集(穿透 open shadow DOM) ---------- */
   const visible = (el) => {
     if (el.disabled || el.readOnly) return false;
@@ -631,6 +708,7 @@
 
     /* 第一趟:先算出每个字段的匹配结果 —— 通配字段(「起止时间」)需要看前后文才能定归属。
      * 抽成函数是因为「自动展开区块」每点一次 + 号都要重新扫一遍页面。 */
+    const sections = scanSections();
     const collectItems = (collectFiles) => {
       const out = [];
       // 自定义组件(antd 等)优先:它内部的 input 只是搜索框,直接写值失焦即丢
@@ -645,11 +723,12 @@
         // 被自定义组件包住的原生输入框交给组件本身处理,避免往搜索框里打字
         if (ws.some((w) => w.contains(el))) continue;
         const cands = labelCands(el);
-        out.push({ el, tag, type, cands, hit: matchRules(cands, customs) });
+        out.push({ el, tag, type, cands, hit: matchRules(cands, customs), sec: sectionDomOf(el, sections) });
       }
       for (const el of ws) {
         const cands = widgetCands(el);
-        out.push({ el, tag: 'WIDGET', type: widgetKind(el), cands, hit: matchRules(cands, customs) });
+        out.push({ el, tag: 'WIDGET', type: widgetKind(el), cands,
+          hit: matchRules(cands, customs), sec: sectionDomOf(el, sections) });
       }
       // 两类元素混在一起,必须还原成页面上的先后顺序,否则区块计数会乱
       out.sort((a, b) => {
@@ -680,6 +759,9 @@
     };
 
     const ambiguousDom = (i, hit) => {
+      /* 区块标题是最可靠的信号 —— 大疆「获奖经历」整块只有一栏「描述」,
+       * 邻居里根本没有 award 字段可依,只有标题能定性。 */
+      if (items[i].sec) return items[i].sec;
       let prev = null, pd = Infinity, next = null, nd = Infinity;
       for (let j = i - 1, d = 0; j >= 0; j--) {
         const h = items[j].hit;
@@ -698,9 +780,35 @@
       return nd < pd ? next : prev;
     };
 
+    /* 泛化标签兜底:标签只有「名称」「描述」「成果」这种词时,规则表认不出来,
+     * 但只要知道它落在哪个区块,角色就确定了 —— 大疆的论文区就是这种写法。 */
+    const genericHit = (it) => {
+      if (!it.sec || !it.cands.length) return null;
+      for (const c of it.cands) {
+        // 泛化角色的前提是「标签只是一个孤零零的词」,整块文字不算
+        if (c.t.length > 8) continue;
+        const role = GENERIC_ROLE.find(([re]) => re.test(c.t));
+        if (!role) continue;
+        // 「自我描述」区块不是经历列表,它的描述位就是自我介绍
+        if (it.sec === 'self') return role[1] === 'desc' ? { field: 'intro', label: c.t } : null;
+        const field = (ROLE_FIELD[it.sec] || {})[role[1]] || role[1];
+        // 该域确实有这个字段才认,免得凭空造出 lang.result 这种东西
+        const sample = (P[LIST_OF[it.sec]] || [])[0];
+        if (!sample || !(field in sample)) continue;
+        // name 是各域的锚点,不标记的话第二块会重复填第一块的内容
+        return { dom: it.sec, field, anchor: field === 'name', label: c.t };
+      }
+      return null;
+    };
+
     /* 第二趟:按 DOM 顺序推进区块状态并写入 */
     for (let idx = 0; idx < items.length; idx++) {
-      const { el, tag, type, cands, hit } = items[idx];
+      const { el, tag, type, cands } = items[idx];
+      /* 泛化角色来自「最近的那个标签」,比通配规则命中的整块文字可信 ——
+       * 大疆论文区一块里有「名称/描述/成果」三行,祖先文本把三个词都裹进候选,
+       * 于是「名称」也会被 *.desc 命中。 */
+      const g = genericHit(items[idx]);
+      const hit = (g && (!items[idx].hit || items[idx].hit.dom === '*')) ? g : (items[idx].hit || g);
       if (!hit) {
         if (cands.length && cands[0].w >= 3 && (tag === 'TEXTAREA' || tag === 'SELECT' || TEXTLIKE.has(type) || type === 'radio')) {
           report.unmatched.push({ label: cands[0].t.slice(0, 30) });
@@ -715,6 +823,11 @@
       } else if (hit.dom) {
         const dom = hit.dom === '*' ? (ambiguousDom(idx, hit) || ctx.domain) : hit.dom;
         if (!dom) continue; // 通篇没有任何经历区块字段,无从判断归属
+        // 「自我描述」是区块标题但不是经历列表 —— 它下面的描述位就是自我介绍
+        if (!LIST_OF[dom]) {
+          semKey = 'intro';
+          v = basicValue('intro', hit.label, P);
+        } else {
         const list = P[LIST_OF[dom]] || [];
         let field = hit.field;
         // 「本科院校」这类带学历限定的标签直接按学历定位,不参与区块计数
@@ -763,11 +876,13 @@
         if (!v && FIELD_FALLBACK[`${dom}.${field}`]) {
           v = String(entry[FIELD_FALLBACK[`${dom}.${field}`]] ?? '').trim();
         }
+        if (!v && COMPUTED[`${dom}.${field}`]) v = String(COMPUTED[`${dom}.${field}`](entry) || '').trim();
         if (hit.ym && v) {
           // 档案存 YYYY-MM,拆给「年」「月」两个框;月份不补前导零(Moka 显示为 9 而非 09)
           const m = v.match(/^(\d{4})[-/.年]?(\d{1,2})?/);
           v = m ? (hit.ym === 'y' ? m[1] : String(Number(m[2] || 0) || '')) : '';
           if (!v) { report.skipped.push({ label: hit.label, reason: `「${entry[field]}」无法拆成年/月` }); continue; }
+        }
         }
       } else {
         v = basicValue(hit.field, hit.label, P);
