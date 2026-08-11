@@ -378,6 +378,74 @@ const CHECKS = {
     紧急联系人_邮箱不填: v('ec-email') === '',
   }),
 
+  /* 这页自己驱动填充 —— 要观察的是「填充过程中」的提示条,跑完再看就晚了 */
+  'progress.html': async () => {
+    const ID = '__rqf_progress__';
+    const box = () => document.getElementById(ID);
+    const txtOf = () => box()?.querySelector('[data-t]')?.textContent || '';
+
+    const texts = [], widths = [];
+    /* 逐条读 MutationRecord 而不是在回调里读当前值:同一个任务里的多次更新会
+     * 合并成一次回调,只读当前值就只能看到最后一条,中间过程全丢。 */
+    const obs = new MutationObserver((recs) => {
+      for (const r of recs) {
+        const host = (r.target.nodeType === 3 ? r.target.parentElement : r.target);
+        if (!host || !host.closest || !host.closest('#' + ID)) continue;
+        if (r.type === 'childList') {
+          for (const n of r.addedNodes) if (n.nodeType === 3) texts.push(String(n.data || ''));
+        } else if (r.type === 'characterData') {
+          texts.push(String(r.target.data || ''));
+        } else if (r.type === 'attributes' && host.hasAttribute('data-b')) {
+          widths.push(parseFloat(host.style.width) || 0);
+        }
+      }
+    });
+    obs.observe(document.body, {
+      subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style'],
+    });
+
+    const fieldsBefore = document.querySelectorAll('input, textarea, select').length;
+    const report = await window.__RQF.fill(window.RQF_TEST_PROFILE, window.RQF_TEST_FILE);
+    obs.disconnect();
+
+    const doneText = txtOf();
+    /* getComputedStyle 返回的是活对象:下一次填充会把这个节点摘掉重建,
+     * 到那时再读就全是空值了 —— 必须当场取成快照。 */
+    const cs = box() ? getComputedStyle(box()) : null;
+    const pointerEvents = cs && cs.pointerEvents;
+    const zIndex = Number(cs && cs.zIndex);
+
+    // 再跑一次:mount 前先 destroy,不能叠出第二条
+    await window.__RQF.fill(window.RQF_TEST_PROFILE, window.RQF_TEST_FILE);
+    const instances = document.querySelectorAll('#' + ID).length;
+
+    /* 出错路径:normalize(null) 会抛。提示条必须换成告警,
+     * 而不是永远挂着「正在填充…」—— 那比没有提示更像卡死。 */
+    let threw = false;
+    try { await window.__RQF.fill(null, null); } catch { threw = true; }
+    const errText = txtOf();
+
+    // 提示条本身不能被引擎当成页面内容:既不是字段,也不是区块标题
+    const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
+    const fieldsAfter = document.querySelectorAll('input, textarea, select').length;
+
+    return {
+      填充中报告了进度: texts.some((t) => /正在填充/.test(t)),
+      逐字段报告了标签: texts.some((t) => /正在填充 \d+\/\d+ · .+/.test(t)),
+      慢路径_下拉单独提示: texts.some((t) => /正在选择「/.test(t)),
+      进度条真的在推进: widths.length > 2 && widths.some((w, i) => i > 0 && w > widths[i - 1]),
+      收尾显示已填数: doneText.includes(`已填 ${report.filled.length} 项`),
+      收尾提醒自行核对: doneText.includes('核对'),
+      不挡住页面点击: pointerEvents === 'none',
+      浮在最上层: zIndex > 1000,
+      重复填充不叠加: instances === 1,
+      出错时抛出: threw,
+      出错时换成告警: /⚠️/.test(errText) && !/正在填充/.test(errText),
+      未被扫描成字段: !s.rows.some((r) => /正在填充|已填|正在选择/.test(r.label)),
+      未新增表单控件: fieldsAfter === fieldsBefore,
+    };
+  },
+
   'custom-widgets.html': () => {
     // 这页只验证「诊断能不能看见自定义控件」,不做填充
     const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
@@ -403,19 +471,23 @@ const loadEngine = async () => {
   (0, eval)(src);
 };
 
-/** 跑当前页面的断言;custom-widgets 只扫描不填充 */
+/* 这些页面自己决定怎么调引擎:custom-widgets 只扫描不填充,
+ * progress 需要在填充过程中架观察器,跑完再看就晚了。 */
+const SELF_DRIVEN = new Set(['custom-widgets.html', 'progress.html']);
+
+/** 跑当前页面的断言 */
 window.rqfRun = async () => {
   const page = location.pathname.split('/').pop();
   const checks = CHECKS[page];
   if (!checks) return { page, error: '没有为该页面登记断言' };
   await loadEngine();
   let report = { filled: [], skipped: [], unmatched: [] };
-  if (page !== 'custom-widgets.html') {
+  if (!SELF_DRIVEN.has(page)) {
     report = await window.__RQF.fill(window.RQF_TEST_PROFILE, window.RQF_TEST_FILE);
   }
   const v = (id) => document.getElementById(id).value;
   const st = (id) => document.getElementById(id).selectedOptions[0]?.textContent || '';
-  const result = checks(v, st);
+  const result = await checks(v, st);
   const fails = Object.entries(result).filter(([, ok]) => !ok).map(([k]) => k);
   return {
     page,

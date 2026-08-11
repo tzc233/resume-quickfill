@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.7.0';
+  const VERSION = '1.8.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -652,6 +652,7 @@
       if (!have || need <= have) continue;   // 页面上没有这个域,或已经够用
       let added = 0;
       while (have < need && added < 6) {
+        ui.step(`展开「${DOM_CN[dom] || dom}」区块 ${have + 1}/${need}…`, 0.05 + 0.08 * (added / 6));
         // 每轮重新找按钮:组件重渲染后旧引用可能已经失效
         const btn = pickAddButton(findAddButtons(), items, dom);
         if (!btn) break;
@@ -723,6 +724,74 @@
     return cs.visibility !== 'hidden' && cs.display !== 'none';
   };
 
+  /* ---------- 页面内进度条 ----------
+   * 进度显示在页面上而不是弹窗里:弹窗一点页面就关,而用户的视线本来就在表单上。
+   * 纯 DOM 实现,不引入任何浏览器扩展 API —— 引擎的可移植性靠这一点。
+   */
+  const UI_ID = '__rqf_progress__';
+
+  const ui = {
+    box: null, bar: null, txt: null, timer: 0,
+
+    mount() {
+      this.destroy();
+      const box = document.createElement('div');
+      box.id = UI_ID;
+      // pointer-events:none —— 绝不挡住用户点击页面
+      box.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;pointer-events:none;'
+        + 'background:rgba(24,24,27,.94);color:#fff;border-radius:12px;padding:10px 14px;'
+        + 'font:13px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;'
+        + 'box-shadow:0 6px 24px rgba(0,0,0,.25);min-width:212px;max-width:320px';
+      box.innerHTML = '<div data-t style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>'
+        + '<div style="margin-top:7px;height:3px;border-radius:2px;background:rgba(255,255,255,.2)">'
+        + '<div data-b style="height:100%;width:3%;border-radius:2px;background:#4ade80;transition:width .15s"></div></div>';
+      document.body.appendChild(box);
+      this.box = box;
+      this.txt = box.querySelector('[data-t]');
+      this.bar = box.querySelector('[data-b]');
+    },
+
+    /** frac 为 0~1 的整体进度;省略则只换文字 */
+    step(text, frac) {
+      if (!this.txt) return;
+      this.txt.textContent = text;
+      if (typeof frac === 'number') {
+        this.bar.style.width = `${Math.max(3, Math.min(100, Math.round(frac * 100)))}%`;
+      }
+    },
+
+    finish(text) {
+      if (!this.box) return;
+      clearTimeout(this.timer);   // 连续两次收尾时,别让上一次的定时器提前把条子撤掉
+      this.bar.style.width = '100%';
+      this.bar.style.background = '#60a5fa';
+      this.txt.textContent = text;
+      this.timer = setTimeout(() => this.destroy(), 5000);
+    },
+
+    destroy() {
+      clearTimeout(this.timer);
+      const old = document.getElementById(UI_ID);
+      if (old) old.remove();
+      this.box = this.bar = this.txt = null;
+    },
+  };
+
+  /* 让浏览器有机会重绘 —— 同步循环里不 yield 的话进度条一格都不会动。
+   *
+   * 标签页不可见时直接跳过:那时既没人在看进度,rAF 也压根不触发,
+   * 而 setTimeout 会被浏览器钳到 1 秒一次 —— 白等一轮反而真把填充拖慢了。
+   * 进度文字仍会照常写进 DOM,只是不专门等重绘。 */
+  const paint = () => {
+    if (document.visibilityState !== 'visible') return Promise.resolve();
+    return new Promise((r) => {
+      let done = false;
+      const fin = () => { if (!done) { done = true; r(); } };
+      requestAnimationFrame(fin);
+      setTimeout(fin, 60);   // rAF 偶尔不触发时的兜底
+    });
+  };
+
   const collect = (root, out) => {
     for (const el of root.querySelectorAll('input, textarea, select')) out.push(el);
     for (const n of root.querySelectorAll('*') ) if (n.shadowRoot) collect(n.shadowRoot, out);
@@ -733,7 +802,7 @@
 
   /* ---------- 主流程 ----------
    * 异步:自定义下拉需要点开、等选项层渲染、再点中,无法同步完成。 */
-  const fill = async (rawProfile, resumeFile) => {
+  const runFill = async (rawProfile, resumeFile) => {
     const P = normalize(rawProfile);
     const report = { url: location.href, filled: [], skipped: [], unmatched: [], fileFilled: false, fileLabel: '' };
     const doneGroups = new Set();
@@ -778,6 +847,10 @@
       });
       return out;
     };
+
+    ui.mount();
+    ui.step('正在识别页面字段…', 0.03);
+    await paint();   // 让第一帧先画出来,否则同步扫描期间用户看不到任何反馈
 
     let items = collectItems(true);
     // 档案段数多于页面区块数时,先把「+ 添加」点出来
@@ -841,8 +914,17 @@
     };
 
     /* 第二趟:按 DOM 顺序推进区块状态并写入 */
+    const shortLabel = (s) => {
+      const t = String(s || '').trim();
+      return t.length > 14 ? `${t.slice(0, 14)}…` : t;
+    };
     for (let idx = 0; idx < items.length; idx++) {
       const { el, tag, type, cands } = items[idx];
+      /* 进度按 DOM 顺序推进(识别 3% → 展开 13% → 填充 93% → 附件 100%)。
+       * 每隔几个字段 yield 一次:这段循环大部分是同步的,不交还控制权的话
+       * 进度条到最后才一次性跳到头,和「卡住」看起来没区别。 */
+      const frac = 0.15 + 0.78 * (idx / Math.max(1, items.length));
+      if (idx % 8 === 0) { ui.step(`正在填充 ${idx + 1}/${items.length}…`, frac); await paint(); }
       /* 泛化角色来自「最近的那个标签」,比通配规则命中的整块文字可信 ——
        * 大疆论文区一块里有「名称/描述/成果」三行,祖先文本把三个词都裹进候选,
        * 于是「名称」也会被 *.desc 命中。 */
@@ -854,6 +936,8 @@
         }
         continue;
       }
+
+      ui.step(`正在填充 ${idx + 1}/${items.length} · ${shortLabel(hit.label)}`, frac);
 
       // 「紧急联系人」这类区块要的是别人的信息,整段不碰
       if (items[idx].sec === 'blocked') {
@@ -937,6 +1021,9 @@
       /* --- 写入 --- */
       if (tag === 'WIDGET') {
         const kind = widgetKind(el);
+        // 展开浮层 → 等渲染 → 点选,是整个流程里最慢的一步,单独报一下
+        ui.step(`正在选择「${shortLabel(hit.label)}」…`, frac);
+        await paint();
         /* 级联要走到叶子,而同名的普通文本框只需「上海」。
          * 所以档案里可另存一份 <字段>Path(如 cityPath = 上海/上海市),仅级联控件使用。 */
         const pathV = (kind === '自定义级联' && P.basic && P.basic[`${semKey}Path`]) || v;
@@ -986,6 +1073,7 @@
     }
 
     if (fileEls.length) {
+      ui.step('正在注入简历附件…', 0.95);
       if (resumeFile && resumeFile.dataBase64) {
         const t = pickFileTarget(fileEls);
         if (t && fillFile(t.el, resumeFile)) {
@@ -1000,7 +1088,24 @@
       }
     }
     report.unmatched = [...new Map(report.unmatched.map((x) => [x.label, x])).values()].slice(0, 30);
+
+    const nf = report.filled.length + (report.fileFilled ? 1 : 0);
+    const ns = report.skipped.length;
+    ui.finish(nf
+      ? `✅ 已填 ${nf} 项${ns ? ` · 跳过 ${ns} 项` : ''},请自行核对后提交`
+      : '未填充任何字段 —— 点插件图标看原因');
     return report;
+  };
+
+  /* 出错时也要把进度条收掉:否则页面上会永远挂着一条「正在填充…」,
+   * 那比没有进度条更让人以为卡死了。 */
+  const fill = async (rawProfile, resumeFile) => {
+    try {
+      return await runFill(rawProfile, resumeFile);
+    } catch (e) {
+      ui.finish(`⚠️ 填充出错:${String((e && e.message) || e).slice(0, 40)}`);
+      throw e;
+    }
   };
 
   /* ---------- 自定义控件探测 ----------

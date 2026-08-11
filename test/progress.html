@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 页面内进度提示</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h2 { font-size: 15px; margin: 18px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 8px 0; width: 800px; }
+    .lab { width: 180px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 560px; flex-shrink: 0; }
+    input, textarea { width: 100%; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    .ant-select { width: 560px; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 9px; background: #fff; display: flex; cursor: pointer; }
+    .ant-select-selector { display: flex; width: 540px; align-items: center; position: relative; min-height: 22px; }
+    .ant-select-selection-placeholder { color: #9ca3af; }
+    .ant-select-selection-search { position: absolute; inset: 0; }
+    .ant-select-selection-search input { border: none; padding: 0; width: 100%; height: 100%; background: transparent; }
+    .ant-select-dropdown { position: absolute; z-index: 50; background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 4px; width: 560px; }
+    .ant-select-dropdown[hidden] { display: none; }
+    .ant-select-item-option { padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">页面内进度提示</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  验证右上角进度条的完整生命周期:挂载 → 逐字段推进 → 收尾摘要 → 出错也能收场。<br>
+  下拉控件是慢路径(展开浮层要等渲染),进度必须在这期间就动起来,否则用户会以为卡死。
+</p>
+
+<h2>个人信息</h2>
+<div class="item"><span class="lab">姓名</span><div class="ctl"><input id="g-name"></div></div>
+<div class="item"><span class="lab">手机号码</span><div class="ctl"><input id="g-phone"></div></div>
+<div class="item"><span class="lab">电子邮箱</span><div class="ctl"><input id="g-email"></div></div>
+<div class="item"><span class="lab">性别</span><div class="ctl" data-sel="gender"></div></div>
+<div class="item"><span class="lab">政治面貌</span><div class="ctl" data-sel="political"></div></div>
+
+<h2>教育背景</h2>
+<div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="g-school"></div></div>
+<div class="item"><span class="lab">专业</span><div class="ctl"><input id="g-major"></div></div>
+<div class="item"><span class="lab">学历</span><div class="ctl" data-sel="degree"></div></div>
+
+<h2>自我描述</h2>
+<div class="item"><span class="lab">自我评价</span><div class="ctl"><textarea id="g-intro" rows="2"></textarea></div></div>
+
+<script>
+const SPECS = {
+  gender:    { opts: ['男', '女'] },
+  political: { opts: ['群众', '共青团员', '中共党员'] },
+  degree:    { opts: ['学士', '硕士', '博士'] },
+};
+for (const [key, spec] of Object.entries(SPECS)) {
+  const host = document.querySelector(`[data-sel="${key}"]`);
+  const sel = document.createElement('div');
+  sel.className = 'ant-select';
+  sel.setAttribute('role', 'combobox');
+  sel.innerHTML = `<div class="ant-select-selector">
+      <span class="ant-select-selection-placeholder">请选择</span>
+      <span class="ant-select-selection-item" hidden></span>
+      <span class="ant-select-selection-search"><input readonly></span>
+    </div>`;
+  const item = sel.querySelector('.ant-select-selection-item');
+  const ph = sel.querySelector('.ant-select-selection-placeholder');
+  const setVal = (t) => { item.textContent = t; item.hidden = false; ph.hidden = true; };
+
+  const dd = document.createElement('div');
+  dd.className = 'ant-select-dropdown';
+  dd.hidden = true;
+  for (const o of spec.opts) {
+    const it = document.createElement('div');
+    it.className = 'ant-select-item-option';
+    it.textContent = o;
+    it.addEventListener('mousedown', (e) => { e.preventDefault(); setVal(o); dd.hidden = true; });
+    dd.appendChild(it);
+  }
+  document.body.appendChild(dd);
+
+  sel.addEventListener('mousedown', () => {
+    document.querySelectorAll('.ant-select-dropdown').forEach((d) => { if (d !== dd) d.hidden = true; });
+    const r = sel.getBoundingClientRect();
+    dd.style.left = (r.left + scrollX) + 'px';
+    dd.style.top = (r.bottom + scrollY + 4) + 'px';
+    dd.hidden = false;
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') dd.hidden = true; });
+  host.appendChild(sel);
+}
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

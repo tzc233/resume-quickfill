@@ -73,7 +73,8 @@ async function doFill() {
     status.textContent = window.rqfNoHostMessage();
     return;
   }
-  status.textContent = '正在识别并填充表单…';
+  // 详细进度显示在页面右上角 —— 弹窗一点页面就关,而用户的视线本来就在表单上
+  status.textContent = '正在识别并填充表单…(进度见页面右上角)';
 
   const run = async (allFrames) => {
     await rqfApi.scripting.executeScript({ target: { tabId: tab.id, allFrames }, files: ['content.js'] });
