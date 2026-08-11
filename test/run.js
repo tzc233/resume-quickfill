@@ -337,6 +337,47 @@ const CHECKS = {
     照片_不该填: document.getElementById('f-photo').files.length === 0,
   }),
 
+  'oppo-style.html': (v) => ({
+    姓名: v('b-name') === '李思远',
+    联系电话: v('b-phone') === '13800138000',
+    电子邮箱: v('b-email') === 'test@example.com',
+    国籍: v('b-nation') === '中国',
+    籍贯_档案无值: v('b-hometown') === '',
+    证件号_档案无值: v('b-id') === '',
+    意向面试地点: v('b-interview') === '上海',
+    工作1_公司: v('w1-company') === '甲公司',
+    工作1_岗位: v('w1-title') === '大模型算法实习生',
+    工作1_职责: v('w1-desc').includes('0.7299'),
+    工作1_部门_档案无值: v('w1-dept') === '',
+    工作2_公司: v('w2-company') === '乙公司',
+    工作2_职责: v('w2-desc').includes('NPC Agent'),
+    项目_名称: v('j1-name').includes('示例项目'),
+    项目_角色: v('j1-role').includes('第一作者'),
+    项目_职责用duty: v('j1-duty').includes('数据管线'),
+    语种: v('l1-name') === '英语',
+    语言证书: v('l1-cert') === 'CET-6',
+    等级分数: v('l1-score').includes('技术交流'),
+    // 合并列表:竞赛在前、荣誉在后
+    合并1_类型是竞赛: v('h1-kind') === '竞赛',
+    合并1_名称是竞赛: v('h1-name') === '示例数学建模竞赛',
+    合并1_级别抽出国家级: v('h1-level') === '国家级',
+    合并1_等级: v('h1-grade') === '省级二等奖',
+    合并2_类型是奖学金: v('h2-kind') === '奖学金',
+    合并2_名称是奖学金: v('h2-name') === '示例一等奖学金',
+    合并2_级别抽出校级: v('h2-level') === '校级',
+    合并2_等级: v('h2-grade') === '一等',
+    合并2_时间: v('h2-date') === '2022-10',
+    合并3_继续排到第二个奖学金: v('h3-name') === '示例二等奖学金',
+    合并3_类型: v('h3-kind') === '奖学金',
+    论文_名称: v('r1-name').startsWith('Alpha'),
+    论文_详情: v('r1-desc').includes('第一篇'),
+    校内活动: v('s-campus').includes('科研助理'),
+    // 紧急联系人:三个字段一个都不能填
+    紧急联系人_姓名不填: v('ec-name') === '',
+    紧急联系人_电话不填: v('ec-phone') === '',
+    紧急联系人_邮箱不填: v('ec-email') === '',
+  }),
+
   'custom-widgets.html': () => {
     // 这页只验证「诊断能不能看见自定义控件」,不做填充
     const s = window.__RQF.scan(window.RQF_TEST_PROFILE);

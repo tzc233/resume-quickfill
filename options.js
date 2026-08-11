@@ -93,7 +93,7 @@ const LIST_SPEC = {
   competitions: {
     fields: [
       { k: 'name', l: '竞赛名称' },
-      { k: 'type', l: '竞赛类型', ph: '国家级 / 国际级' },
+      { k: 'type', l: '竞赛类型 / 级别', ph: '国家级 / 国际级' },
       { k: 'result', l: '竞赛成绩', ph: '二等奖' },
       { k: 'startTime', l: '开始时间', type: 'month' },
       { k: 'endTime', l: '结束时间', type: 'month' },
@@ -103,7 +103,7 @@ const LIST_SPEC = {
   awards: {
     fields: [
       { k: 'name', l: '奖项名称' },
-      { k: 'type', l: '奖项类型', ph: '校级奖学金' },
+      { k: 'type', l: '奖项类型 / 级别', ph: '校级奖学金' },
       { k: 'result', l: '奖项成绩', ph: '一等' },
       { k: 'date', l: '获奖时间', type: 'month' },
       { k: 'desc', l: '奖项描述', type: 'textarea', full: true },

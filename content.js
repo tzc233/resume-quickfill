@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.6.0';
+  const VERSION = '1.7.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -52,7 +52,7 @@
     { k: 'prCountry', re: /永久居留权|永居|permanent residen/i },
     { k: 'otherNationality', re: /其他国籍/i },
     { k: 'nationality', re: /国籍|当前所在国家|所在国家|nationality/i, ex: /其他|出生|居留/i },
-    { k: 'sourceChannel', re: /招聘信息来源|信息来源|获知渠道|来源渠道/i },
+    { k: 'sourceChannel', re: /招聘信息来源|信息来源|获取来源|获知渠道|来源渠道/i },
     { k: 'hobbies',   re: /兴趣爱好|个人爱好|^爱好$|hobb/i },
     { k: 'gradYear',  re: /毕业年份|毕业届别|graduation year/i },
     { k: 'highestSchoolCity', re: /院校所在城市|学校所在城市|学校所在地/i },
@@ -60,7 +60,7 @@
 
     /* ---- 求职意向 ---- */
     { k: 'expectedCity2',  re: /意向工作地\s*2|期望工作地\s*2|意向城市\s*2/i },
-    { k: 'expectedCity',   re: /意向工作城市|意向工作地|期望(工作)?(城市|地点|地区)|意向城市|期望工作地|工作意向地|preferred (city|location)|desired (city|location)/i },
+    { k: 'expectedCity',   re: /意向工作城市|意向工作地|意向面试地点|期望(工作)?(城市|地点|地区)|意向城市|期望工作地|工作意向地|preferred (city|location)|desired (city|location)/i },
     { k: 'expectedSalary', re: /期望(薪资|月薪|年薪|薪酬)|薪资要求|expected salary|desired salary|salary expect/i, ex: /当前|现在|目前|current/i },
     { k: 'availableDate',  re: /到岗|入职时间|onboard|available (date|time)|start date|earliest start/i },
     { k: 'yearsExp',       re: /工作年限|工作经验年|years? of (work )?experience|experience years?/i },
@@ -68,7 +68,7 @@
       ex: /期望|意向|preferred|desired|籍贯|户口|hometown|native|学校|院校|公司/i },
 
     /* ---- 校园工作(须早于 work.desc,否则被「经历描述」抢走) ---- */
-    { k: 'campusWork', re: /校园工作经历|校园经历|校园组织|学生工作|社团经历/i },
+    { k: 'campusWork', re: /校园工作经历|校园经历|校园组织|学生工作|学生干部|校内活动|社团经历/i },
 
     /* ---- 教育经历(锚点:学校) ---- */
     { k: 'edu.college', re: /学院.?系|院系|学院|系别|department|faculty/i },
@@ -119,7 +119,20 @@
     { k: 'paper.authorOrder', re: /作者顺序|作者排序|署名顺序/i },
     { k: 'paper.url',  re: /论文链接|文章链接/i },
     { k: 'paper.date', re: /发表时间|发表日期|publish/i },
-    { k: 'paper.desc', re: /论文描述|文章描述/i },
+    { k: 'paper.desc', re: /论文描述|文章描述|论文详情/i },
+
+    /* ---- 竞赛与奖学金合并列表(OPPO)----
+     * 标签一律带「竞赛/奖学金」前缀,不会误伤中兴/大疆那种拆开的表单。
+     * 注意「类别 / 级别 / 等级」是三个不同维度:类别=竞赛还是奖学金,
+     * 级别=国家级还是校级,等级=一等还是二等。 */
+    { k: 'honor.name', a: 1, re: /竞赛.{0,2}奖学金名称|竞赛.{0,2}获奖名称/i },
+    { k: 'honor.category', re: /竞赛.{0,2}奖学金类别|获奖类别/i },
+    { k: 'honor.level', re: /竞赛.{0,2}奖学金级别|获奖级别/i },
+    { k: 'honor.grade', re: /竞赛.{0,2}奖学金等级|获奖等级/i },
+    { k: 'honor.date', re: /竞赛.{0,2}获奖时间/i },
+    // 这一栏排在名称之前,不当锚点的话第二段取不到自己的值;
+    // 锚点按字段名去重,与 honor.name 两个锚点可以共存
+    { k: 'honor.kind', a: 1, re: /^竞赛.{0,2}奖学金$/i },
 
     /* ---- 竞赛(锚点:竞赛名称) ---- */
     // 大疆用「赛事」而非「竞赛」——不收这个词,整个赛事区块都会落到通配规则上
@@ -157,7 +170,7 @@
     { k: 'lang.name', a: 1, re: /语言种类|语种|外语语言/i },
     { k: 'lang.certScore', re: /语言证书及成绩|证书及成绩|证书与成绩/i },
     { k: 'lang.cert', re: /认证类型|证书类型|考试类型|语言证书/i },
-    { k: 'lang.score', re: /^成绩$|语言成绩|外语成绩|考试成绩/i },
+    { k: 'lang.score', re: /^成绩$|语言成绩|外语成绩|考试成绩|等级.{0,2}分数/i },
 
     /* ---- 编程语言能力(锚点:编程语言名称) ---- */
     { k: 'prog.name', a: 1, re: /编程语言名称|编程语言|programming language/i },
@@ -198,7 +211,9 @@
    */
   const SECTION_DOMAIN = [
     [/教育背景|教育经历|学习经历|院校信息/, 'edu'],
-    [/实习经历|工作经历|职业经历|实习与工作/, 'work'],
+    [/实习经历|工作经历|职业经历|实习与工作|工作信息/, 'work'],
+    // OPPO 把竞赛与奖学金合并成一个列表,必须排在 comp 之前(否则「竞赛/获奖经历」被判成 comp)
+    [/竞赛.{0,2}获奖|竞赛.{0,2}奖学金|获奖.{0,2}竞赛/, 'honor'],
     [/赛事|竞赛|比赛/, 'comp'],
     [/项目经验|项目经历|科研项目/, 'proj'],
     [/获奖经历|获奖情况|荣誉奖项|荣誉与奖项|奖励情况/, 'award'],
@@ -211,6 +226,10 @@
     [/专利/, 'patent'],
     [/软件著作/, 'soft'],
   ];
+
+  /* 这些区块里的字段一律不填 —— 它们要的是别人的信息,填成本人就是实打实的错误。
+   * 排除词只能拦住标签里带「紧急」的字段;区块里若只写「姓名」「电话」就拦不住。 */
+  const BLOCK_SECTION = /紧急联系人|亲属信息|担保人|监护人|推荐人信息|家庭成员/;
 
   /* 泛化标签 → 该域的规范字段。「描述」在获奖区块是 award.desc,在论文区块是 paper.desc。 */
   const GENERIC_ROLE = [
@@ -229,12 +248,14 @@
   const LIST_OF = {
     edu: 'education', work: 'work', proj: 'projects', paper: 'papers', comp: 'competitions',
     award: 'awards', lang: 'languages', prog: 'progLangs', patent: 'patents', soft: 'softwares',
+    honor: 'honors',
   };
   // 表单只提供其中一栏时的互相兜底
   const FIELD_FALLBACK = { 'proj.duty': 'role', 'proj.role': 'duty' };
   const DOM_CN = {
     edu: '教育', work: '工作', proj: '项目', paper: '论文', comp: '竞赛',
     award: '奖项', lang: '外语', prog: '编程语言', patent: '专利', soft: '软件著作权',
+    honor: '竞赛/获奖',
   };
 
   /* ---------- 采集标签候选文本(带权重,权重高者优先) ---------- */
@@ -351,6 +372,23 @@
     out.papers = asList(P.papers);
     out.competitions = asList(P.competitions);
     out.awards = asList(P.awards);
+    /* OPPO 把竞赛与奖学金合并成一个列表,每条用「类别/级别/等级」三维描述。
+     * 档案里这两类是分开存的,这里拼成一条流 —— 竞赛在前、荣誉在后,与表单顺序一致。
+     * 「级别」(国家级/校级)常混在 type 或 result 里,单独抽出来。 */
+    const LEVEL_RE = /国家级|国际级|省部级|省级|市级|校级|院级/;
+    const pickLevel = (e) => (String(e.type || '').match(LEVEL_RE)
+      || String(e.result || '').match(LEVEL_RE) || [''])[0];
+    out.honors = [
+      ...out.competitions.map((c) => ({
+        kind: '竞赛', category: c.type || '竞赛', name: c.name,
+        date: c.date || c.startTime, level: pickLevel(c), grade: c.result, desc: c.desc,
+      })),
+      ...out.awards.map((a) => ({
+        kind: /奖学金/.test(String(a.name) + String(a.type)) ? '奖学金' : '荣誉',
+        category: a.type, name: a.name,
+        date: a.date, level: pickLevel(a), grade: a.result, desc: a.desc,
+      })),
+    ];
     out.languages = asList(P.languages);
     out.progLangs = asList(P.progLangs);
     out.patents = asList(P.patents);
@@ -655,6 +693,7 @@
        * 放宽了容易把整段说明文字误当标题。 */
       const isRealHeading = /^(H[1-6]|LEGEND)$/.test(el.tagName);
       if (!t || t.length > (isRealHeading ? 40 : 20)) continue;
+      if (BLOCK_SECTION.test(t)) { out.push({ el, dom: 'blocked', text: t }); continue; }
       const hit = SECTION_DOMAIN.find(([re]) => re.test(t));
       if (!hit) continue;
       const r = el.getBoundingClientRect();
@@ -813,6 +852,12 @@
         if (cands.length && cands[0].w >= 3 && (tag === 'TEXTAREA' || tag === 'SELECT' || TEXTLIKE.has(type) || type === 'radio')) {
           report.unmatched.push({ label: cands[0].t.slice(0, 30) });
         }
+        continue;
+      }
+
+      // 「紧急联系人」这类区块要的是别人的信息,整段不碰
+      if (items[idx].sec === 'blocked') {
+        report.skipped.push({ label: hit.label, reason: '属于紧急联系人/亲属区块,不自动填写' });
         continue;
       }
 

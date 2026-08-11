@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · OPPO 校招表单结构</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    .section-title { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; font-weight: 600; }
+    .sub-title { font-size: 13px; color: #6b7280; margin: 10px 0 4px; font-weight: 600; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 6px 0; width: 820px; }
+    .lab { width: 190px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 560px; flex-shrink: 0; }
+    input, textarea { width: 100%; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    .blk { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; background: #fcfcfd; width: 820px; }
+    .danger { border-color: #fecaca; background: #fef2f2; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">OPPO 校招表单结构(按真实区块与字段命名复刻)</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  两个重点:①「竞赛/获奖经历」是<strong>合并列表</strong>,每条用「类别/级别/等级」三维描述(与大疆拆开的做法相反);
+  ②末尾的<strong>紧急联系人</strong>区块字段只写「姓名/联系电话」,不能被填成本人信息。
+</p>
+
+<div class="section-title">基础信息</div>
+<div class="item"><span class="lab">姓名</span><div class="ctl"><input id="b-name"></div></div>
+<div class="item"><span class="lab">联系电话</span><div class="ctl"><input id="b-phone"></div></div>
+<div class="item"><span class="lab">电子邮箱</span><div class="ctl"><input id="b-email"></div></div>
+<div class="item"><span class="lab">国籍（国家/地区）</span><div class="ctl"><input id="b-nation"></div></div>
+<div class="item"><span class="lab">籍贯</span><div class="ctl"><input id="b-hometown"></div></div>
+<div class="item"><span class="lab">证件号码</span><div class="ctl"><input id="b-id"></div></div>
+<div class="item"><span class="lab">意向面试地点</span><div class="ctl"><input id="b-interview"></div></div>
+<div class="item"><span class="lab">招聘信息获取来源</span><div class="ctl"><input id="b-source"></div></div>
+
+<div class="section-title">工作/实习经历</div>
+<div class="blk">
+  <div class="sub-title">工作信息1</div>
+  <div class="item"><span class="lab">公司名称</span><div class="ctl"><input id="w1-company"></div></div>
+  <div class="item"><span class="lab">任职部门</span><div class="ctl"><input id="w1-dept"></div></div>
+  <div class="item"><span class="lab">担任岗位</span><div class="ctl"><input id="w1-title"></div></div>
+  <div class="item"><span class="lab">工作职责</span><div class="ctl"><textarea id="w1-desc" rows="2"></textarea></div></div>
+</div>
+<div class="blk">
+  <div class="sub-title">工作信息2</div>
+  <div class="item"><span class="lab">公司名称</span><div class="ctl"><input id="w2-company"></div></div>
+  <div class="item"><span class="lab">任职部门</span><div class="ctl"><input id="w2-dept"></div></div>
+  <div class="item"><span class="lab">担任岗位</span><div class="ctl"><input id="w2-title"></div></div>
+  <div class="item"><span class="lab">工作职责</span><div class="ctl"><textarea id="w2-desc" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">项目经历</div>
+<div class="blk">
+  <div class="sub-title">项目经历1</div>
+  <div class="item"><span class="lab">项目名称</span><div class="ctl"><input id="j1-name"></div></div>
+  <div class="item"><span class="lab">项目角色</span><div class="ctl"><input id="j1-role"></div></div>
+  <div class="item"><span class="lab">项目职责</span><div class="ctl"><textarea id="j1-duty" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">语言能力</div>
+<div class="blk">
+  <div class="item"><span class="lab">语种</span><div class="ctl"><input id="l1-name"></div></div>
+  <div class="item"><span class="lab">语言证书</span><div class="ctl"><input id="l1-cert"></div></div>
+  <div class="item"><span class="lab">等级/分数</span><div class="ctl"><input id="l1-score"></div></div>
+</div>
+
+<div class="section-title">竞赛/获奖经历</div>
+<div class="blk">
+  <div class="sub-title">竞赛/获奖经历1</div>
+  <div class="item"><span class="lab">竞赛/奖学金</span><div class="ctl"><input id="h1-kind"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金类别</span><div class="ctl"><input id="h1-cat"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金名称</span><div class="ctl"><input id="h1-name"></div></div>
+  <div class="item"><span class="lab">竞赛/获奖时间</span><div class="ctl"><input id="h1-date"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金级别</span><div class="ctl"><input id="h1-level"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金等级</span><div class="ctl"><input id="h1-grade"></div></div>
+</div>
+<div class="blk">
+  <div class="sub-title">竞赛/获奖经历2</div>
+  <div class="item"><span class="lab">竞赛/奖学金</span><div class="ctl"><input id="h2-kind"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金类别</span><div class="ctl"><input id="h2-cat"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金名称</span><div class="ctl"><input id="h2-name"></div></div>
+  <div class="item"><span class="lab">竞赛/获奖时间</span><div class="ctl"><input id="h2-date"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金级别</span><div class="ctl"><input id="h2-level"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金等级</span><div class="ctl"><input id="h2-grade"></div></div>
+</div>
+<div class="blk">
+  <div class="sub-title">竞赛/获奖经历3</div>
+  <div class="item"><span class="lab">竞赛/奖学金</span><div class="ctl"><input id="h3-kind"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金类别</span><div class="ctl"><input id="h3-cat"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金名称</span><div class="ctl"><input id="h3-name"></div></div>
+  <div class="item"><span class="lab">竞赛/获奖时间</span><div class="ctl"><input id="h3-date"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金级别</span><div class="ctl"><input id="h3-level"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金等级</span><div class="ctl"><input id="h3-grade"></div></div>
+</div>
+
+<div class="section-title">论文</div>
+<div class="blk">
+  <div class="item"><span class="lab">论文名称</span><div class="ctl"><input id="r1-name"></div></div>
+  <div class="item"><span class="lab">发表时间</span><div class="ctl"><input id="r1-date"></div></div>
+  <div class="item"><span class="lab">论文详情</span><div class="ctl"><textarea id="r1-desc" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">学生干部经历</div>
+<div class="item"><span class="lab">校内活动</span><div class="ctl"><textarea id="s-campus" rows="2"></textarea></div></div>
+
+<div class="section-title">紧急联系人</div>
+<div class="blk danger">
+  <div class="item"><span class="lab">姓名</span><div class="ctl"><input id="ec-name"></div></div>
+  <div class="item"><span class="lab">联系电话</span><div class="ctl"><input id="ec-phone"></div></div>
+  <div class="item"><span class="lab">电子邮箱</span><div class="ctl"><input id="ec-email"></div></div>
+</div>
+
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>
