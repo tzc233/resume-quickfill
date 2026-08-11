@@ -378,6 +378,39 @@ const CHECKS = {
     紧急联系人_邮箱不填: v('ec-email') === '',
   }),
 
+  /* 合并区块 + 短标签:「名称」「类别」「级别」「等级」单看只能命中 award.* 规则,
+   * 靠区块标题「竞赛/获奖经历」才能改判到合并流 honors。
+   * 档案里 competitions 1 条 + awards 3 条 → honors 4 条,前两条是竞赛与一等奖学金。 */
+  'oppo-short.html': (v) => ({
+    合并1_类型是竞赛: v('s1-kind') === '竞赛',
+    合并1_类别: v('s1-cat') === '国家级',
+    合并1_名称: v('s1-name') === '示例数学建模竞赛',
+    合并1_时间_取自竞赛而非奖项: v('s1-date') === '2022-09',
+    合并1_级别: v('s1-level') === '国家级',
+    合并1_等级: v('s1-grade') === '省级二等奖',
+    合并2_类型是奖学金: v('s2-kind') === '奖学金',
+    合并2_名称: v('s2-name') === '示例一等奖学金',
+    合并2_时间: v('s2-date') === '2022-10',
+    合并2_级别: v('s2-level') === '校级',
+    合并2_等级: v('s2-grade') === '一等',
+
+    论文1_名称: v('p1-name').startsWith('Alpha'),
+    论文1_类别用type: v('p1-type').includes('CCF A'),
+    论文1_时间: v('p1-date') === '2026-05',
+    论文1_详情: v('p1-desc').includes('第一篇'),
+    论文2_名称_已分段: v('p2-name').startsWith('Beta'),
+    论文2_类别: v('p2-type').includes('SCI 一区'),
+
+    // 已填内容一律不许动
+    已填_姓名不覆盖: v('k-name') === '张三',
+    已填_手机不覆盖: v('k-phone') === '13900001111',
+    已填_自我评价不覆盖: v('k-intro').includes('别动'),
+    已选_单选组不改: document.getElementById('k-male').checked
+      && !document.getElementById('k-female').checked,
+    已选_下拉不改: document.getElementById('k-degree').value === '博士',
+    已传_附件不替换: document.getElementById('k-resume').files[0].name === '我改过的简历-投OPPO.pdf',
+  }),
+
   /* 这页自己驱动填充 —— 要观察的是「填充过程中」的提示条,跑完再看就晚了 */
   'progress.html': async () => {
     const ID = '__rqf_progress__';

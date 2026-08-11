@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 合并区块的短标签写法</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    .section-title { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; font-weight: 600; }
+    .blk { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 14px; margin-bottom: 10px; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+    .lab { width: 150px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 600px; flex-shrink: 0; }
+    input, textarea { width: 100%; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">合并区块 + 短标签</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  同样是 OPPO 那种「竞赛/奖学金合并成一个列表」的表单,但每栏的标签被简写成
+  「名称」「类别」「级别」「等级」「获奖时间」——单看这些词只能命中 award.* 规则,
+  <b>只有区块标题能说明它们属于合并流</b>。论文区同理。<br>
+  另外验证:已经填好的字段(含单选组与已上传的附件)一律不许被覆盖。
+</p>
+
+<div class="section-title">竞赛/获奖经历</div>
+<div class="blk">
+  <div class="item"><span class="lab">竞赛/奖学金</span><div class="ctl"><input id="s1-kind"></div></div>
+  <div class="item"><span class="lab">类别</span><div class="ctl"><input id="s1-cat"></div></div>
+  <div class="item"><span class="lab">名称</span><div class="ctl"><input id="s1-name"></div></div>
+  <div class="item"><span class="lab">获奖时间</span><div class="ctl"><input id="s1-date"></div></div>
+  <div class="item"><span class="lab">级别</span><div class="ctl"><input id="s1-level"></div></div>
+  <div class="item"><span class="lab">等级</span><div class="ctl"><input id="s1-grade"></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">竞赛/奖学金</span><div class="ctl"><input id="s2-kind"></div></div>
+  <div class="item"><span class="lab">类别</span><div class="ctl"><input id="s2-cat"></div></div>
+  <div class="item"><span class="lab">名称</span><div class="ctl"><input id="s2-name"></div></div>
+  <div class="item"><span class="lab">获奖时间</span><div class="ctl"><input id="s2-date"></div></div>
+  <div class="item"><span class="lab">级别</span><div class="ctl"><input id="s2-level"></div></div>
+  <div class="item"><span class="lab">等级</span><div class="ctl"><input id="s2-grade"></div></div>
+</div>
+
+<div class="section-title">论文</div>
+<div class="blk">
+  <div class="item"><span class="lab">名称</span><div class="ctl"><input id="p1-name"></div></div>
+  <div class="item"><span class="lab">类别</span><div class="ctl"><input id="p1-type"></div></div>
+  <div class="item"><span class="lab">时间</span><div class="ctl"><input id="p1-date"></div></div>
+  <div class="item"><span class="lab">详情</span><div class="ctl"><textarea id="p1-desc" rows="2"></textarea></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">名称</span><div class="ctl"><input id="p2-name"></div></div>
+  <div class="item"><span class="lab">类别</span><div class="ctl"><input id="p2-type"></div></div>
+  <div class="item"><span class="lab">时间</span><div class="ctl"><input id="p2-date"></div></div>
+  <div class="item"><span class="lab">详情</span><div class="ctl"><textarea id="p2-desc" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">已填内容(一项都不许改)</div>
+<div class="blk">
+  <div class="item"><span class="lab">姓名</span><div class="ctl"><input id="k-name" value="张三"></div></div>
+  <div class="item"><span class="lab">手机号码</span><div class="ctl"><input id="k-phone" value="13900001111"></div></div>
+  <div class="item"><span class="lab">自我评价</span><div class="ctl"><textarea id="k-intro" rows="2">这段是我自己写的,别动。</textarea></div></div>
+  <div class="item"><span class="lab">性别</span><div class="ctl">
+    <label><input type="radio" name="k-sex" id="k-male" value="男" checked> 男</label>
+    <label><input type="radio" name="k-sex" id="k-female" value="女"> 女</label>
+  </div></div>
+  <div class="item"><span class="lab">最高学历</span><div class="ctl">
+    <select id="k-degree"><option value="">请选择</option><option>学士</option><option selected>博士</option></select>
+  </div></div>
+  <div class="item"><span class="lab">简历附件</span><div class="ctl"><input type="file" id="k-resume"></div></div>
+</div>
+
+<script>
+// 预置一份「已上传」的附件,验证插件不会拿存档里的简历把它换掉
+const dt = new DataTransfer();
+dt.items.add(new File(['%PDF'], '我改过的简历-投OPPO.pdf', { type: 'application/pdf' }));
+document.getElementById('k-resume').files = dt.files;
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

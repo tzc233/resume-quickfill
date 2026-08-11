@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.8.0';
+  const VERSION = '1.9.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -231,15 +231,23 @@
    * 排除词只能拦住标签里带「紧急」的字段;区块里若只写「姓名」「电话」就拦不住。 */
   const BLOCK_SECTION = /紧急联系人|亲属信息|担保人|监护人|推荐人信息|家庭成员/;
 
-  /* 泛化标签 → 该域的规范字段。「描述」在获奖区块是 award.desc,在论文区块是 paper.desc。 */
+  /* 泛化标签 → 该域的规范字段。「描述」在获奖区块是 award.desc,在论文区块是 paper.desc。
+   * 「类别 / 级别 / 等级」是三个不同维度:类别=竞赛还是奖学金,级别=国家级还是校级,
+   * 等级=一等还是二等 —— 合并型表单(OPPO)三个都要,拆开型表单只用其中一两个。 */
   const GENERIC_ROLE = [
     [/^名称$|^标题$|^项目$/, 'name'],
     [/^描述$|^简介$|^说明$|^详情$|^内容$|^补充说明$/, 'desc'],
+    [/^类别$|^类型$/, 'type'],
+    [/^级别$/, 'level'],
     [/^成果$|^结果$|^等级$/, 'result'],
     [/^时间$|^日期$/, 'date'],
   ];
-  // 各域对「result」这一角色的实际字段名不同
-  const ROLE_FIELD = { paper: { result: 'type' }, edu: { result: 'rank' } };
+  // 各域对同一角色的实际字段名不同
+  const ROLE_FIELD = {
+    paper: { result: 'type' },
+    edu: { result: 'rank' },
+    honor: { type: 'category', result: 'grade' },
+  };
   /* 表单把两个字段并成一栏时,由档案现有字段拼出来 */
   const COMPUTED = {
     'lang.certScore': (e) => [e.cert, e.score].filter(Boolean).join(' '),
@@ -514,6 +522,9 @@
     const group = el.name
       ? Array.from(root.querySelectorAll(`input[type="radio"][name="${CSS.escape(el.name)}"]`))
       : [el];
+    /* 这一组已经选过了就别动 —— 哪怕选的和档案不一致,那也是用户自己的选择,
+     * 或是网站解析简历后预填的。和文本框「已有内容不覆盖」是同一条规矩。 */
+    if (group.some((r) => r.checked)) return 'kept';
     let target = null;
     if (key === 'gender') {
       const g = GENDER(v);
@@ -892,6 +903,23 @@
       return nd < pd ? next : prev;
     };
 
+    /* 规则域与区块标题冲突时,信区块标题。
+     *
+     * OPPO 把竞赛和奖学金合并成一个区块,里面的字段叫「获奖时间」「获奖类别」——
+     * 这些词单看会命中 award.* 规则,可它们明明落在「竞赛/获奖经历」区块里,
+     * 该取合并流 honors 而不是 awards。取错列表,整块的段号和取值都会跟着错位:
+     * 名称来自 honors 第 1 段,时间却来自 awards 第 1 段,凑成一条不存在的经历。
+     *
+     * 反过来在大疆那种拆开的表单上,「竞赛/获奖名称」落在「获奖经历」区块里,
+     * 同样会被改判成 award —— 这正是想要的。
+     *
+     * 两道闸门防误伤:两边都得是经历列表域,且目标列表确实有这个字段。 */
+    const retarget = (dom, field, sec) => {
+      if (!sec || sec === dom || !LIST_OF[sec] || !LIST_OF[dom]) return dom;
+      const sample = (P[LIST_OF[sec]] || [])[0];
+      return (sample && field in sample) ? sec : dom;
+    };
+
     /* 泛化标签兜底:标签只有「名称」「描述」「成果」这种词时,规则表认不出来,
      * 但只要知道它落在哪个区块,角色就确定了 —— 大疆的论文区就是这种写法。 */
     const genericHit = (it) => {
@@ -929,7 +957,13 @@
        * 大疆论文区一块里有「名称/描述/成果」三行,祖先文本把三个词都裹进候选,
        * 于是「名称」也会被 *.desc 命中。 */
       const g = genericHit(items[idx]);
-      const hit = (g && (!items[idx].hit || items[idx].hit.dom === '*')) ? g : (items[idx].hit || g);
+      const rh = items[idx].hit;
+      /* 规则是在一段「整块摘要」文字里命中的,而泛化角色是短标签上的完全匹配 ——
+       * 后者是强得多的证据。区块里每栏标签都很短时(OPPO 的「类别」「级别」「等级」),
+       * 兄弟文本恰好退化成「本块其它所有标签」的拼接,里面随便一个词
+       * (比如「获奖时间」)就能让整块六个字段全部命中同一条规则、全填成日期。 */
+      const ruleOnBlob = rh && rh.label && rh.label.length > 8;
+      const hit = (g && (!rh || rh.dom === '*' || ruleOnBlob)) ? g : (rh || g);
       if (!hit) {
         if (cands.length && cands[0].w >= 3 && (tag === 'TEXTAREA' || tag === 'SELECT' || TEXTLIKE.has(type) || type === 'radio')) {
           report.unmatched.push({ label: cands[0].t.slice(0, 30) });
@@ -950,7 +984,8 @@
       if (hit.custom) {
         v = hit.value;
       } else if (hit.dom) {
-        const dom = hit.dom === '*' ? (ambiguousDom(idx, hit) || ctx.domain) : hit.dom;
+        const dom = hit.dom === '*' ? (ambiguousDom(idx, hit) || ctx.domain)
+          : retarget(hit.dom, hit.field, items[idx].sec);
         if (!dom) continue; // 通篇没有任何经历区块字段,无从判断归属
         // 「自我描述」是区块标题但不是经历列表 —— 它下面的描述位就是自我介绍
         if (!LIST_OF[dom]) {
@@ -1038,6 +1073,7 @@
       if (type === 'radio') {
         const r = fillRadio(el, semKey, v, doneGroups);
         if (r === true) report.filled.push({ label: hit.label, value: v });
+        else if (r === 'kept') report.skipped.push({ label: hit.label, reason: '已有选择,未覆盖' });
         else if (r === false) report.skipped.push({ label: hit.label, reason: '选项未匹配' });
         continue;
       }
@@ -1076,7 +1112,11 @@
       ui.step('正在注入简历附件…', 0.95);
       if (resumeFile && resumeFile.dataBase64) {
         const t = pickFileTarget(fileEls);
-        if (t && fillFile(t.el, resumeFile)) {
+        /* 已经传过附件就不换 —— 用户很可能上传了针对这家公司改过的版本,
+         * 或者网站解析过的那一份。悄悄替换成插件里存的旧简历是最坏的一种错。 */
+        if (t && t.el.files && t.el.files.length) {
+          report.skipped.push({ label: t.label, reason: `已上传「${t.el.files[0].name}」,未覆盖` });
+        } else if (t && fillFile(t.el, resumeFile)) {
           report.fileFilled = true;
           report.fileLabel = t.label;
           mark(t.el);
