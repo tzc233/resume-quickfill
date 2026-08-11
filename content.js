@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.9.0';
+  const VERSION = '1.9.1';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -380,20 +380,34 @@
     out.papers = asList(P.papers);
     out.competitions = asList(P.competitions);
     out.awards = asList(P.awards);
-    /* OPPO 把竞赛与奖学金合并成一个列表,每条用「类别/级别/等级」三维描述。
+    /* OPPO 把竞赛与奖学金合并成一个列表,每条用「类别/级别/等级」三个维度描述。
      * 档案里这两类是分开存的,这里拼成一条流 —— 竞赛在前、荣誉在后,与表单顺序一致。
-     * 「级别」(国家级/校级)常混在 type 或 result 里,单独抽出来。 */
+     *
+     * 三个维度必须拆干净,不能把同一个值喂给两栏:
+     *   类别 = 竞赛还是奖学金还是荣誉   (下拉选项:学科竞赛 / 奖学金 / 荣誉称号…)
+     *   级别 = 国家级还是校级           (下拉选项:国家级 / 省级 / 校级…)
+     *   等级 = 一等还是二等
+     * 档案里的 type 常写成「校级奖学金」这种混合值 —— 级别词摘出来给「级别」,
+     * 剩下的「奖学金」才是类别。若 type 只写了级别(比如「国家级」),那就是
+     * 档案里根本没有类别信息:**留空**,由用户自己选。
+     *
+     * 这里刻意不拿「竞赛」二字去凑:类别下拉的选项是「学科竞赛 / 科技竞赛 /
+     * 文体竞赛」这类子类,而选项匹配允许子串命中,拿「竞赛」去撞会选中排在
+     * 最前面的那个子类 —— 那是瞎猜。留空会明确报「档案中未填写」,
+     * 用户把竞赛类型改写成「学科竞赛 国家级」之后两栏就都对了。 */
     const LEVEL_RE = /国家级|国际级|省部级|省级|市级|校级|院级/;
     const pickLevel = (e) => (String(e.type || '').match(LEVEL_RE)
       || String(e.result || '').match(LEVEL_RE) || [''])[0];
+    const pickCategory = (e) =>
+      String(e.type || '').replace(LEVEL_RE, '').replace(/^[\s/、·-]+|[\s/、·-]+$/g, '').trim();
     out.honors = [
       ...out.competitions.map((c) => ({
-        kind: '竞赛', category: c.type || '竞赛', name: c.name,
+        kind: '竞赛', category: pickCategory(c), name: c.name,
         date: c.date || c.startTime, level: pickLevel(c), grade: c.result, desc: c.desc,
       })),
       ...out.awards.map((a) => ({
         kind: /奖学金/.test(String(a.name) + String(a.type)) ? '奖学金' : '荣誉',
-        category: a.type, name: a.name,
+        category: pickCategory(a), name: a.name,
         date: a.date, level: pickLevel(a), grade: a.result, desc: a.desc,
       })),
     ];

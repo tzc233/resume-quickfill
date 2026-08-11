@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · OPPO 合并区块的真实控件构成</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    .section-title { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; font-weight: 600; }
+    .blk { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 14px; margin-bottom: 10px; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+    .lab { width: 170px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 560px; flex-shrink: 0; }
+    input, textarea { width: 100%; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    .ant-select, .ant-picker { width: 560px; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 4px 9px; background: #fff; display: flex; cursor: pointer; min-height: 30px; align-items: center; }
+    .ant-select-selector { display: flex; width: 540px; align-items: center; position: relative; min-height: 22px; }
+    .ant-select-selection-placeholder { color: #9ca3af; }
+    .ant-select-selection-search { position: absolute; inset: 0; }
+    .ant-select-selection-search input { border: none; padding: 0; width: 100%; height: 100%; background: transparent; }
+    .ant-picker input { border: none; outline: none; width: 100%; background: transparent; }
+    .ant-select-dropdown, .ant-picker-dropdown { position: absolute; z-index: 60; background: #fff;
+      border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 5px; }
+    .ant-select-dropdown[hidden], .ant-picker-dropdown[hidden] { display: none; }
+    .ant-select-item-option { padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+    .ant-picker-cell { width: 40px; height: 28px; text-align: center; cursor: pointer; border-radius: 4px; font-size: 12.5px; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">OPPO 合并区块 · 按真实控件构成复刻</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  控件类型取自真实页面的扫描清单:<b>类别 / 级别 / 竞赛还是奖学金</b>三栏是自定义下拉,
+  <b>获奖时间 / 发表时间</b>是日期控件,只有<b>名称 / 等级 / 论文详情</b>是文本框。<br>
+  重点验证三个维度不能互相串:类别下拉里根本没有「国家级」这种选项,
+  把级别值喂进去的话整栏会落空。
+</p>
+
+<div class="section-title">竞赛/获奖经历</div>
+<div class="blk" data-blk="1">
+  <div class="item"><span class="lab">竞赛/奖学金</span><div class="ctl" data-sel="kind"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金类别</span><div class="ctl" data-sel="cat"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金名称</span><div class="ctl"><input id="w1-name"></div></div>
+  <div class="item"><span class="lab">竞赛/获奖时间</span><div class="ctl" data-dp="w1-date" data-year="2022"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金级别</span><div class="ctl" data-sel="lvl"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金等级</span><div class="ctl"><input id="w1-grade"></div></div>
+</div>
+
+<div class="blk" data-blk="2">
+  <div class="item"><span class="lab">竞赛/奖学金</span><div class="ctl" data-sel="kind2"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金类别</span><div class="ctl" data-sel="cat2"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金名称</span><div class="ctl"><input id="w2-name"></div></div>
+  <div class="item"><span class="lab">竞赛/获奖时间</span><div class="ctl" data-dp="w2-date" data-year="2022"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金级别</span><div class="ctl" data-sel="lvl2"></div></div>
+  <div class="item"><span class="lab">竞赛/奖学金等级</span><div class="ctl"><input id="w2-grade"></div></div>
+</div>
+
+<div class="section-title">论文</div>
+<div class="blk">
+  <div class="item"><span class="lab">论文名称</span><div class="ctl"><input id="r1-name"></div></div>
+  <div class="item"><span class="lab">发表时间</span><div class="ctl" data-dp="r1-date" data-year="2026"></div></div>
+  <div class="item"><span class="lab">论文详情</span><div class="ctl"><textarea id="r1-desc" rows="2"></textarea></div></div>
+</div>
+
+<script>
+/* 选项表照搬真实招聘表单的口径:类别是「哪一类荣誉」,级别是「多大范围」,两者互不相干 */
+const KIND = ['竞赛', '奖学金'];
+const CAT  = ['学科竞赛', '科技竞赛', '文体竞赛', '创业竞赛', '奖学金', '荣誉称号'];
+const LVL  = ['国际级', '国家级', '省级', '市级', '校级', '院级'];
+const SPECS = {
+  kind: { opts: KIND }, cat: { opts: CAT }, lvl: { opts: LVL },
+  kind2: { opts: KIND }, cat2: { opts: CAT }, lvl2: { opts: LVL },
+};
+
+for (const [key, spec] of Object.entries(SPECS)) {
+  const host = document.querySelector(`[data-sel="${key}"]`);
+  const sel = document.createElement('div');
+  sel.className = 'ant-select';
+  sel.setAttribute('role', 'combobox');
+  sel.id = 'sel-' + key;
+  sel.innerHTML = `<div class="ant-select-selector">
+      <span class="ant-select-selection-placeholder">请选择</span>
+      <span class="ant-select-selection-item" hidden></span>
+      <span class="ant-select-selection-search"><input readonly></span>
+    </div>`;
+  const item = sel.querySelector('.ant-select-selection-item');
+  const ph = sel.querySelector('.ant-select-selection-placeholder');
+
+  const dd = document.createElement('div');
+  dd.className = 'ant-select-dropdown';
+  dd.hidden = true;
+  for (const o of spec.opts) {
+    const it = document.createElement('div');
+    it.className = 'ant-select-item-option';
+    it.textContent = o;
+    it.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      item.textContent = o; item.hidden = false; ph.hidden = true; dd.hidden = true;
+    });
+    dd.appendChild(it);
+  }
+  document.body.appendChild(dd);
+  sel.addEventListener('mousedown', () => {
+    document.querySelectorAll('.ant-select-dropdown,.ant-picker-dropdown').forEach((d) => { if (d !== dd) d.hidden = true; });
+    const r = sel.getBoundingClientRect();
+    dd.style.left = (r.left + scrollX) + 'px';
+    dd.style.top = (r.bottom + scrollY + 4) + 'px';
+    dd.hidden = false;
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') dd.hidden = true; });
+  host.appendChild(sel);
+}
+
+for (const host of document.querySelectorAll('[data-dp]')) {
+  const box = document.createElement('div');
+  box.className = 'ant-picker';
+  box.id = host.dataset.dp;
+  box.innerHTML = '<span class="ant-picker-selection-item"></span><input readonly placeholder="请选择日期">';
+  const item = box.querySelector('.ant-picker-selection-item');
+
+  const dd = document.createElement('div');
+  dd.className = 'ant-picker-dropdown';
+  dd.hidden = true;
+  const year = Number(host.dataset.year);
+  const tbl = document.createElement('table');
+  let tr = document.createElement('tr');
+  for (let m = 1; m <= 12; m++) {
+    if (m > 1 && (m - 1) % 6 === 0) { tbl.appendChild(tr); tr = document.createElement('tr'); }
+    const td = document.createElement('td');
+    const title = `${year}-${String(m).padStart(2, '0')}`;
+    td.className = 'ant-picker-cell';
+    td.setAttribute('title', title);
+    td.setAttribute('role', 'gridcell');
+    td.textContent = m + '月';
+    td.addEventListener('mousedown', (e) => { e.preventDefault(); item.textContent = title; dd.hidden = true; });
+    tr.appendChild(td);
+  }
+  tbl.appendChild(tr);
+  dd.appendChild(tbl);
+  document.body.appendChild(dd);
+
+  box.addEventListener('mousedown', () => {
+    document.querySelectorAll('.ant-select-dropdown,.ant-picker-dropdown').forEach((d) => { if (d !== dd) d.hidden = true; });
+    const r = box.getBoundingClientRect();
+    dd.style.left = (r.left + scrollX) + 'px';
+    dd.style.top = (r.bottom + scrollY + 4) + 'px';
+    dd.hidden = false;
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') dd.hidden = true; });
+  host.appendChild(box);
+}
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>
