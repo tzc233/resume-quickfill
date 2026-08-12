@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.9.1';
+  const VERSION = '1.9.2';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -388,28 +388,51 @@
      *   级别 = 国家级还是校级           (下拉选项:国家级 / 省级 / 校级…)
      *   等级 = 一等还是二等
      * 档案里的 type 常写成「校级奖学金」这种混合值 —— 级别词摘出来给「级别」,
-     * 剩下的「奖学金」才是类别。若 type 只写了级别(比如「国家级」),那就是
-     * 档案里根本没有类别信息:**留空**,由用户自己选。
-     *
-     * 这里刻意不拿「竞赛」二字去凑:类别下拉的选项是「学科竞赛 / 科技竞赛 /
-     * 文体竞赛」这类子类,而选项匹配允许子串命中,拿「竞赛」去撞会选中排在
-     * 最前面的那个子类 —— 那是瞎猜。留空会明确报「档案中未填写」,
-     * 用户把竞赛类型改写成「学科竞赛 国家级」之后两栏就都对了。 */
+     * 剩下的「奖学金」才是类别。type 只写了级别时才需要另想办法,见 pickCategory。 */
     const LEVEL_RE = /国家级|国际级|省部级|省级|市级|校级|院级/;
     const pickLevel = (e) => (String(e.type || '').match(LEVEL_RE)
       || String(e.result || '').match(LEVEL_RE) || [''])[0];
-    const pickCategory = (e) =>
-      String(e.type || '').replace(LEVEL_RE, '').replace(/^[\s/、·-]+|[\s/、·-]+$/g, '').trim();
+
+    /* 竞赛名称 → 类别。竞赛名本身就是强证据:「数学建模」确实属于学科竞赛,
+     * 「互联网+」确实属于创业竞赛,这是知识不是猜测。只收录归属无争议的 ——
+     * 像「挑战杯」那样大挑是课外学术科技、小挑是创业计划的,一律不收。 */
+    const COMP_CATEGORY = [
+      [/数学建模|数模|美赛|MCM|ICM/i, '学科竞赛'],
+      [/ACM|ICPC|CCPC|程序设计|算法竞赛|编程竞赛|蓝桥|天池|kaggle/i, '学科竞赛'],
+      [/数学竞赛|物理竞赛|化学竞赛|生物竞赛|力学竞赛|英语竞赛|翻译大赛/i, '学科竞赛'],
+      [/电子设计|智能车|机器人|嵌入式|集成电路|芯片设计/i, '科技竞赛'],
+      [/科技创新|发明创造|专利大赛/i, '科技竞赛'],
+      [/互联网\+|创新创业|创业大赛|创业计划/i, '创业竞赛'],
+      [/运动会|田径|篮球|足球|辩论|演讲|合唱|摄影|书法|文艺汇演/i, '文体竞赛'],
+    ];
+
+    /* 类别 = type 去掉级别词后剩下的部分。剩不下东西时分两种情况:
+     *   奖学金 / 荣誉 —— 拿 kind 本身当类别,它就是选项表里的一项,精确命中;
+     *   竞赛         —— 不能拿「竞赛」二字去撞。选项里「学科竞赛 / 科技竞赛 /
+     *                   文体竞赛 / 创业竞赛」四个都含这两个字,子串匹配只会选中
+     *                   排在最前面的那个,选中什么纯看页面怎么排 —— 那才是瞎猜。
+     *                   改从竞赛名称查表;查不到就留空,报「档案中未填写」。 */
+    const pickCategory = (e, kind) => {
+      const rest = String(e.type || '')
+        .replace(LEVEL_RE, '').replace(/^[\s/、·-]+|[\s/、·-]+$/g, '').trim();
+      if (rest) return rest;
+      if (kind !== '竞赛') return kind;
+      const hit = COMP_CATEGORY.find(([re]) => re.test(String(e.name || '')));
+      return hit ? hit[1] : '';
+    };
+
     out.honors = [
       ...out.competitions.map((c) => ({
-        kind: '竞赛', category: pickCategory(c), name: c.name,
+        kind: '竞赛', category: pickCategory(c, '竞赛'), name: c.name,
         date: c.date || c.startTime, level: pickLevel(c), grade: c.result, desc: c.desc,
       })),
-      ...out.awards.map((a) => ({
-        kind: /奖学金/.test(String(a.name) + String(a.type)) ? '奖学金' : '荣誉',
-        category: pickCategory(a), name: a.name,
-        date: a.date, level: pickLevel(a), grade: a.result, desc: a.desc,
-      })),
+      ...out.awards.map((a) => {
+        const kind = /奖学金/.test(String(a.name) + String(a.type)) ? '奖学金' : '荣誉';
+        return {
+          kind, category: pickCategory(a, kind), name: a.name,
+          date: a.date, level: pickLevel(a), grade: a.result, desc: a.desc,
+        };
+      }),
     ];
     out.languages = asList(P.languages);
     out.progLangs = asList(P.progLangs);
