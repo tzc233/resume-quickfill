@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.9.2';
+  const VERSION = '1.10.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -78,9 +78,16 @@
     { k: 'edu.isHighest', re: /是否最高学历|最高学历\s*[??]/i },
     { k: 'edu.eduType',   re: /学历类型|培养方式|统招/i },
     { k: 'edu.studyForm', re: /学习形式|培养形式|全日制/i },
+    /* 学历与学位是两套词,不能混:
+     *   学历 = 读到哪一级 → 专科 / 本科 / 硕士研究生 / 博士研究生
+     *   学位 = 拿到什么学位 → 学士 / 硕士 / 博士
+     * 湖南大学那段本科经历,「学历」栏填「学士」是错的。所以分成两条规则,
+     * 各自换算成本栏该用的说法(见 DEG_EDU / DEG_AWARD)。 */
     // 「最高学历」归入基本信息,恒指向第一段教育经历,不受经历区块顺序影响
-    { k: 'degree',     re: /最高学历|最高学位|highest (education|degree)/i },
-    { k: 'edu.degree', re: /学历|学位|degree|education level|qualification/i },
+    { k: 'degreeAward', re: /最高学位/i },
+    { k: 'degree',      re: /最高学历|highest (education|degree)/i },
+    { k: 'edu.degreeAward', re: /学位|academic degree/i },
+    { k: 'edu.degree',      re: /学历|degree|education level|qualification/i },
     // 顺序要紧:三条都含「实验室」,笼统的那条必须垫底
     { k: 'edu.hasLab',   re: /是否有?实验室|有无实验室/i },
     { k: 'edu.labLevel', re: /实验室级别|实验室层次/i },
@@ -251,6 +258,12 @@
   /* 表单把两个字段并成一栏时,由档案现有字段拼出来 */
   const COMPUTED = {
     'lang.certScore': (e) => [e.cert, e.score].filter(Boolean).join(' '),
+    // 档案只存学历,学位由层级换算得出
+    'edu.degreeAward': (e) => degWord(String(e.degree || ''), 'award'),
+  };
+  /* 取到值之后、写进控件之前的用词换算 —— 与 COMPUTED 不同,这个在有值时也要跑 */
+  const TRANSFORM = {
+    'edu.degree': (v) => degWord(v, 'edu'),
   };
 
   const LIST_OF = {
@@ -455,6 +468,17 @@
   const DEG_LV = (t) => (/博士|phd|doctor/i.test(t) ? 4 : /硕士|研究生|master|msc/i.test(t) ? 3
     : /本科|学士|bachelor|bsc|第一学历|前置学历/i.test(t) ? 2 : /大专|专科|associate|diploma/i.test(t) ? 1 : 0);
 
+  /* 同一段教育经历,「学历」栏和「学位」栏要填不同的词 —— 本科对应的学位是学士,
+   * 反过来把「学士」填进学历栏是错的。按 DEG_LV 的层级换算成本栏该用的说法;
+   * 认不出层级(比如「MBA」「中专」)时原样保留,不擅自改写用户填的内容。 */
+  const DEG_EDU = ['', '专科', '本科', '硕士研究生', '博士研究生'];
+  const DEG_AWARD = ['', '', '学士', '硕士', '博士'];   // 专科没有学位
+  const degWord = (v, kind) => {
+    const lv = DEG_LV(v);
+    if (!lv) return v;   // 认不出层级(MBA、中专…)原样保留,不擅自改写
+    return (kind === 'award' ? DEG_AWARD : DEG_EDU)[lv];   // 专科学位为空,那是事实
+  };
+
   const scopedEduIdx = (list, labelText) => {
     const lv = DEG_LV(labelText);
     if (!lv) return -1;
@@ -487,7 +511,9 @@
       github: L.github, linkedin: L.linkedin, homepage: L.homepage,
       intro: P.intro,
       // 基本信息区出现的「学历 / 毕业时间 / 公司 / 职位」指向最高学历与最近一段经历
-      degree: e0.degree, endTime: e0.endTime, company: w0.company, title: w0.title,
+      degree: degWord(String(e0.degree || ''), 'edu'),
+      degreeAward: degWord(String(e0.degree || ''), 'award'),
+      endTime: e0.endTime, company: w0.company, title: w0.title,
     };
     return String(map[key] ?? '').trim();
   };
@@ -526,7 +552,7 @@
     if (key === 'gender') {
       const g = GENDER(v);
       if (g) target = opts.find((o) => GENDER((o.textContent || '') + ' ' + o.value) === g);
-    } else if (key === 'degree') {
+    } else if (key === 'degree' || key === 'degreeAward') {
       const dv = DEG_LV(v);
       if (dv) target = opts.find((o) => DEG_LV(o.textContent || '') === dv);
     }
@@ -566,7 +592,7 @@
     if (key === 'gender') {
       const g = GENDER(v);
       if (g) target = group.find((r) => GENDER(radioText(r)) === g);
-    } else if (key === 'degree') {
+    } else if (key === 'degree' || key === 'degreeAward') {
       const dv = DEG_LV(v);
       if (dv) target = group.find((r) => DEG_LV(radioText(r)) === dv);
     }
@@ -1078,6 +1104,7 @@
           v = String(entry[FIELD_FALLBACK[`${dom}.${field}`]] ?? '').trim();
         }
         if (!v && COMPUTED[`${dom}.${field}`]) v = String(COMPUTED[`${dom}.${field}`](entry) || '').trim();
+        if (v && TRANSFORM[`${dom}.${field}`]) v = String(TRANSFORM[`${dom}.${field}`](v) || '').trim();
         if (hit.ym && v) {
           // 档案存 YYYY-MM,拆给「年」「月」两个框;月份不补前导零(Moka 显示为 9 而非 09)
           const m = v.match(/^(\d{4})[-/.年]?(\d{1,2})?/);
@@ -1268,7 +1295,7 @@
       const t = g && opts.find((o) => GENDER(txt(o)) === g);
       if (t) return t;
     }
-    if (key === 'degree' || key === 'isHighest') {
+    if (key === 'degree' || key === 'degreeAward' || key === 'isHighest') {
       const d = DEG_LV(v);
       const t = d && opts.find((o) => DEG_LV(txt(o)) === d);
       if (t) return t;
