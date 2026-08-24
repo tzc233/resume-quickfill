@@ -385,6 +385,55 @@ const CHECKS = {
     紧急联系人_邮箱不填: v('ec-email') === '',
   }),
 
+  /* Moka 真实 DOM 逐字复刻。三个致命细节的回归护栏:
+   * 值在 display-value(不是 input.value)、校验提示不得当标签、
+   * 空年月框靠组件内部 input 的 placeholder 表明身份。 */
+  'moka-real.html': (v) => {
+    const wv = (k) => {
+      const b = document.querySelector(`[data-sel="${k}"]`);
+      return (b?.querySelector('.sd-Input-display-value-1RTHN')?.textContent || '').trim();
+    };
+    const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
+    const lbl = (rule) => (s.rows.find((x) => x.rule === rule) || {}).label || '';
+    return {
+      // 标签不能是校验提示
+      标签_不是必填项未填写: !s.rows.some((x) => /项未填写/.test(x.label)),
+      标签_学习形式认对: s.rows.some((x) => x.rule === 'edu.studyForm' && /学习形式/.test(x.label)),
+
+      姓名: v('f-name') === '李思远',
+      最高学历毕业院校: v('f-topschool') === '示例大学',
+      // 已填的下拉不能被重新点选覆盖
+      性别_已填不覆盖: wv('gender') === '女',
+      学历1_已填不覆盖: wv('e1deg') === '硕士',
+      学校1_已填不覆盖: wv('e1school') === '示例大学',
+
+      // 空下拉要真的点上
+      学习形式1_点选成功: wv('e1form') === '全日制',
+      // 档案第二段教育没有 studyForm —— 留空才是对的,不该拿第一段的值顶上
+      学习形式2_档案无此项留空: wv('e2form') === '',
+      英语证书1_点选成功: wv('l1cert') === 'CET-6',
+      英语证书2_没有第二门语言留空: wv('l2cert') === '',
+      出生日期_点选成功: wv('birth') === '2000-06-15',
+
+      // month-range 四联:起对已填不动,止对点上(年份表虚拟滚动,靠打字过滤)
+      教育1_起对不动: wv('e1sy') === '2024' && wv('e1sm') === '9',
+      教育1_止对点上: wv('e1ey') === '2027' && wv('e1em') === '6',
+      教育2_四联都已填不动: wv('e2sy') === '2020' && wv('e2em') === '6',
+
+      // item-half 二联:预计毕业时间在区块外 → 不猜归属;获奖时间分两段
+      预计毕业时间_区块外不猜: wv('gy') === '' && wv('gm') === '',
+      获奖1_日期: wv('a1y') === '2022' && wv('a1m') === '10',
+      获奖1_名称: v('f-a1name') === '示例一等奖学金',
+      获奖2_日期_是第二段: wv('a2y') === '2021' && wv('a2m') === '10',
+      获奖2_名称: v('f-a2name') === '示例二等奖学金',
+
+      学院1: v('f-e1college') === '计算机科学与工程系',
+      绩点2_合并栏: v('f-e2gpa') === '3.63/4.00',
+      自我评价: v('f-intro').includes('AI for Science'),
+      常驻导航_零误点: window.NAV_CLICKS === 0,
+    };
+  },
+
   /* Moka sd-Dropdown:值在内部 input.value,「年」是组件内 addon,只接受点选。
    * 覆盖四条路径:直接点选、语义匹配点选(学历)、打字过滤兜底(虚拟滚动的年份表)、
    * 以及与选项行同 class 的常驻导航绝不能被误点。 */

@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.15.0';
+  const VERSION = '1.16.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -296,9 +296,31 @@
   };
 
   /* ---------- 采集标签候选文本(带权重,权重高者优先) ---------- */
-  const ancestorText = (node) => {
-    let t = '';
-    try { t = clean(node.innerText || ''); } catch { /* 某些节点取 innerText 会抛错 */ }
+  /* 校验提示、字段说明、必填星号都不是标签。Moka 把「必填项未填写」放在
+   * <label> 内部、紧挨着 input —— DOM 距离比真标题 <div class="title-">近,
+   * 权重会压过真标签,于是整片字段的标签都变成了「必填项未填写」。
+   * 只跳过「不包含目标元素」的噪声分支:sd-Input-error 这类 class 也戴在
+   * 包着 input 的 label 上,不能一刀切。 */
+  const NOISE_SEL = '[class*="message" i],[class*="describe" i],[class*="tips" i],'
+    + '[class*="asterisk" i],[class*="required" i],[class*="error-" i]';
+
+  const textOf = (root, skip, keep) => {
+    let out = '';
+    const walk = (n) => {
+      if (out.length > 220 || n === skip) return;
+      if (n.nodeType === 3) { out += ' ' + n.data; return; }
+      if (n.nodeType !== 1) return;
+      if (keep && n !== keep && !n.contains(keep)) {
+        try { if (n.matches(NOISE_SEL)) return; } catch { /* 选择器不支持则不跳过 */ }
+      }
+      for (const c of n.childNodes) walk(c);
+    };
+    for (const c of root.childNodes) walk(c);
+    return out;
+  };
+
+  const ancestorText = (node, keep) => {
+    const t = clean(textOf(node, null, keep));
     // 过长的祖先文本通常是整个经历区块(含多个字段标签),属于噪声
     return t.length > 40 ? '' : t;
   };
@@ -307,14 +329,8 @@
    * <div>学校名称<div><span>某某大学</span><input/></div></div>
    * 往上第二层就能把「学校名称」摘出来;而整段 innerText 会把「值」一起裹进来,
    * 于是标签被读成了「某某大学」这种字段值。 */
-  const siblingText = (parent, child) => {
-    let t = '';
-    for (const n of parent.childNodes) {
-      if (n === child) continue;
-      t += ' ' + (n.textContent || '');
-      if (t.length > 200) break;
-    }
-    const c = clean(t);
+  const siblingText = (parent, child, keep) => {
+    const c = clean(textOf(parent, child, keep));
     return c.length > 40 ? '' : c;
   };
 
@@ -342,10 +358,16 @@
     for (let d = 0; d < 6 && node; d++) {
       const parent = node.parentElement || (node.getRootNode && node.getRootNode().host) || null;
       if (!parent || parent === document.body || parent === document.documentElement) break;
-      const sib = siblingText(parent, node);
+      /* 容器里的表单控件超过 4 个,说明它装的是「一整块字段」,它的文字是多个
+       * 标签拼起来的,不是本字段的标签 —— 到此为止,别再往上取。
+       * 这类拼接文本反复冒充标签:姓名框拿到「…最高学历毕业院校」(含「院校」),
+       * 空的年份框拿到「学历 学习形式 … 学院 …」(含「学院」)。
+       * 阈值取 4:一个「起止时间」最多拆成 年/月/年/月 四个框共用一个标签。 */
+      if (parent.querySelectorAll('input, textarea, select').length > 4) break;
+      const sib = siblingText(parent, node, el);
       if (sib) push(sib, 3.2 - d * 0.3);
       if (parent.tagName === 'FORM') break;
-      const t = ancestorText(parent);
+      const t = ancestorText(parent, el);
       if (t) push(t, 3 - d * 0.3);
       node = parent;
     }
@@ -366,12 +388,21 @@
         if (kws.some((k) => c.t.includes(k))) return { custom: true, value: String(cu.a || '').trim(), label: c.t };
       }
     }
-    // 排除词按全体候选文本判定:任一候选命中即整条规则作废
-    const active = RULES.filter((r) => !(r.ex && cands.some((c) => r.ex.test(c.t))));
+    /* 排除词只在「像标签」的短候选上判定。曾经按全体候选判定,结果:姓名框的
+     * 兄弟文本是「性别 女 出生日期 年龄 最高学历毕业院校」—— 里面的「院校」
+     * 把整条 fullName 规则作废(那条排除词本是为了防止姓名填成学校名),
+     * 姓名于是掉进含「性别」的那段文本,被填成了「女」。
+     * 区块摘要文本里出现的词跟本字段无关,不该连坐。 */
+    const EX_MAX = 12;
+    const active = RULES.filter((r) => !(r.ex
+      && cands.some((c) => c.t.length <= EX_MAX && r.ex.test(c.t))));
     // 候选权重优先于规则顺序 —— 字段自身的精确标签必须压过祖先容器的整块文本,
     // 否则区块内每个字段都会被块首的「学校名称/公司名称」锚点抢先命中。
     for (const c of cands) {
       for (const rule of active) {
+        // 这条候选自身含排除词就跳过它 —— 「意向工作城市是否可以调剂」既含
+        // 「意向工作城市」也含「调剂」,不能只因为它太长就放行
+        if (rule.ex && rule.ex.test(c.t)) continue;
         if (!rule.re.test(c.t)) continue;
         const [dom, field] = rule.k.includes('.') ? rule.k.split('.') : [null, rule.k];
         return { dom, field, anchor: !!rule.a, range: !!rule.r, ym: rule.ym || '', label: c.t };
@@ -1550,17 +1581,28 @@
   const isSelectLike = (el) => widgetKind(el) === '自定义下拉';
 
   const widgetValue = (el) => {
+    /* Moka:选中值渲染在 <span class="sd-Input-display-value">,内部 input 的
+     * value 恒为空(它只是搜索框)。读错位置有两个后果:已填的下拉被当成空的
+     * 重新点选(会覆盖 ATS 解析好的内容),点选之后回读又永远拿不到值,
+     * 于是成功的点选也被报成「点选未生效」。 */
+    const disp = el.querySelector('[class*="display-value"]');
+    if (disp) return clean(disp.textContent || '');
     const item = el.querySelector('.ant-select-selection-item, .el-select__tags-text, [class*="selection-item"]');
     if (item) return clean(item.textContent || '');
-    /* Moka(sd-*):值在内部 input 的 value 里;innerText 只有「年」这类 addon 单位,
-     * 拿它当值会把空组件误判成已填 */
+    /* 组件里有 input 时,它就是值的载体(前面两种显示位都没有的情况下):
+     * 空的 input 就代表空值,绝不能再退到 innerText —— 那里只有「年」这类
+     * addon 单位字,会把空的年份框判成「已有选择」而整片跳过。 */
     const inp = el.querySelector('input');
-    if (/sd-Dropdown/.test(String(el.className))) return clean((inp && inp.value) || '');
-    if (inp && String(inp.value || '').trim()) return clean(inp.value);
+    if (inp) return clean(inp.value || '');
     // 「必填项未填写」「暂无选项」是占位提示不是值 —— 当成值会把空组件误判成已填
     return clean(el.innerText || '')
       .replace(/请选择|请输入|请填写|(必填)?项?未填写|暂无选项|select|choose/gi, '').trim();
   };
+
+  /* 这一页上次成功弹出菜单的触发目标(0=容器 1=内部输入框 2=父层 3=祖父层)。
+   * Moka 的点击处理器不一定绑在组件容器上 —— 骨架显示外面还包着
+   * sd-Tooltip-container 和 ctrl- 包装层。挨个试,试中的记住,后续组件直接用。 */
+  const openHint = { idx: -1 };
 
   const fillWidget = async (el, key, v) => {
     if (widgetValue(el)) return { ok: false, reason: '已有选择,未覆盖' };
@@ -1568,9 +1610,26 @@
      * sd-Menu-container,不差分的话「教育背景」这类导航项会混进选项列表 */
     const before = new Set(openOptions());
     const fresh = () => openOptions().filter((o) => !before.has(o));
-    realClick(el);
-    const opts = await waitUntil(() => { const o = fresh(); return o.length ? o : null; }, 1000);
-    if (!opts) { closePopup(); return { ok: false, reason: '下拉未能展开,请手动选' }; }
+
+    const inp0 = el.querySelector('input');
+    const targets = [el, inp0, el.parentElement,
+      el.parentElement && el.parentElement.parentElement].filter(Boolean);
+    /* 已经摸清这一页该点哪一层之后,就只试那一层加一个兜底 —— 探路成本只付一次。
+     * 组件确实打不开时(禁用的下拉),否则每个都要白等四轮。 */
+    const order = openHint.idx >= 0 && targets[openHint.idx]
+      ? [openHint.idx, ...[...targets.keys()].filter((i) => i !== openHint.idx).slice(0, 1)]
+      : [...targets.keys()];
+    let opts = null;
+    for (const i of order) {
+      const t = targets[i];
+      if (!t) continue;
+      if (t.tagName === 'INPUT') { try { t.focus(); } catch { } }
+      realClick(t);
+      opts = await waitUntil(() => { const o = fresh(); return o.length ? o : null; },
+        i === order[0] ? 500 : 250);
+      if (opts) { openHint.idx = i; break; }
+    }
+    if (!opts) { closePopup(); return { ok: false, reason: '下拉未能展开(试过容器/输入框/父层),请手动选' }; }
     let target = pickOption(opts, key, v);
     if (!target) {
       /* 年份列表常虚拟滚动,目标不在已渲染的选项里。这类输入框接受打字过滤
@@ -1615,8 +1674,15 @@
     const unit = clean(el.innerText || '').replace(/请选择|请输入/g, '').trim();
     if (unit && unit !== own && unit.length <= 2 && !/日期|时间/.test(unit)) {
       cands.push({ t: unit, w: 3.5 });
-      cands.sort((a, b) => b.w - a.w);
     }
+    /* 组件内部 input 的 placeholder 同样看不到(labelCands 只认元素自身的)。
+     * Moka 的空年/月框正是靠 placeholder="年" 表明身份的。
+     * 但「请选择日期」这种纯提示语要整条丢掉 —— 剥掉「请选择」剩下的「日期」
+     * 是残渣不是标签,给它高权重会把真标签「出生日期」顶掉。 */
+    const rawPh = String((el.querySelector('input') || {}).placeholder || '').trim();
+    const ph = /^请(选择|输入|填写)/.test(rawPh) ? '' : clean(rawPh);
+    if (ph && ph !== own) cands.push({ t: ph, w: 4 });
+    cands.sort((a, b) => b.w - a.w);
     if (!own) return cands;
     return cands.filter((c) => c.t !== own && !(c.t.length >= 2 && own.includes(c.t)));
   };
@@ -1742,14 +1808,22 @@
     }
     const wRows = scanCustomWidgets(customs, widgets, sections);
     rows.push(...wRows);
+    /* 采样配额:标签可疑的字段(有 note)最值钱 —— 它们多半是坏掉的组件;
+     * 未命中的其次(常是导航/搜索这类本就不该填的)。相同骨架只留一份,
+     * 免得三个「至今」勾选框占掉三个名额。 */
+    const seen = new Set();
     let snips = 0;
-    for (const r of rows) {
-      if (snips < 10 && r.snipEl && (!r.rule || r.note)) {
-        r.snip = domSnip(r.snipEl);
-        snips++;
-      }
-      delete r.snipEl;   // DOM 引用无法跨 executeScript 序列化,必须摘掉
-    }
+    const sample = (r) => {
+      if (snips >= 12 || !r.snipEl) return;
+      const sn = domSnip(r.snipEl);
+      if (seen.has(sn)) return;
+      seen.add(sn);
+      r.snip = sn;
+      snips++;
+    };
+    for (const r of rows) if (r.note) sample(r);
+    for (const r of rows) if (!r.rule && !r.note) sample(r);
+    for (const r of rows) delete r.snipEl;   // DOM 引用无法跨 executeScript 序列化
     // 带上引擎版本:扩展文件被 Chrome 缓存,不点「刷新扩展」就仍在跑旧代码,
     // 有版本号才能一眼看出这份清单是不是过期的
     return {

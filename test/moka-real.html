@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · Moka 真实 DOM 复刻</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 940px; margin: 20px auto; padding: 0 16px; color: #1f2937; }
+    .blockTitle-dcmrfhpkg1 { font-size: 15px; font-weight: 600; margin: 18px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .apply-fields-BzcXI4i2Pm { border: 1px solid #e5e7eb; border-radius: 10px; padding: 6px 14px; margin-bottom: 10px; }
+    .apply-field-Q2iJ7AtQGX { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0; }
+    .title-IWWQ0Xa4L7 { width: 180px; flex-shrink: 0; color: #374151; font-size: 13px; padding-top: 5px; }
+    .ctrl-CICMG4Fr4_ { width: 620px; flex-shrink: 0; }
+    .sd-Input-container-3OoVt { display: flex; align-items: center; border: 1px solid #d1d5db;
+      border-radius: 6px; padding: 4px 9px; background: #fff; position: relative; min-height: 26px; }
+    .sd-Select-container-D6nZH { cursor: pointer; }
+    .sd-Input-input-QsLkW { border: none; outline: none; flex: 1; min-width: 40px; padding: 2px; font: inherit; background: transparent; }
+    .sd-Input-display-value-1RTHN { color: #1f2937; margin-right: 4px; }
+    .sd-Input-message-1XQaw { position: absolute; left: 0; top: 100%; font-size: 12px; color: #dc2626; }
+    .sd-Input-addon-29hJw { color: #9ca3af; font-size: 12px; }
+    .month-range-select { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .item-CNFmjn2r6y, .item-half-mz_My7kExy { width: 120px; }
+    .sd-Textarea-textarea-2IL5N { width: 100%; min-height: 54px; border: 1px solid #d1d5db; border-radius: 6px; padding: 5px 9px; font: inherit; }
+    .sd-Dropdown-dropdown-1c-rG { position: absolute; z-index: 80; background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 4px; min-width: 180px; max-height: 220px; overflow: auto; }
+    .sd-Dropdown-dropdown-1c-rG[hidden] { display: none; }
+    .sd-Menu-container-3HY1z { padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+    .sd-Menu-container-3HY1z:hover { background: #eef2ff; }
+    .nav-zjN_DfSsJz { position: fixed; right: 8px; top: 80px; width: 130px; font-size: 12px;
+      border: 1px dashed #d1d5db; border-radius: 8px; padding: 6px; list-style: none; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">Moka 真实 DOM 复刻(class 名与嵌套层级逐字照搬)</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  三个致命细节:① 选中值在 <code>sd-Input-display-value</code>,内部 input 的 value <b>恒为空</b>;<br>
+  ② 校验提示「必填项未填写」在 <code>&lt;label&gt;</code> 内部、紧挨 input,DOM 距离比真标题 <code>title-*</code> 更近;<br>
+  ③ 空的年/月框靠 <code>placeholder="年"</code> 表明身份,而 placeholder 在组件<b>内部</b>的 input 上。
+</p>
+
+<!-- 常驻锚点导航:同样用 sd-Menu-container,必须靠快照差分排除 -->
+<ul class="nav-zjN_DfSsJz">
+  <li><div class="sd-Menu-container-3HY1z" data-nav>教育背景</div></li>
+  <li><div class="sd-Menu-container-3HY1z" data-nav>2024</div></li>
+</ul>
+
+<div id="form"></div>
+
+<script>
+window.NAV_CLICKS = 0;
+
+/* ---- 按真实 DOM 生成各类字段 ---- */
+const YEARS = Array.from({length: 41}, (_, i) => String(1990 + i));
+const MONTHS = Array.from({length: 12}, (_, i) => String(i + 1));
+
+// 文本输入(string_info):值直接在 input.value
+function textField(title, id, value, ph) {
+  return `<div class="apply-field-Q2iJ7AtQGX string_info-UOJxKN5mtC">
+    <div class="title-IWWQ0Xa4L7"><span><span>${title}</span></span><span class="required-asterisk-av7daEKsLS">*</span></div>
+    <div class="ctrl-CICMG4Fr4_"><div class="sd-Tooltip-container-2zU-8" style="width:100%">
+      <label class="sd-Input-container-3OoVt string_info no-adaptive-tooltip sd-Input-lg-39_0c" style="width:100%">
+        <input type="text" class="sd-Input-input-QsLkW sd-Input-common-input-21SDH" id="${id}"
+               autocomplete="new_password" placeholder="${ph || title}" maxlength="255" value="${value || ''}">
+        ${value ? '' : '<div class="sd-Input-message-1XQaw sd-Input-error-26mRf">必填项未填写</div>'}
+      </label></div><div><div class="describe-GCCjupJ4ID"></div></div></div></div>`;
+}
+
+// 下拉(Select / select_info):值在 display-value,input 恒空
+function selField(title, key, opts, value, ph) {
+  return `<div class="apply-field-Q2iJ7AtQGX Select-oqOV0aGogs">
+    <div class="title-IWWQ0Xa4L7"><span><span>${title}</span></span><span class="required-asterisk-av7daEKsLS">*</span></div>
+    <div class="ctrl-CICMG4Fr4_"><div class="sd-Tooltip-container-2zU-8 w-full-mRUtzMQLHs">
+      <div class="sd-Dropdown-container-282zZ" data-sel="${key}" data-opts="${opts.join('|')}" style="width:100%">
+        <label class="sd-Input-container-3OoVt sd-Select-container-D6nZH select no-adaptive-tooltip sd-Input-lg-39_0c" style="width:100%">
+          <span class="sd-Input-display-value-1RTHN sd-Input-display-value-spacing-bhYPY">${value ? `<span class="">${value}</span>` : ''}</span>
+          <input type="text" class="sd-Input-input-QsLkW sd-Input-common-input-21SDH sd-Input-has-addon-SMZCZ"
+                 placeholder="${ph === undefined ? (value ? '' : '请选择') : ph}" autocomplete="nope" maxlength="-1" value="">
+          <span class="sd-Input-addon-29hJw sd-Select-addon-3AtZz"><div class="sd-Input-shadow-21f5l"></div></span>
+          ${value ? '' : '<div class="sd-Input-message-1XQaw sd-Input-error-26mRf">必填项未填写</div>'}
+        </label><span data-menu></span></div></div>
+      <div><div class="describe-GCCjupJ4ID"></div></div></div></div>`;
+}
+
+// 起止时间(month-range-select 四联)/ 单日期(item-half 二联)
+function rangeField(title, keys, values, half) {
+  const cls = half ? 'item-half-mz_My7kExy' : 'item-CNFmjn2r6y';
+  const cell = (k, v, ph) => `<div class="${cls}"><div class="sd-Tooltip-container-2zU-8 full-width-fZap_B2OcF">
+      <div class="sd-Dropdown-container-282zZ" data-sel="${k}" data-opts="${(/y$/.test(k) ? YEARS : MONTHS).join('|')}" style="width:100%">
+        <label class="sd-Input-container-3OoVt sd-Select-container-D6nZH no-adaptive-tooltip sd-Input-lg-39_0c" style="width:100%">
+          <span class="sd-Input-display-value-1RTHN sd-Input-display-value-spacing-bhYPY">${v ? `<span class="">${v}</span>` : ''}</span>
+          <input type="text" class="sd-Input-input-QsLkW sd-Input-common-input-21SDH sd-Input-has-addon-SMZCZ"
+                 placeholder="${v ? '' : ph}" autocomplete="nope" maxlength="-1" value="">
+          <span class="sd-Input-addon-29hJw sd-Select-addon-3AtZz"><div class="sd-Input-shadow-21f5l"></div></span>
+          <div class="sd-Input-message-1XQaw sd-Input-error-26mRf"></div>
+        </label><span data-menu></span></div></div></div>`;
+  const cells = keys.map((k, i) => cell(k, values[i], /y$/.test(k) ? '年' : '月'));
+  const body = half ? cells.join('')
+    : `<span>${cells[0]}${cells[1]}</span><span class="till-QjTOI37re2">-<br></span><span>${cells[2]}${cells[3]}</span>`;
+  return `<div class="apply-field-Q2iJ7AtQGX date_info-nCj8tT_zjw full-width-field-_9KdqB6mcu">
+    <div class="title-IWWQ0Xa4L7"><span><span>${title}</span></span><span class="required-asterisk-av7daEKsLS">*</span></div>
+    <div class="ctrl-CICMG4Fr4_"><div class="month-range-select date_info wrapper-Wilqy7sjl0">
+      <label class="label-ZJNsc2aXvx"></label>${body}
+      <div class="error-xvdaUhi8z1">必填项未填写</div>
+    </div><div><div class="describe-GCCjupJ4ID"></div></div></div></div>`;
+}
+
+function areaField(title, id, value) {
+  return `<div class="apply-field-Q2iJ7AtQGX text_info-YMkFcQzvoO">
+    <div class="title-IWWQ0Xa4L7"><span><span>${title}</span></span></div>
+    <div class="ctrl-CICMG4Fr4_"><div class="sd-Textarea-container-2QhFO" style="width:100%">
+      <textarea class="sd-Textarea-textarea-2IL5N text_info" id="${id}" placeholder="内容">${value || ''}</textarea>
+    </div><div><div class="describe-GCCjupJ4ID"></div></div></div></div>`;
+}
+
+const block = (title, groups) => `<div class="apply-block-KRDTLLb5hU">
+  <div class="blockTitle-dcmrfhpkg1"><span class="text-JHHb1llnzL"><span>${title}</span></span></div>
+  ${groups.map((g) => `<div class="apply-fields-BzcXI4i2Pm multi-NTCDdF2lci">${g}</div>`).join('')}</div>`;
+
+document.getElementById('form').innerHTML = [
+  block('个人信息', [
+    textField('姓名', 'f-name', '') +
+    selField('性别', 'gender', ['男', '女'], '女') +
+    selField('出生日期 (年龄)', 'birth', ['2000-06-15', '2001-01-01'], '', '出生日期 (年龄)') +
+    textField('最高学历毕业院校', 'f-topschool', '') +
+    rangeField('预计毕业时间：', ['gy', 'gm'], ['', ''], true) +
+    selField('是否校园大使推荐', 'amb', ['是', '否'], ''),
+  ]),
+  block('教育背景', [
+    selField('学历', 'e1deg', ['大专', '本科', '硕士', '博士'], '硕士') +
+    selField('学习形式', 'e1form', ['全日制', '非全日制'], '') +
+    rangeField('就读时间', ['e1sy', 'e1sm', 'e1ey', 'e1em'], ['2024', '9', '', '']) +
+    selField('学校名称', 'e1school', ['示例大学', '样例学院'], '示例大学') +
+    textField('学院', 'f-e1college', '') +
+    selField('专业名称', 'e1major', ['计算机科学与技术', '软件工程'], '计算机科学与技术') +
+    selField('专业排名', 'e1rank', ['前10%', '前30%'], '') +
+    textField('绩点/绩点总分', 'f-e1gpa', ''),
+
+    selField('学历', 'e2deg', ['大专', '本科', '硕士', '博士'], '本科') +
+    selField('学习形式', 'e2form', ['全日制', '非全日制'], '') +
+    rangeField('就读时间', ['e2sy', 'e2sm', 'e2ey', 'e2em'], ['2020', '9', '2024', '6']) +
+    selField('学校名称', 'e2school', ['示例大学', '样例学院'], '样例学院') +
+    textField('学院', 'f-e2college', '') +
+    textField('绩点/绩点总分', 'f-e2gpa', ''),
+  ]),
+  block('获奖经历', [
+    rangeField('获奖时间', ['a1y', 'a1m'], ['', ''], true) + textField('奖项名称', 'f-a1name', ''),
+    rangeField('获奖时间', ['a2y', 'a2m'], ['', ''], true) + textField('奖项名称', 'f-a2name', ''),
+  ]),
+  block('英语水平', [
+    selField('英语等级证书', 'l1cert', ['CET-4', 'CET-6', '雅思', '托福'], ''),
+    selField('英语等级证书', 'l2cert', ['CET-4', 'CET-6', '雅思', '托福'], ''),
+  ]),
+  block('其他', [areaField('自我评价', 'f-intro', '')]),
+].join('');
+
+/* ---- 下拉行为:菜单渲染在 label 的兄弟 span 内(与真实一致),点选写入 display-value ---- */
+document.querySelectorAll('[data-sel]').forEach((box) => {
+  const opts = box.dataset.opts.split('|');
+  const disp = box.querySelector('.sd-Input-display-value-1RTHN');
+  const input = box.querySelector('input');
+  const host = box.querySelector('[data-menu]');   // 专属宿主:不能用 label + span,
+  // month-range 里 <label class="label-"> 后面跟的是装着起始年月格子的 span,会被误清空
+  const virtual = opts.length > 20;   // 年份表模拟虚拟滚动
+
+  const render = (kw) => {
+    let rows = kw ? opts.filter((o) => o.includes(kw)) : opts;
+    if (virtual && !kw) rows = rows.slice(0, 10);
+    host.innerHTML = `<div class="sd-Dropdown-dropdown-1c-rG"><div class="sd-Select-menu-UbIS2">
+      <div class="sd-Select-scrollable-1FoVy">${rows.map((o) =>
+        `<div class="sd-Select-common-item-3mSTZ"><div class="sd-Menu-container-3HY1z" data-o="${o}">
+          <span style="width:0px;flex:0 0 auto"></span>
+          <div class="sd-Menu-content-2vKOA sd-Menu-leftItem-2sehK"><div class="sd-Menu-content-item-37fPj">
+            <div class="option-label-p2B4XVc4Pn">${o}</div></div></div></div></div>`).join('')}
+      </div></div></div>`;
+    host.querySelectorAll('[data-o]').forEach((it) => {
+      it.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        disp.innerHTML = `<span class="">${it.dataset.o}</span>`;
+        const msg = box.querySelector('.sd-Input-message-1XQaw');
+        if (msg) msg.textContent = '';
+        host.innerHTML = '';
+      });
+    });
+  };
+  box.addEventListener('mousedown', () => {
+    document.querySelectorAll('[data-menu]').forEach((h) => { if (h !== host) h.innerHTML = ''; });
+    render('');
+  });
+  input.addEventListener('input', (e) => { if (host.innerHTML) render(e.target.value.trim()); });
+  // 受控吐回:打字不算提交
+  input.addEventListener('blur', () => { input.value = ''; });
+});
+document.querySelectorAll('[data-nav]').forEach((n) =>
+  n.addEventListener('click', () => { window.NAV_CLICKS++; }));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') document.querySelectorAll('[data-menu]').forEach((h) => { h.innerHTML = ''; });
+});
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>
