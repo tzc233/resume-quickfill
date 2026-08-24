@@ -159,27 +159,42 @@ async function doScan() {
   } catch (e) { status.textContent = '扫描失败:' + ((e && e.message) || e); return; }
 
   const rows = [];
+  const sections = [];
   let ver = '';
   for (const r of results || []) if (r && r.result && r.result.rows) {
     rows.push(...r.result.rows);
+    sections.push(...(r.result.sections || []));
     ver = r.result.version || ver;
   }
   if (!rows.length) { status.textContent = '没有扫描到任何表单字段。'; return; }
 
+  /* 档案概况只报「每类几段」,不含任何内容 —— 这份报告是拿去贴给别人(AI)看的,
+   * 里面绝不能混进手机号、学校名这类真实信息 */
+  let pf = {};
+  try { pf = (await rqfApi.storage.local.get('profile')).profile || {}; } catch { }
+  const listCounts = CHECK_LISTS
+    .map(([k, cn]) => `${cn}${Array.isArray(pf[k]) ? pf[k].length : 0}段`).join(' · ');
+  const basicN = CHECK_BASIC.filter(([k]) => String((pf.basic || {})[k] || '').trim()).length;
+
   const miss = rows.filter((r) => !r.rule && !r.filled);
+  const warns = rows.filter((r) => r.note).length;
   const lines = [
-    `# 字段清单 — ${tab.title || ''}`,
+    `# 诊断报告 — ${tab.title || ''}`,
     tab.url,
     `引擎版本 ${ver || '未知'}(与 README 不符说明扩展未刷新)`,
-    `共 ${rows.length} 个字段,其中 ${miss.length} 个未命中规则`,
+    `档案概况(仅段数):${listCounts} · 基本信息 ${basicN}/${CHECK_BASIC.length} 项`,
+    sections.length
+      ? `识别到的区块标题:${sections.map((x) => `${x.text}→${x.dom}`).join(' · ')}`
+      : '未识别到任何区块标题(泛化标签将只能靠前后邻居猜归属)',
+    `共 ${rows.length} 个字段:${miss.length} 个未命中规则,${warns} 个标签定位可疑`,
     '',
-    '| 字段标签 | 控件 | 命中规则 | 已有值 |',
-    '| --- | --- | --- | --- |',
-    ...rows.map((r) => `| ${r.label} | ${r.ctrl} | ${r.rule || '—'} | ${r.filled ? '是' : ''} |`),
+    '| 字段标签 | 控件 | 命中规则 | 区块 | 已有值 | 提示 |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...rows.map((r) => `| ${r.label} | ${r.ctrl} | ${r.rule || '—'} | ${r.sec || ''} | ${r.filled ? '是' : ''} | ${r.note || ''} |`),
   ];
   try {
     await navigator.clipboard.writeText(lines.join('\n'));
-    status.textContent = `✅ 已复制 ${rows.length} 个字段的清单到剪贴板(${miss.length} 个未命中规则)`;
+    status.textContent = `✅ 诊断报告已复制(${rows.length} 个字段,${miss.length} 个未命中,${warns} 个标签可疑),直接粘贴即可`;
   } catch {
     status.textContent = `扫描到 ${rows.length} 个字段,但复制失败,请看下方列表`;
   }

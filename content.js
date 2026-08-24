@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.10.0';
+  const VERSION = '1.11.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -60,7 +60,8 @@
 
     /* ---- 求职意向 ---- */
     { k: 'expectedCity2',  re: /意向工作地\s*2|期望工作地\s*2|意向城市\s*2/i },
-    { k: 'expectedCity',   re: /意向工作城市|意向工作地|意向面试地点|期望(工作)?(城市|地点|地区)|意向城市|期望工作地|工作意向地|preferred (city|location)|desired (city|location)/i },
+    { k: 'expectedCity',   re: /意向工作城市|意向工作地|意向面试地点|期望(工作)?(城市|地点|地区)|意向城市|期望工作地|工作意向地|preferred (city|location)|desired (city|location)/i,
+      ex: /是否|调剂/ },   // 「意向工作城市是否可以调剂」是调剂意愿问句,填城市名进去是错的
     { k: 'expectedSalary', re: /期望(薪资|月薪|年薪|薪酬)|薪资要求|expected salary|desired salary|salary expect/i, ex: /当前|现在|目前|current/i },
     { k: 'availableDate',  re: /到岗|入职时间|onboard|available (date|time)|start date|earliest start/i },
     { k: 'yearsExp',       re: /工作年限|工作经验年|years? of (work )?experience|experience years?/i },
@@ -71,9 +72,15 @@
     { k: 'campusWork', re: /校园工作经历|校园经历|校园组织|学生工作|学生干部|校内活动|社团经历/i },
 
     /* ---- 教育经历(锚点:学校) ---- */
+    /* 「最高学历毕业院校」出现在基本信息区,必须归成基本信息键:
+     * edu.school 是锚点,让它命中的话会把教育区块计数器提前消耗一格,
+     * 后面真正的教育经历整体错位一段(Shopee 就是这种布局)。 */
+    { k: 'topSchool', re: /最高学历(毕业)?院校|最高学历学校/i },
     { k: 'edu.college', re: /学院.?系|院系|学院|系别|department|faculty/i },
     { k: 'edu.school', a: 1, re: /学校名称|毕业院校|毕业学校|院校名称|学校|院校|大学名称|university|college|school|alma mater/i,
       ex: /高中|初中|小学|middle school|high school|primary/i },
+    // 「专业排名」含「专业」二字,排名必须排在专业之前,否则排名栏会被填成专业名
+    { k: 'edu.rank',     re: /成绩排名|专业排名|年级排名|排名|\brank\b/i },
     { k: 'edu.major',  re: /专业名称|所学专业|专业|major|field of study|discipline/i, ex: /专业技能|专业证书|专业能力/i },
     { k: 'edu.isHighest', re: /是否最高学历|最高学历\s*[??]/i },
     { k: 'edu.eduType',   re: /学历类型|培养方式|统招/i },
@@ -81,20 +88,22 @@
     /* 学历与学位是两套词,不能混:
      *   学历 = 读到哪一级 → 专科 / 本科 / 硕士研究生 / 博士研究生
      *   学位 = 拿到什么学位 → 学士 / 硕士 / 博士
-     * 湖南大学那段本科经历,「学历」栏填「学士」是错的。所以分成两条规则,
+     * 同一段本科经历,「学历」栏填「学士」是错的。所以分成两条规则,
      * 各自换算成本栏该用的说法(见 DEG_EDU / DEG_AWARD)。 */
     // 「最高学历」归入基本信息,恒指向第一段教育经历,不受经历区块顺序影响
     { k: 'degreeAward', re: /最高学位/i },
     { k: 'degree',      re: /最高学历|highest (education|degree)/i },
     { k: 'edu.degreeAward', re: /学位|academic degree/i },
-    { k: 'edu.degree',      re: /学历|degree|education level|qualification/i },
+    // 「请问你是否填写了本科学历」这类问句问的是"是/否",不是学历本身
+    { k: 'edu.degree',      re: /学历|degree|education level|qualification/i, ex: /是否|请问/ },
     // 顺序要紧:三条都含「实验室」,笼统的那条必须垫底
     { k: 'edu.hasLab',   re: /是否有?实验室|有无实验室/i },
     { k: 'edu.labLevel', re: /实验室级别|实验室层次/i },
     { k: 'edu.lab',      re: /实验室(全称|名称)?/i },
     { k: 'edu.advisor',  re: /导师|指导教师|指导老师|负责老师|supervisor|advisor/i },
     { k: 'edu.research', re: /研究方向|研究领域|research (interest|direction)/i },
-    { k: 'edu.rank',     re: /成绩排名|专业排名|年级排名|排名|\brank\b/i },
+    // Shopee 把绩点和总分并成一栏「绩点/绩点总分」,拼成 3.63/4.00 整体填入
+    { k: 'edu.gpaCombined', re: /绩点.{0,3}绩点总分|绩点\s*\/\s*总分/i },
     { k: 'edu.gpaTotal', re: /gpa\s*总分|总分|满分/i },
     { k: 'edu.gpaScore', re: /gpa\s*(分数|成绩)|绩点|gpa|平均分|均分/i },
     { k: 'edu.timeRange', r: 1, re: /就读时间|在校时间|教育时间|学习时间/i },
@@ -176,11 +185,15 @@
     /* ---- 外语能力(锚点:语言种类) ---- */
     { k: 'lang.name', a: 1, re: /语言种类|语种|外语语言/i },
     { k: 'lang.certScore', re: /语言证书及成绩|证书及成绩|证书与成绩/i },
-    { k: 'lang.cert', re: /认证类型|证书类型|考试类型|语言证书/i },
+    /* Shopee 的英语水平列表每段只有一栏「英语等级证书」:作为锚点分段后,
+     * 档案只有一门语言时第二段会明确报「没有第 2 段」,而不是重复填同一本证书 */
+    { k: 'lang.cert', a: 1, re: /认证类型|证书类型|考试类型|语言证书|等级证书/i },
     { k: 'lang.score', re: /^成绩$|语言成绩|外语成绩|考试成绩|等级.{0,2}分数/i },
 
     /* ---- 编程语言能力(锚点:编程语言名称) ---- */
     { k: 'prog.name', a: 1, re: /编程语言名称|编程语言|programming language/i },
+    // 「职业技能&掌握程度」一栏并两问,拼成「Python 熟练」
+    { k: 'prog.nameLevel', re: /(职业)?技能.{0,3}掌握程度/i },
     { k: 'prog.level', re: /掌握程度|熟练程度|proficien/i },
 
     /* ---- 整段文本型成果(表单未拆结构时使用) ---- */
@@ -228,7 +241,7 @@
 
     // prog 必须排在 lang 之前:「编程语言能力」同时含「语言能力」
     [/编程语言/, 'prog'],
-    [/语言能力|外语能力|语言水平/, 'lang'],
+    [/语言能力|外语能力|语言水平|英语水平|外语水平/, 'lang'],
     [/自我描述|自我评价|个人描述|个人陈述/, 'self'],
     [/专利/, 'patent'],
     [/软件著作/, 'soft'],
@@ -245,6 +258,7 @@
     [/^名称$|^标题$|^项目$/, 'name'],
     [/^描述$|^简介$|^说明$|^详情$|^内容$|^补充说明$/, 'desc'],
     [/^类别$|^类型$/, 'type'],
+    [/^职责$/, 'role'],
     [/^级别$/, 'level'],
     [/^成果$|^结果$|^等级$/, 'result'],
     [/^时间$|^日期$/, 'date'],
@@ -260,6 +274,8 @@
     'lang.certScore': (e) => [e.cert, e.score].filter(Boolean).join(' '),
     // 档案只存学历,学位由层级换算得出
     'edu.degreeAward': (e) => degWord(String(e.degree || ''), 'award'),
+    'edu.gpaCombined': (e) => [e.gpaScore, e.gpaTotal].filter(Boolean).join('/'),
+    'prog.nameLevel': (e) => [e.name, e.level].filter(Boolean).join(' '),
   };
   /* 取到值之后、写进控件之前的用词换算 —— 与 COMPUTED 不同,这个在有值时也要跑 */
   const TRANSFORM = {
@@ -504,6 +520,7 @@
       city: b.city, expectedCity: b.expectedCity, expectedCity2: b.expectedCity2,
       expectedSalary: b.expectedSalary, yearsExp: b.yearsExp, availableDate: b.availableDate,
       gradYear: b.gradYear || String(e0.endTime || '').slice(0, 4),
+      topSchool: e0.school,
       highestSchoolCity: b.highestSchoolCity || e0.city,
       lastMajor: b.lastMajor || e0.major,
       publications: P.publicationsText, awards: P.awardsText, languages: P.languagesText,
@@ -658,7 +675,7 @@
     [/奖项|荣誉|获奖|奖学金|award|honor/i, 'award'],
     [/专利|patent/i, 'patent'],
     [/软件著作|软著|software/i, 'soft'],
-    [/外语|语言|language/i, 'lang'],
+    [/外语|语言|英语|language/i, 'lang'],
     [/编程语言|programming/i, 'prog'],
   ];
 
@@ -680,16 +697,19 @@
     return cand.filter((b) => !cand.some((o) => o !== b && b.el.contains(o.el)));
   };
 
-  /** 页面上某个域现有几段:数锚点;没有锚点但有该域字段则算 1 段 */
+  /** 页面上某个域现有几段。一段里可能有多个锚点字段(honor 的 kind+name、
+   * lang 的 name+cert),按锚点总数算会虚高一倍,须按同名锚点的出现次数取最大值 */
   const countBlocks = (items, dom) => {
-    let anchors = 0, any = false;
+    const per = {};
+    let any = false;
     for (const it of items) {
       const h = it.hit;
       if (!h || h.dom !== dom) continue;
       any = true;
-      if (h.anchor) anchors++;
+      if (h.anchor) per[h.field] = (per[h.field] || 0) + 1;
     }
-    return anchors || (any ? 1 : 0);
+    const counts = Object.values(per);
+    return (counts.length ? Math.max(...counts) : 0) || (any ? 1 : 0);
   };
 
   /** 找该域对应的「+ 添加」:先看按钮文字,再退回「紧跟在该域最后一个字段之后」 */
@@ -885,7 +905,11 @@
 
     /* 经历区块上下文:按 DOM 顺序推进。
      * 同一域内锚点字段(学校/公司/项目名称)重复出现 → 进入下一段经历。 */
-    const ctx = { domain: null, idx: {}, used: {}, taken: new Set() };
+    /* taken 记录「哪个域第几段的哪个字段已填过」,供通配字段判断上一段是否已满;
+     * takenSec 只记录发生在该域自己区块里的那部分 —— 分段推进只认它:
+     * 基本信息区的「预计毕业时间」也占用 edu#0#endTime,但它不在教育区块里,
+     * 不能因为它先出现,就把教育区块里第一个「结束时间」顶到下一段去。 */
+    const ctx = { domain: null, idx: {}, used: {}, taken: new Set(), takenSec: new Set() };
     for (const d of Object.keys(LIST_OF)) { ctx.idx[d] = 0; ctx.used[d] = new Set(); }
 
     /* 第一趟:先算出每个字段的匹配结果 —— 通配字段(「起止时间」)需要看前后文才能定归属。
@@ -1059,6 +1083,7 @@
         let field = hit.field;
         // 「本科院校」这类带学历限定的标签直接按学历定位,不参与区块计数
         let i = dom === 'edu' ? scopedEduIdx(list, hit.label) : -1;
+        const scoped = i >= 0;
         if (i < 0) {
           ctx.domain = dom;
           /* 分段判定:只有锚点(学校/公司/论文名称…)与时间区间参与计数 ——
@@ -1087,6 +1112,12 @@
           } else if (hit.anchor) {
             if (used.has(field)) { ctx.idx[dom]++; used.clear(); }
             used.add(field);
+          } else if (items[idx].sec === dom && ctx.takenSec.has(`${dom}#${ctx.idx[dom]}#${field}`)) {
+            /* Shopee 把「学历/学习形式」排在锚点「学校名称」之前:第二段的这些字段
+             * 出现时锚点还没轮到,按旧规则会取到第一段的值。放开「非锚点不参与分段」
+             * 的限制,但必须以区块标题为闸门 —— 基本信息区的「学历」不在教育区块里,
+             * 不会把段号带偏(当年正是为了它才禁止非锚点参与计数)。 */
+            ctx.idx[dom]++; used.clear();
           }
           i = ctx.idx[dom];
         }
@@ -1097,6 +1128,7 @@
         }
         semKey = field;
         ctx.taken.add(`${dom}#${i}#${field}`);
+        if (!scoped && items[idx].sec === dom) ctx.takenSec.add(`${dom}#${i}#${field}`);
         v = String(entry[field] ?? '').trim();
         // 百度把「项目职务」和「项目职责」拆开,中兴只有一个「项目中职责」——
         // 表单只给一栏时,用另一个字段兜底,免得该栏空着
@@ -1458,7 +1490,7 @@
     return cands.filter((c) => c.t !== own && !(c.t.length >= 2 && own.includes(c.t)));
   };
 
-  const scanCustomWidgets = (customs, widgets) => {
+  const scanCustomWidgets = (customs, widgets, sections = []) => {
     const rows = [];
     for (const el of widgets) {
       const cands = widgetCands(el);
@@ -1473,6 +1505,8 @@
         label,
         ctrl: SUPPORTED_WIDGETS.has(kind) ? kind : `${kind}(需手动)`,
         rule: key,
+        sec: secName(sectionDomOf(el, sections)),
+        note: labelWarn(label, el),
         filled: guessable && !!String(el.innerText || '').replace(/请选择|请输入|\s/g, '').trim(),
       });
     }
@@ -1483,11 +1517,35 @@
    * 用于在陌生的招聘网站上排查「为什么某个字段没填上」:
    * 输出每个可见字段的标签、控件类型与命中的规则,便于针对性补规则。
    */
+  /* 区块域名转成人话;secName('') = 不在任何已识别区块里 */
+  const secName = (sec) => (sec === 'blocked' ? '禁填区'
+    : sec === 'self' ? '自我描述' : (DOM_CN[sec] || sec || ''));
+
+  /* 标签退化预警:诊断时最有价值的一列。
+   * 标签是纯数字/日期 → 八成把已填的「值」当成了标签;
+   * 标签是占位词 → 把「必填项未填写」这类提示当成了标签。
+   * 两种都说明标签定位落错了 DOM 层级,顺手带上祖先 class 链帮忙定位。 */
+  const labelWarn = (label, el) => {
+    let why = '';
+    if (/^[\d\s.\/年月-]+$/.test(label)) why = '标签疑似是已填的值';
+    else if (/未填写|请选择|请输入|暂无选项/.test(label)) why = '标签疑似是占位提示';
+    else if (el && String(el.value || '').trim() && label === String(el.value).trim()) why = '标签就是当前值';
+    if (!why) return '';
+    const chain = [];
+    let n = el && el.parentElement;
+    for (let d = 0; d < 3 && n; d++, n = n.parentElement) {
+      const c = String(n.className || '').trim().split(/\s+/)[0];
+      if (c) chain.push(c);
+    }
+    return why + (chain.length ? `(${chain.join('<').slice(0, 40)})` : '');
+  };
+
   const scan = (rawProfile) => {
     const P = normalize(rawProfile || {});
     const customs = P.custom || [];
     const rows = [];
     const widgets = outerWidgets();
+    const sections = scanSections();
     for (const el of collect(document, [])) {
       const tag = el.tagName;
       const type = (el.type || '').toLowerCase();
@@ -1511,14 +1569,20 @@
           .slice(0, 40).replace(/\|/g, '/'),
         ctrl: tag === 'INPUT' ? `input:${type || 'text'}` : tag.toLowerCase(),
         rule: hit && hit.range ? `${key}(起止区间)` : key,
+        sec: secName(sectionDomOf(el, sections)),
+        note: labelWarn(String((hit && hit.label) || (cands[0] && cands[0].t) || ''), el),
         filled,
       });
     }
-    const wRows = scanCustomWidgets(customs, widgets);
+    const wRows = scanCustomWidgets(customs, widgets, sections);
     rows.push(...wRows);
     // 带上引擎版本:扩展文件被 Chrome 缓存,不点「刷新扩展」就仍在跑旧代码,
     // 有版本号才能一眼看出这份清单是不是过期的
-    return { url: location.href, title: document.title, version: VERSION, rows, customWidgets: wRows.length };
+    return {
+      url: location.href, title: document.title, version: VERSION, rows,
+      customWidgets: wRows.length,
+      sections: sections.map((x) => ({ text: x.text.slice(0, 24), dom: secName(x.dom) })),
+    };
   };
 
   window.__RQF = { version: VERSION, fill, scan };

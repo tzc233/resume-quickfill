@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · Shopee 校招表单</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    .section-title { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; font-weight: 600; }
+    .blk { border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 14px; margin-bottom: 10px; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+    .lab { width: 210px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 540px; flex-shrink: 0; }
+    input, textarea { width: 100%; padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    .ymbox { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; }
+    .ymbox input { width: 64px; }
+    .ymbox span { color: #6b7280; font-size: 12.5px; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">Shopee 校招表单(按真实字段命名与顺序复刻)</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  三个特点:① 基本信息区有「最高学历毕业院校」——它不能消耗教育区块的锚点计数;<br>
+  ② 教育区块把「学历/学习形式」排在锚点「学校名称」<b>之前</b>——第二段靠区块标题分段;<br>
+  ③ 「是否可以调剂」「请问你是否填写了本科学历」是问句,填城市名/学历进去都是错的。
+</p>
+
+<div class="section-title">申请信息</div>
+<div class="blk">
+  <div class="item"><span class="lab">意向工作城市</span><div class="ctl"><input id="s-city"></div></div>
+  <div class="item"><span class="lab">意向工作城市是否可以调剂</span><div class="ctl"><input id="s-adjust"></div></div>
+  <div class="item"><span class="lab">是否校园大使推荐</span><div class="ctl"><input id="s-ambassador"></div></div>
+  <div class="item"><span class="lab">你是从哪些渠道了解到Shopee校招信息?</span><div class="ctl"><input id="s-channel"></div></div>
+</div>
+
+<div class="section-title">个人信息</div>
+<div class="blk">
+  <div class="item"><span class="lab">姓名</span><div class="ctl"><input id="s-name"></div></div>
+  <div class="item"><span class="lab">邮箱</span><div class="ctl"><input id="s-email"></div></div>
+  <div class="item"><span class="lab">最高学历</span><div class="ctl"><input id="s-topdeg"></div></div>
+  <div class="item"><span class="lab">最高学历毕业院校</span><div class="ctl"><input id="s-topschool"></div></div>
+</div>
+
+<div class="section-title">教育背景</div>
+<div class="blk">
+  <div class="item"><span class="lab">学历</span><div class="ctl"><input id="e1-deg"></div></div>
+  <div class="item"><span class="lab">学习形式</span><div class="ctl"><input id="e1-form"></div></div>
+  <div class="item"><span class="lab">就读时间</span><div class="ctl">
+    <span class="ymbox"><input id="e1-sy"><span>年</span></span>
+    <span class="ymbox"><input id="e1-sm"><span>月</span></span>
+    <span>-</span>
+    <span class="ymbox"><input id="e1-ey"><span>年</span></span>
+    <span class="ymbox"><input id="e1-em"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="e1-school"></div></div>
+  <div class="item"><span class="lab">学院</span><div class="ctl"><input id="e1-college"></div></div>
+  <div class="item"><span class="lab">专业名称</span><div class="ctl"><input id="e1-major"></div></div>
+  <div class="item"><span class="lab">专业排名</span><div class="ctl"><input id="e1-rank"></div></div>
+  <div class="item"><span class="lab">绩点/绩点总分</span><div class="ctl"><input id="e1-gpa"></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">学历</span><div class="ctl"><input id="e2-deg"></div></div>
+  <div class="item"><span class="lab">学习形式</span><div class="ctl"><input id="e2-form"></div></div>
+  <div class="item"><span class="lab">就读时间</span><div class="ctl">
+    <span class="ymbox"><input id="e2-sy"><span>年</span></span>
+    <span class="ymbox"><input id="e2-sm"><span>月</span></span>
+    <span>-</span>
+    <span class="ymbox"><input id="e2-ey"><span>年</span></span>
+    <span class="ymbox"><input id="e2-em"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="e2-school"></div></div>
+  <div class="item"><span class="lab">学院</span><div class="ctl"><input id="e2-college"></div></div>
+  <div class="item"><span class="lab">专业名称</span><div class="ctl"><input id="e2-major"></div></div>
+  <div class="item"><span class="lab">专业排名</span><div class="ctl"><input id="e2-rank"></div></div>
+  <div class="item"><span class="lab">绩点/绩点总分</span><div class="ctl"><input id="e2-gpa"></div></div>
+</div>
+
+<div class="section-title">项目经验</div>
+<div class="blk">
+  <div class="item"><span class="lab">项目名称</span><div class="ctl"><input id="p-name"></div></div>
+  <div class="item"><span class="lab">职责</span><div class="ctl"><input id="p-role"></div></div>
+  <div class="item"><span class="lab">项目描述</span><div class="ctl"><textarea id="p-desc" rows="2"></textarea></div></div>
+  <div class="item"><span class="lab">项目中职责</span><div class="ctl"><textarea id="p-duty" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">英语水平</div>
+<div class="blk">
+  <div class="item"><span class="lab">英语等级证书</span><div class="ctl"><input id="l1-cert"></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">英语等级证书</span><div class="ctl"><input id="l2-cert"></div></div>
+</div>
+
+<div class="section-title">其他技能</div>
+<div class="blk">
+  <div class="item"><span class="lab">职业技能&掌握程度</span><div class="ctl"><input id="k-pl"></div></div>
+  <div class="item"><span class="lab">您擅长使用的AI工具及相关应用技能</span><div class="ctl"><textarea id="k-ai" rows="2"></textarea></div></div>
+  <div class="item"><span class="lab">请描述过往已发表论文情况</span><div class="ctl"><textarea id="k-pub" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">其他</div>
+<div class="blk">
+  <div class="item"><span class="lab">请问你是否填写了本科学历</span><div class="ctl"><input id="k-bs"></div></div>
+</div>
+
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>
