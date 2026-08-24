@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.11.0';
+  const VERSION = '1.12.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -943,6 +943,24 @@
         if (p & Node.DOCUMENT_POSITION_PRECEDING) return 1;
         return 0;
       });
+      /* 已填过的年/月框,标签会退化成值本身(「2024」),规则认不出,
+       * 于是不参与年月推进 —— 空着的「结束时间」对就被当成「开始时间」填,
+       * 教育经历的结束年月会被写成入学年月。按「值长得像年份/月份」把它们
+       * 补回序列:只推进状态,绝不写入,也不进报告。
+       * 月份必须紧跟在年/月框之后才算,免得把无关的数字框(如「1」)卷进来。 */
+      for (let k = 0; k < out.length; k++) {
+        const it = out[k];
+        if (it.hit || it.tag !== 'INPUT' || !TEXTLIKE.has(it.type)) continue;
+        const val = String(it.el.value || '').trim();
+        if (/^(19|20)\d{2}$/.test(val)) {
+          it.hit = { dom: '*', field: '', ym: 'y', occupied: true, label: '(已填年份)' };
+        } else if (/^(0?[1-9]|1[0-2])$/.test(val)) {
+          const prev = out[k - 1];
+          if (prev && prev.hit && prev.hit.ym) {
+            it.hit = { dom: '*', field: '', ym: 'm', occupied: true, label: '(已填月份)' };
+          }
+        }
+      }
       return out;
     };
 
@@ -1071,6 +1089,13 @@
       if (hit.custom) {
         v = hit.value;
       } else if (hit.dom) {
+        /* 年/月对出现在任何已识别区块之外(预计毕业时间、出生日期这类独立日期)时,
+         * 绝不能靠前后邻居猜它属于哪段经历 —— Shopee 的「预计毕业时间」曾因此
+         * 差点被填成第一段教育的入学年月。猜错是脏数据,留空只是留空。 */
+        if (hit.ym && hit.dom === '*' && !items[idx].sec) {
+          if (!hit.occupied) report.skipped.push({ label: hit.label, reason: '这组年/月不在任何经历区块内,无法确定归属,请手动填' });
+          continue;
+        }
         const dom = hit.dom === '*' ? (ambiguousDom(idx, hit) || ctx.domain)
           : retarget(hit.dom, hit.field, items[idx].sec);
         if (!dom) continue; // 通篇没有任何经历区块字段,无从判断归属
@@ -1092,7 +1117,17 @@
            * 计数必须同时认锚点和时间区间:中兴表单的「就读时间」排在「学校名称」之前,
            * 只认锚点会让第二段的起止时间取到第一段的值。 */
           const used = ctx.used[dom];
-          if (hit.ym) {
+          /* 获奖/论文这类域的条目只有一个 date,没有起止 —— 一段只配一对年/月,
+           * 第二对年/月出现就是下一段,而不是本段的「结束时间」。 */
+          const s0 = list[0] || {};
+          const singleDate = ('date' in s0) && !('startTime' in s0);
+          if (hit.ym && singleDate) {
+            if (hit.ym === 'y') {
+              if (used.has('ymStart')) { ctx.idx[dom]++; used.clear(); }
+              used.add('ymStart');
+            }
+            field = 'date';
+          } else if (hit.ym) {
             /* 「年」「月」四个框依次对应 起始年 → 起始月 → 结束年 → 结束月。
              * 见到「年」就推进一格,「月」跟随当前那一格;
              * 第三个「年」出现时说明已进入结束时间。 */
@@ -1123,9 +1158,11 @@
         }
         const entry = list[i];
         if (!entry) {
-          report.skipped.push({ label: hit.label, reason: `档案中没有第 ${i + 1} 段${DOM_CN[dom] || ''}经历` });
+          if (!hit.occupied) report.skipped.push({ label: hit.label, reason: `档案中没有第 ${i + 1} 段${DOM_CN[dom] || ''}经历` });
           continue;
         }
+        // 占位条目的使命到此为止:序列已推进,值绝不该被写(框里本来就有值)
+        if (hit.occupied) continue;
         semKey = field;
         ctx.taken.add(`${dom}#${i}#${field}`);
         if (!scoped && items[idx].sec === dom) ctx.takenSec.add(`${dom}#${i}#${field}`);
@@ -1527,7 +1564,7 @@
    * 两种都说明标签定位落错了 DOM 层级,顺手带上祖先 class 链帮忙定位。 */
   const labelWarn = (label, el) => {
     let why = '';
-    if (/^[\d\s.\/年月-]+$/.test(label)) why = '标签疑似是已填的值';
+    if (/\d/.test(label) && /^[\d\s.\/年月-]+$/.test(label)) why = '标签疑似是已填的值';
     else if (/未填写|请选择|请输入|暂无选项/.test(label)) why = '标签疑似是占位提示';
     else if (el && String(el.value || '').trim() && label === String(el.value).trim()) why = '标签就是当前值';
     if (!why) return '';

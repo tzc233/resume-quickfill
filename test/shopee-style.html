@@ -38,15 +38,24 @@
   <div class="item"><span class="lab">邮箱</span><div class="ctl"><input id="s-email"></div></div>
   <div class="item"><span class="lab">最高学历</span><div class="ctl"><input id="s-topdeg"></div></div>
   <div class="item"><span class="lab">最高学历毕业院校</span><div class="ctl"><input id="s-topschool"></div></div>
+  <div class="item"><span class="lab">预计毕业时间</span></div>
+  <div class="item"><div class="ctl">
+    <span class="ymbox"><input id="g-y"><span>年</span></span>
+    <span class="ymbox"><input id="g-m"><span>月</span></span>
+  </div></div>
 </div>
 
 <div class="section-title">教育背景</div>
 <div class="blk">
   <div class="item"><span class="lab">学历</span><div class="ctl"><input id="e1-deg"></div></div>
   <div class="item"><span class="lab">学习形式</span><div class="ctl"><input id="e1-form"></div></div>
-  <div class="item"><span class="lab">就读时间</span><div class="ctl">
-    <span class="ymbox"><input id="e1-sy"><span>年</span></span>
-    <span class="ymbox"><input id="e1-sm"><span>月</span></span>
+  <!-- Moka 真实形态:标签独立成行(不在输入框的近祖先链里);
+       开始对已被 ATS 解析填过,值同时镜像成兄弟文本 —— 标签退化成「2024」;
+       结束对空着,引擎必须认出它是「结束」而不是又一个「开始」 -->
+  <div class="item"><span class="lab">就读时间</span></div>
+  <div class="item"><div class="ctl">
+    <span class="ymbox"><input id="e1-sy" value="2024"><span>2024</span></span>
+    <span class="ymbox"><input id="e1-sm" value="9"><span>9</span></span>
     <span>-</span>
     <span class="ymbox"><input id="e1-ey"><span>年</span></span>
     <span class="ymbox"><input id="e1-em"><span>月</span></span>
@@ -80,6 +89,24 @@
   <div class="item"><span class="lab">职责</span><div class="ctl"><input id="p-role"></div></div>
   <div class="item"><span class="lab">项目描述</span><div class="ctl"><textarea id="p-desc" rows="2"></textarea></div></div>
   <div class="item"><span class="lab">项目中职责</span><div class="ctl"><textarea id="p-duty" rows="2"></textarea></div></div>
+</div>
+
+<div class="section-title">获奖经历</div>
+<div class="blk">
+  <div class="item"><span class="lab">获奖时间</span></div>
+  <div class="item"><div class="ctl">
+    <span class="ymbox"><input id="a1-y"><span>年</span></span>
+    <span class="ymbox"><input id="a1-m"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">奖项名称</span><div class="ctl"><input id="a1-name"></div></div>
+</div>
+<div class="blk">
+  <div class="item"><span class="lab">获奖时间</span></div>
+  <div class="item"><div class="ctl">
+    <span class="ymbox"><input id="a2-y"><span>年</span></span>
+    <span class="ymbox"><input id="a2-m"><span>月</span></span>
+  </div></div>
+  <div class="item"><span class="lab">奖项名称</span><div class="ctl"><input id="a2-name"></div></div>
 </div>
 
 <div class="section-title">英语水平</div>
