@@ -48,9 +48,22 @@
   <span class="wide" data-sd="gender" data-opts="男,女"></span>
 </div></div>
 
+<div class="item"><span class="lab">预计毕业时间</span><div class="ctl">
+  <span data-sd="gy" data-kind="year"></span>
+  <span data-sd="gm" data-kind="month"></span>
+</div></div>
+<div class="item"><span class="lab">神秘选项</span><div class="ctl">
+  <span data-sd="mystery" data-opts="甲,乙"></span>
+</div></div>
+
 <div class="section-title">教育背景</div>
 <div class="item"><span class="lab">学历</span><div class="ctl">
   <span class="wide" data-sd="degree" data-opts="大专,本科,硕士研究生,博士研究生"></span>
+</div></div>
+<div class="item"><span class="lab">学习形式</span><div class="ctl">
+  <div id="m-form" role="combobox" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 9px;width:200px;cursor:pointer">
+    <span>必填项未填写</span>
+  </div>
 </div></div>
 <div class="item"><span class="lab">就读时间</span></div>
 <div class="item"><div class="ctl">
@@ -61,6 +74,27 @@
   <span data-sd="em" data-kind="month" data-unit="月"></span>
 </div></div>
 <div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="m-school" style="width:100%"></div></div>
+
+<div class="item"><span class="lab">就读时间</span><div class="ctl">
+  <span class="month-range-select-2AbX" style="display:inline-flex;gap:8px;align-items:center">
+    <span data-sd="e2sy" data-kind="year" data-value="2020"></span>
+    <span data-sd="e2sm" data-kind="month" data-value="9"></span>
+    <span>-</span>
+    <span data-sd="e2ey" data-kind="year"></span>
+    <span data-sd="e2em" data-kind="month"></span>
+  </span>
+</div></div>
+<div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="m-school2" style="width:100%"></div></div>
+
+<div class="section-title">获奖经历</div>
+<div class="item"><span class="lab">获奖时间</span><div class="ctl">
+  <span data-sd="a1y" data-kind="year"></span><span data-sd="a1m" data-kind="month"></span>
+</div></div>
+<div class="item"><span class="lab">奖项名称</span><div class="ctl"><input id="m-award1" style="width:100%"></div></div>
+<div class="item"><span class="lab">获奖时间</span><div class="ctl">
+  <span data-sd="a2y" data-kind="year"></span><span data-sd="a2m" data-kind="month"></span>
+</div></div>
+<div class="item"><span class="lab">奖项名称</span><div class="ctl"><input id="m-award2" style="width:100%"></div></div>
 
 <script>
 window.NAV_CLICKS = 0;
@@ -129,6 +163,30 @@ for (const host of document.querySelectorAll('[data-sd]')) {
 
   host.appendChild(box);
 }
+</script>
+<script>
+// 学习形式组合框:role=combobox、无内部 input、收起态文字是占位提示
+(() => {
+  const box = document.getElementById('m-form');
+  const span = box.querySelector('span');
+  const dd = document.createElement('div');
+  dd.className = 'sd-menu-portal';
+  dd.hidden = true;
+  for (const o of ['全日制', '非全日制']) {
+    const it = document.createElement('div');
+    it.className = 'sd-Menu-container-3HY1z';
+    it.innerHTML = `<span class="sd-Select-keyword-eVPX_">${o}</span>`;
+    it.addEventListener('mousedown', (e) => { e.preventDefault(); span.textContent = o; dd.hidden = true; });
+    dd.appendChild(it);
+  }
+  document.body.appendChild(dd);
+  box.addEventListener('mousedown', () => {
+    const r = box.getBoundingClientRect();
+    dd.style.left = (r.left + scrollX) + 'px';
+    dd.style.top = (r.bottom + scrollY + 4) + 'px';
+    dd.hidden = false;
+  });
+})();
 </script>
 <script src="run.js"></script>
 <script>rqfAuto()</script>

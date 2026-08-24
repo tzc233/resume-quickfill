@@ -192,6 +192,13 @@ async function doScan() {
     '| --- | --- | --- | --- | --- | --- |',
     ...rows.map((r) => `| ${r.label} | ${r.ctrl} | ${r.rule || '—'} | ${r.sec || ''} | ${r.filled ? '是' : ''} | ${r.note || ''} |`),
   ];
+  const snips = rows.filter((r) => r.snip);
+  if (snips.length) {
+    lines.push('', '## 可疑/未识别字段的 DOM 骨架(已脱敏:值→[值],长文本→[文])', '');
+    for (const r of snips) {
+      lines.push(`- 「${r.label}」(${r.rule || '未命中'}):`, '', '```html', r.snip, '```', '');
+    }
+  }
   try {
     await navigator.clipboard.writeText(lines.join('\n'));
     status.textContent = `✅ 诊断报告已复制(${rows.length} 个字段,${miss.length} 个未命中,${warns} 个标签可疑),直接粘贴即可`;

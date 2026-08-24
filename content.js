@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.14.0';
+  const VERSION = '1.15.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -947,6 +947,40 @@
         if (p & Node.DOCUMENT_POSITION_PRECEDING) return 1;
         return 0;
       });
+      /* Moka 的 month-range-select:一段起止拆成 起年/起月/止年/止月 四个下拉。
+       * 标签全退化(已填的是值,空的是「必填项未填写」),只有容器 class 能定性;
+       * 按「起止区间」处理会把四个框当两个用。组内按位置改写成 年/月/年/月。 */
+      const ranges = new Map();
+      for (const it of out) {
+        if (it.tag !== 'WIDGET') continue;
+        const box = it.el.closest('[class*="month-range"]');
+        if (!box) continue;
+        if (!ranges.has(box)) ranges.set(box, []);
+        ranges.get(box).push(it);
+      }
+      for (const g of ranges.values()) {
+        if (g.length < 2) continue;
+        const gd = (g.find((x) => x.hit && x.hit.dom) || { hit: {} }).hit.dom || '*';
+        g.forEach((it2, i2) => {
+          it2.hit = { dom: gd, field: '', ym: i2 % 2 ? 'm' : 'y',
+            label: (it2.hit && it2.hit.label) || '(起止年月)' };
+        });
+      }
+
+      /* 一条日期拆成年、月两个下拉(预计毕业时间/获奖时间):相邻两个组件命中
+       * 同一个日期字段 → 前者取年、后者取月;月那半不参与分段推进,否则第二段
+       * 获奖经历的月份框会被「同区块重复字段」判定多推一段。 */
+      for (let k = 0; k + 1 < out.length; k++) {
+        const a = out[k], b = out[k + 1];
+        if (a.tag !== 'WIDGET' || b.tag !== 'WIDGET') continue;
+        const ha = a.hit, hb = b.hit;
+        if (!ha || !hb || ha.ym || hb.ym || ha.range || hb.range || ha.custom || hb.custom) continue;
+        if (ha.half || hb.half) continue;
+        if (!ha.field || ha.field !== hb.field || ha.dom !== hb.dom) continue;
+        if (!/date|time|birthday/i.test(ha.field)) continue;
+        ha.half = 'y'; hb.half = 'm';
+      }
+
       /* 已填过的年/月框,标签会退化成值本身(「2024」),规则认不出,
        * 于是不参与年月推进 —— 空着的「结束时间」对就被当成「开始时间」填,
        * 教育经历的结束年月会被写成入学年月。按「值长得像年份/月份」把它们
@@ -1151,7 +1185,7 @@
           } else if (hit.anchor) {
             if (used.has(field)) { ctx.idx[dom]++; used.clear(); }
             used.add(field);
-          } else if (items[idx].sec === dom && ctx.takenSec.has(`${dom}#${ctx.idx[dom]}#${field}`)) {
+          } else if (hit.half !== 'm' && items[idx].sec === dom && ctx.takenSec.has(`${dom}#${ctx.idx[dom]}#${field}`)) {
             /* Shopee 把「学历/学习形式」排在锚点「学校名称」之前:第二段的这些字段
              * 出现时锚点还没轮到,按旧规则会取到第一段的值。放开「非锚点不参与分段」
              * 的限制,但必须以区块标题为闸门 —— 基本信息区的「学历」不在教育区块里,
@@ -1178,10 +1212,11 @@
         }
         if (!v && COMPUTED[`${dom}.${field}`]) v = String(COMPUTED[`${dom}.${field}`](entry) || '').trim();
         if (v && TRANSFORM[`${dom}.${field}`]) v = String(TRANSFORM[`${dom}.${field}`](v) || '').trim();
-        if (hit.ym && v) {
+        const ymc = hit.ym || hit.half;   // half = 相邻年月对,取值拆法与 ym 完全相同
+        if (ymc && v) {
           // 档案存 YYYY-MM,拆给「年」「月」两个框;月份不补前导零(Moka 显示为 9 而非 09)
           const m = v.match(/^(\d{4})[-/.年]?(\d{1,2})?/);
-          v = m ? (hit.ym === 'y' ? m[1] : String(Number(m[2] || 0) || '')) : '';
+          v = m ? (ymc === 'y' ? m[1] : String(Number(m[2] || 0) || '')) : '';
           if (!v) { report.skipped.push({ label: hit.label, reason: `「${entry[field]}」无法拆成年/月` }); continue; }
         }
         }
@@ -1391,6 +1426,15 @@
       const t = d && opts.find((o) => DEG_LV(txt(o)) === d);
       if (t) return t;
     }
+    /* 值是 YYYY-MM 而选项是纯年份/纯月份列表 —— 兜底保护:整串「2027-06」拿去
+     * 子串匹配会碰上「2」这类选项。取对应片段精确匹配,匹配不到就明确失败。 */
+    const dm = String(v).match(/^(\d{4})[-/.年]\s*(\d{1,2})/);
+    if (dm) {
+      const yOpts = opts.filter((o) => /^(19|20)\d{2}$/.test(txt(o)));
+      if (yOpts.length >= 3) return yOpts.find((o) => txt(o) === dm[1]) || null;
+      const mOpts = opts.filter((o) => /^(0?[1-9]|1[0-2])\s*月?$/.test(txt(o)));
+      if (mOpts.length >= 3) return mOpts.find((o) => Number(txt(o).replace('月', '')) === Number(dm[2])) || null;
+    }
     const nv = clean(v);
     return opts.find((o) => txt(o) === nv)
       || opts.find((o) => { const t = txt(o); return t && (t.includes(nv) || nv.includes(t)); })
@@ -1513,7 +1557,9 @@
     const inp = el.querySelector('input');
     if (/sd-Dropdown/.test(String(el.className))) return clean((inp && inp.value) || '');
     if (inp && String(inp.value || '').trim()) return clean(inp.value);
-    return clean(el.innerText || '').replace(/请选择|请输入|select|choose/gi, '').trim();
+    // 「必填项未填写」「暂无选项」是占位提示不是值 —— 当成值会把空组件误判成已填
+    return clean(el.innerText || '')
+      .replace(/请选择|请输入|请填写|(必填)?项?未填写|暂无选项|select|choose/gi, '').trim();
   };
 
   const fillWidget = async (el, key, v) => {
@@ -1592,7 +1638,9 @@
         rule: key,
         sec: secName(sectionDomOf(el, sections)),
         note: labelWarn(label, el),
-        filled: guessable && !!String(el.innerText || '').replace(/请选择|请输入|\s/g, '').trim(),
+        snipEl: el,
+        filled: guessable && !!String(el.innerText || '')
+          .replace(/请选择|请输入|请填写|(必填)?项?未填写|暂无选项|\s/g, '').trim(),
       });
     }
     return rows;
@@ -1623,6 +1671,38 @@
       if (c) chain.push(c);
     }
     return why + (chain.length ? `(${chain.join('<').slice(0, 40)})` : '');
+  };
+
+  /* 可疑字段的 DOM 骨架:往上取两层祖先,序列化成脱敏 HTML ——
+   * 只留标签名 / class / 结构性属性;value 一律替换成 [值],
+   * 超过 4 字或含数字的文本节点替换成 [文],个人信息进不了报告。
+   * 有它,「把这个字段的 HTML 复制给我」这一步就不用人肉去 DevTools 抠了。 */
+  const domSnip = (el) => {
+    let root = el;
+    for (let d = 0; d < 2 && root.parentElement && root.parentElement !== document.body; d++) {
+      root = root.parentElement;
+    }
+    const walk = (n, depth) => {
+      if (depth > 5) return '…';
+      if (n.nodeType === 3) {
+        const t = clean(n.data || '');
+        if (!t) return '';
+        return (t.length <= 4 && !/\d/.test(t)) ? t : '[文]';
+      }
+      if (n.nodeType !== 1) return '';
+      const tag = n.tagName.toLowerCase();
+      if (/^(script|style|svg|img)$/.test(tag)) return '';
+      const attrs = [];
+      const cls = n.getAttribute('class');
+      if (cls) attrs.push(`class="${cls}"`);
+      for (const a of ['type', 'role', 'placeholder', 'readonly', 'hidden']) {
+        if (n.hasAttribute(a)) attrs.push(a + (n.getAttribute(a) ? `="${n.getAttribute(a)}"` : ''));
+      }
+      if (tag === 'input' && String(n.value || '').trim()) attrs.push('value="[值]"');
+      const kids = Array.from(n.childNodes).map((c) => walk(c, depth + 1)).join('');
+      return `<${tag}${attrs.length ? ' ' + attrs.join(' ') : ''}>${kids}</${tag}>`;
+    };
+    return walk(root, 0).slice(0, 420);
   };
 
   const scan = (rawProfile) => {
@@ -1656,11 +1736,20 @@
         rule: hit && hit.range ? `${key}(起止区间)` : key,
         sec: secName(sectionDomOf(el, sections)),
         note: labelWarn(String((hit && hit.label) || (cands[0] && cands[0].t) || ''), el),
+        snipEl: el,
         filled,
       });
     }
     const wRows = scanCustomWidgets(customs, widgets, sections);
     rows.push(...wRows);
+    let snips = 0;
+    for (const r of rows) {
+      if (snips < 10 && r.snipEl && (!r.rule || r.note)) {
+        r.snip = domSnip(r.snipEl);
+        snips++;
+      }
+      delete r.snipEl;   // DOM 引用无法跨 executeScript 序列化,必须摘掉
+    }
     // 带上引擎版本:扩展文件被 Chrome 缓存,不点「刷新扩展」就仍在跑旧代码,
     // 有版本号才能一眼看出这份清单是不是过期的
     return {
