@@ -160,10 +160,16 @@ async function doScan() {
 
   const rows = [];
   const sections = [];
+  const lastSkips = [];
+  let lastFilled = 0;
   let ver = '';
   for (const r of results || []) if (r && r.result && r.result.rows) {
     rows.push(...r.result.rows);
     sections.push(...(r.result.sections || []));
+    if (r.result.lastFill) {
+      lastSkips.push(...(r.result.lastFill.skipped || []));
+      lastFilled += (r.result.lastFill.filled || []).length;
+    }
     ver = r.result.version || ver;
   }
   if (!rows.length) { status.textContent = '没有扫描到任何表单字段。'; return; }
@@ -192,6 +198,26 @@ async function doScan() {
     '| --- | --- | --- | --- | --- | --- |',
     ...rows.map((r) => `| ${r.label} | ${r.ctrl} | ${r.rule || '—'} | ${r.sec || ''} | ${r.filled ? '是' : ''} | ${r.note || ''} |`),
   ];
+  /* 上次填充的跳过原因 —— 排查时最该看的一列。同一个原因归并计数,
+   * 「12 个字段都是『已有选择,未覆盖』」这种系统性问题一眼就看出来。 */
+  if (lastSkips.length || lastFilled) {
+    lines.push('', `## 上次填充结果:已填 ${lastFilled} 项,跳过 ${lastSkips.length} 项`, '');
+    const byReason = new Map();
+    for (const sk of lastSkips) {
+      const k = String(sk.reason || '未说明');
+      if (!byReason.has(k)) byReason.set(k, []);
+      byReason.get(k).push(String(sk.label || '').slice(0, 20));
+    }
+    const sorted = [...byReason.entries()].sort((a, b) => b[1].length - a[1].length);
+    for (const [reason, labels] of sorted) {
+      lines.push(`- **${reason}**(${labels.length} 项):${labels.slice(0, 12).join('、')}`
+        + (labels.length > 12 ? ' …' : ''));
+    }
+  } else {
+    lines.push('', '## 上次填充结果:本页还没点过「一键填充」', '',
+      '> 先点一次填充再复制报告,跳过原因往往比字段清单更能说明问题。');
+  }
+
   const snips = rows.filter((r) => r.snip);
   if (snips.length) {
     lines.push('', '## 可疑/未识别字段的 DOM 骨架(已脱敏:值→[值],长文本→[文])', '');

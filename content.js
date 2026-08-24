@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.17.0';
+  const VERSION = '1.18.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -975,6 +975,12 @@
      * takenSec 只记录发生在该域自己区块里的那部分 —— 分段推进只认它:
      * 基本信息区的「预计毕业时间」也占用 edu#0#endTime,但它不在教育区块里,
      * 不能因为它先出现,就把教育区块里第一个「结束时间」顶到下一段去。 */
+    /* 年填上之后,组件常会把空着的月自动补成 1(Moka 就是这样)。等轮到月份格时
+     * 它已经「有值」,「已有内容不覆盖」那条保护就把我们自己挡在了外面 ——
+     * 结果是年份全对、月份全是 1。同一个日期的年和月是一个整体:年是我写的,
+     * 月就必须由我写完。只在紧跟着的那一格生效,不波及任何别的字段。 */
+    let ymYearJustFilled = false;
+
     const ctx = { domain: null, idx: {}, used: {}, taken: new Set(), takenSec: new Set() };
     for (const d of Object.keys(LIST_OF)) { ctx.idx[d] = 0; ctx.used[d] = new Set(); }
 
@@ -1296,14 +1302,18 @@
         /* 级联要走到叶子,而同名的普通文本框只需「上海」。
          * 所以档案里可另存一份 <字段>Path(如 cityPath = 上海/上海市),仅级联控件使用。 */
         const pathV = (kind === '自定义级联' && P.basic && P.basic[`${semKey}Path`]) || v;
-        const r = kind === '自定义下拉' ? await fillWidget(el, semKey, v)
+        const ymRole = hit.ym || hit.half || '';
+        const force = ymRole === 'm' && ymYearJustFilled;
+        const r = kind === '自定义下拉' ? await fillWidget(el, semKey, v, force)
           : kind === '自定义日期' ? await fillDatePicker(el, v)
             : kind === '自定义级联' ? await fillCascader(el, pathV)
               : { ok: false, reason: `${kind}需要手动操作` };
         if (r.ok) { mark(el); report.filled.push({ label: hit.label, value: r.value }); }
         else report.skipped.push({ label: hit.label, reason: r.reason });
+        ymYearJustFilled = ymRole === 'y' && r.ok;
         continue;
       }
+      ymYearJustFilled = false;
       if (type === 'radio') {
         const r = fillRadio(el, semKey, v, doneGroups);
         if (r === true) report.filled.push({ label: hit.label, value: v });
@@ -1378,6 +1388,18 @@
       }
     }
     report.unmatched = [...new Map(report.unmatched.map((x) => [x.label, x])).values()].slice(0, 30);
+
+    /* 把这次填充的结果留在页面上。跳过原因(「已有选择,未覆盖」「选项里没有 X」
+     * 「下拉未能展开」)只写在弹窗的填充报告里,弹窗一关就没了 —— 而诊断报告
+     * 是拿去排查的那一份。两者对不上时,排查等于瞎猜。 */
+    try {
+      window.__RQF_LAST = {
+        url: location.href,
+        filled: report.filled.map((x) => x.label),
+        skipped: report.skipped.map((x) => ({ label: x.label, reason: x.reason })),
+        expanded: report.expanded || [],
+      };
+    } catch { /* 页面可能禁止写 window,报告本身不受影响 */ }
 
     const nf = report.filled.length + (report.fileFilled ? 1 : 0);
     const ns = report.skipped.length;
@@ -1635,8 +1657,10 @@
    * sd-Tooltip-container 和 ctrl- 包装层。挨个试,试中的记住,后续组件直接用。 */
   const openHint = { idx: -1 };
 
-  const fillWidget = async (el, key, v) => {
-    if (widgetValue(el)) return { ok: false, reason: '已有选择,未覆盖' };
+  const fillWidget = async (el, key, v, force) => {
+    const cur = widgetValue(el);
+    if (cur && !force) return { ok: false, reason: '已有选择,未覆盖' };
+    if (cur && String(cur).trim() === String(v).trim()) return { ok: true, value: cur };
     /* 快照差分:只认「点开之后才出现」的选项。Moka 的左侧锚点导航也用
      * sd-Menu-container,不差分的话「教育背景」这类导航项会混进选项列表 */
     const before = new Set(openOptions());
@@ -1862,6 +1886,8 @@
       url: location.href, title: document.title, version: VERSION, rows,
       customWidgets: wRows.length,
       sections: sections.map((x) => ({ text: x.text.slice(0, 24), dom: secName(x.dom) })),
+      lastFill: (typeof window !== 'undefined' && window.__RQF_LAST
+        && window.__RQF_LAST.url === location.href) ? window.__RQF_LAST : null,
     };
   };
 

@@ -183,6 +183,15 @@ function wire(root) {
         const msg = box.querySelector('.sd-Input-message-1XQaw');
         if (msg) msg.textContent = '';
         host.innerHTML = '';
+        /* 真实 Moka 的行为:选中年份后,同一格日期里空着的月会被自动补成 1。
+           「月份全变成 1」就是这么来的 —— 组件抢先填了,插件的
+           「已有内容不覆盖」保护反而把插件自己挡在了外面。 */
+        if (/^(19|20)\d{2}$/.test(it.dataset.o)) {
+          const cell = box.closest('.item-CNFmjn2r6y, .item-half-mz_My7kExy');
+          const next = cell && cell.nextElementSibling;
+          const mDisp = next && next.querySelector('.sd-Input-display-value-1RTHN');
+          if (mDisp && !mDisp.textContent.trim()) mDisp.innerHTML = '<span class="">1</span>';
+        }
       });
     });
   };
