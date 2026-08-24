@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.16.0';
+  const VERSION = '1.17.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -301,8 +301,8 @@
    * 权重会压过真标签,于是整片字段的标签都变成了「必填项未填写」。
    * 只跳过「不包含目标元素」的噪声分支:sd-Input-error 这类 class 也戴在
    * 包着 input 的 label 上,不能一刀切。 */
-  const NOISE_SEL = '[class*="message" i],[class*="describe" i],[class*="tips" i],'
-    + '[class*="asterisk" i],[class*="required" i],[class*="error-" i]';
+  const NOISE_SEL = 'button,[role="button"],[class*="message" i],[class*="describe" i],'
+    + '[class*="tips" i],[class*="asterisk" i],[class*="required" i],[class*="error-" i]';
 
   const textOf = (root, skip, keep) => {
     let out = '';
@@ -336,7 +336,10 @@
 
   const labelCands = (el) => {
     const out = [];
-    const push = (s, w) => { const t = clean(s); if (t && t.length <= 60) out.push({ t, w }); };
+    /* o = 这条候选是不是「本字段自己的」标签:来自 label/aria/placeholder/name/id,
+     * 或者来自只装了一个控件的容器。反之(容器里有多个控件)就是上下文文本,
+     * 多半是几个字段的标签拼在一起。 */
+    const push = (s, w, o = true) => { const t = clean(s); if (t && t.length <= 60) out.push({ t, w, o }); };
     try { if (el.labels) for (const l of el.labels) push(l.innerText, 5); } catch { }
     push(el.getAttribute('aria-label'), 5);
     const lb = el.getAttribute('aria-labelledby');
@@ -362,18 +365,28 @@
        * 标签拼起来的,不是本字段的标签 —— 到此为止,别再往上取。
        * 这类拼接文本反复冒充标签:姓名框拿到「…最高学历毕业院校」(含「院校」),
        * 空的年份框拿到「学历 学习形式 … 学院 …」(含「学院」)。
-       * 阈值取 4:一个「起止时间」最多拆成 年/月/年/月 四个框共用一个标签。 */
-      if (parent.querySelectorAll('input, textarea, select').length > 4) break;
+       * 阈值取 4:一个「起止时间」最多拆成 年/月/年/月 四个框共用一个标签。
+       * 勾选框不计数 —— 「至今」是这个时间字段的修饰而非独立字段,把它算进去
+       * 会让实习/项目的起止时间(4 格 + 至今 = 5)够不着自己的标题,
+       * 已填的起始格不占位,空着的结束格就被当成起始格,入职年月被写进离职年月。 */
+      const ctrls = parent.querySelectorAll('input, textarea, select');
+      let n = 0;
+      for (const c of ctrls) if (!/^(checkbox|radio|file|hidden|submit|button)$/.test(c.type || '')) n++;
+      if (n > 4) break;
+      const alone = n <= 1;
       const sib = siblingText(parent, node, el);
-      if (sib) push(sib, 3.2 - d * 0.3);
+      if (sib) push(sib, 3.2 - d * 0.3, alone);
       if (parent.tagName === 'FORM') break;
       const t = ancestorText(parent, el);
-      if (t) push(t, 3 - d * 0.3);
+      if (t) push(t, 3 - d * 0.3, alone);
       node = parent;
     }
-    push(el.name, 2);
-    push(el.id, 2);
-    push(el.getAttribute('data-field') || el.getAttribute('data-name'), 2);
+    /* name / id 是最弱的兜底证据(常是 e1-t1 这种没有语义的串)。
+     * 不能算「自己的标签」—— 否则共用一个标签的两个输入框(中兴的
+     * 「就读时间 [__]-[__]」)会因为有 id 就不再去看那个共用标签。 */
+    push(el.name, 2, false);
+    push(el.id, 2, false);
+    push(el.getAttribute('data-field') || el.getAttribute('data-name'), 2, false);
     return out.sort((a, b) => b.w - a.w);
   };
 
@@ -396,9 +409,18 @@
     const EX_MAX = 12;
     const active = RULES.filter((r) => !(r.ex
       && cands.some((c) => c.t.length <= EX_MAX && r.ex.test(c.t))));
+
+    /* 字段有自己的标签时,就不再看邻居的拼接文本。自己的标签匹配不上,
+     * 答案就是「没匹配上」,而不是拿上下文瞎猜 —— 「请问你是否填写了本科学历」
+     * 曾因此被区块文字「自我评价 请问你是否…」带着命中 intro,
+     * 把整段自我介绍填进一个该答是/否的下拉。
+     * 只有本字段压根没有自己的标签时(比如共用一个「就读时间」标签的两个输入框),
+     * 才退回去用上下文。 */
+    const own = cands.filter((c) => c.o && c.t.length >= 2);
+    const pool = own.length ? own : cands;
     // 候选权重优先于规则顺序 —— 字段自身的精确标签必须压过祖先容器的整块文本,
     // 否则区块内每个字段都会被块首的「学校名称/公司名称」锚点抢先命中。
-    for (const c of cands) {
+    for (const c of pool) {
       for (const rule of active) {
         // 这条候选自身含排除词就跳过它 —— 「意向工作城市是否可以调剂」既含
         // 「意向工作城市」也含「调剂」,不能只因为它太长就放行
@@ -744,12 +766,21 @@
   };
 
   /** 找该域对应的「+ 添加」:先看按钮文字,再退回「紧跟在该域最后一个字段之后」 */
-  const pickAddButton = (buttons, items, dom) => {
+  const pickAddButton = (buttons, items, dom, sections) => {
     const named = buttons.find((b) => {
       const hit = ADD_DOMAIN.find(([re]) => re.test(b.text));
       return hit && hit[1] === dom;
     });
     if (named) return named;
+    /* 按区块归属认领:Moka 把「添加」按钮放在区块标题栏里,位置在该区块所有
+     * 字段之前 —— 下面那套「找最后一个字段之后最近的按钮」永远够不着它,
+     * 结果就是教育背景只有一段时死活不会自动加第二段。
+     * 标题元素本身包着按钮,compareDocumentPosition 对被包含元素同样置
+     * FOLLOWING 位,所以 sectionDomOf 能正确认出按钮属于哪个区块。 */
+    if (sections && sections.length) {
+      const inSec = buttons.filter((b) => sectionDomOf(b.el, sections) === dom);
+      if (inSec.length) return inSec[0];
+    }
     // 文字里没写明是哪一类(只写「添加」或「+」)—— 取该域最后一个字段之后最近的那个,
     // 且中间不能夹着别的域的字段,否则说明按钮属于另一个区块
     let lastEl = null;
@@ -769,7 +800,7 @@
     return best;
   };
 
-  const expandBlocks = async (P, items, collectItems, report) => {
+  const expandBlocks = async (P, items, collectItems, report, sections) => {
     const expanded = [];
     for (const dom of Object.keys(LIST_OF)) {
       const need = (P[LIST_OF[dom]] || []).length;
@@ -779,7 +810,7 @@
       while (have < need && added < 6) {
         ui.step(`展开「${DOM_CN[dom] || dom}」区块 ${have + 1}/${need}…`, 0.05 + 0.08 * (added / 6));
         // 每轮重新找按钮:组件重渲染后旧引用可能已经失效
-        const btn = pickAddButton(findAddButtons(), items, dom);
+        const btn = pickAddButton(findAddButtons(), items, dom, sections);
         if (!btn) break;
         realClick(btn.el);
         const grown = await waitUntil(() => {
@@ -1039,7 +1070,7 @@
 
     let items = collectItems(true);
     // 档案段数多于页面区块数时,先把「+ 添加」点出来
-    items = await expandBlocks(P, items, collectItems, report);
+    items = await expandBlocks(P, items, collectItems, report, sections);
 
     /* 通配字段(「起止时间」「描述」)的归属判定。
      * 两种真实布局需要同时成立:
@@ -1637,7 +1668,8 @@
       const inp = el.querySelector('input:not([readonly])');
       if (inp) {
         setNative(inp, v);
-        target = await waitUntil(() => pickOption(fresh(), key, v), 800);
+        // 学校/专业这类下拉是远程搜索,打完字要等接口回来,800ms 常常不够
+        target = await waitUntil(() => pickOption(fresh(), key, v), 1800);
       }
     }
     if (!target) { closePopup(); return { ok: false, reason: `选项里没有「${v}」,请手动选` }; }
@@ -1673,7 +1705,7 @@
      * 权重压过外层兄弟文本:同一行里其它三个框的单位字都在外层文本里。 */
     const unit = clean(el.innerText || '').replace(/请选择|请输入/g, '').trim();
     if (unit && unit !== own && unit.length <= 2 && !/日期|时间/.test(unit)) {
-      cands.push({ t: unit, w: 3.5 });
+      cands.push({ t: unit, w: 3.5, o: true });
     }
     /* 组件内部 input 的 placeholder 同样看不到(labelCands 只认元素自身的)。
      * Moka 的空年/月框正是靠 placeholder="年" 表明身份的。
@@ -1681,7 +1713,7 @@
      * 是残渣不是标签,给它高权重会把真标签「出生日期」顶掉。 */
     const rawPh = String((el.querySelector('input') || {}).placeholder || '').trim();
     const ph = /^请(选择|输入|填写)/.test(rawPh) ? '' : clean(rawPh);
-    if (ph && ph !== own) cands.push({ t: ph, w: 4 });
+    if (ph && ph !== own) cands.push({ t: ph, w: 4, o: true });
     cands.sort((a, b) => b.w - a.w);
     if (!own) return cands;
     return cands.filter((c) => c.t !== own && !(c.t.length >= 2 && own.includes(c.t)));
@@ -1833,5 +1865,9 @@
     };
   };
 
-  window.__RQF = { version: VERSION, fill, scan };
+  /* 诊断/测试用:某个「添加」按钮被认领给哪个经历域。
+   * 「不会自己加一段」这类问题,光看填充报告看不出是按钮没找到还是点了没反应。 */
+  const addButtonDomain = (el) => (el ? sectionDomOf(el, scanSections()) : null);
+
+  window.__RQF = { version: VERSION, fill, scan, addButtonDomain };
 })();

@@ -81,7 +81,7 @@ function selField(title, key, opts, value, ph) {
 }
 
 // 起止时间(month-range-select 四联)/ 单日期(item-half 二联)
-function rangeField(title, keys, values, half) {
+function rangeField(title, keys, values, half, till) {
   const cls = half ? 'item-half-mz_My7kExy' : 'item-CNFmjn2r6y';
   const cell = (k, v, ph) => `<div class="${cls}"><div class="sd-Tooltip-container-2zU-8 full-width-fZap_B2OcF">
       <div class="sd-Dropdown-container-282zZ" data-sel="${k}" data-opts="${(/y$/.test(k) ? YEARS : MONTHS).join('|')}" style="width:100%">
@@ -98,7 +98,10 @@ function rangeField(title, keys, values, half) {
   return `<div class="apply-field-Q2iJ7AtQGX date_info-nCj8tT_zjw full-width-field-_9KdqB6mcu">
     <div class="title-IWWQ0Xa4L7"><span><span>${title}</span></span><span class="required-asterisk-av7daEKsLS">*</span></div>
     <div class="ctrl-CICMG4Fr4_"><div class="month-range-select date_info wrapper-Wilqy7sjl0">
-      <label class="label-ZJNsc2aXvx"></label>${body}
+      <label class="label-ZJNsc2aXvx"></label>${body}${till
+        ? '<span class="sign-MhIus99jyR"><label class="sd-Checkbox-container-1n9Pw"><span class="sd-Checkbox-box-2U1yI">'
+          + '<input type="checkbox" class="sd-Checkbox-input-3JNJP"></span>'
+          + '<span class="sd-Checkbox-label-1hBiz"><div class="sd-Checkbox-label-text-1fNQy">至今</div></span></label></span>' : ''}
       <div class="error-xvdaUhi8z1">必填项未填写</div>
     </div><div><div class="describe-GCCjupJ4ID"></div></div></div></div>`;
 }
@@ -111,8 +114,11 @@ function areaField(title, id, value) {
     </div><div><div class="describe-GCCjupJ4ID"></div></div></div></div>`;
 }
 
-const block = (title, groups) => `<div class="apply-block-KRDTLLb5hU">
-  <div class="blockTitle-dcmrfhpkg1"><span class="text-JHHb1llnzL"><span>${title}</span></span></div>
+/* 区块标题栏:标题 + 「添加」按钮。按钮在该区块所有字段【之前】——
+   这正是「不会自己加一段」的成因,位置法永远够不着它。 */
+const block = (title, groups, addKey) => `<div class="apply-block-KRDTLLb5hU" ${addKey ? `data-add="${addKey}"` : ''}>
+  <div class="blockTitle-dcmrfhpkg1"><span class="text-JHHb1llnzL"><span>${title}</span></span>${
+    addKey ? '<button type="button" class="sd-Button-container-3NnDx"><span class="sd-Button-content-bz_6k"><span><span>添加</span></span></span></button>' : ''}</div>
   ${groups.map((g) => `<div class="apply-fields-BzcXI4i2Pm multi-NTCDdF2lci">${g}</div>`).join('')}</div>`;
 
 document.getElementById('form').innerHTML = [
@@ -134,12 +140,10 @@ document.getElementById('form').innerHTML = [
     selField('专业排名', 'e1rank', ['前10%', '前30%'], '') +
     textField('绩点/绩点总分', 'f-e1gpa', ''),
 
-    selField('学历', 'e2deg', ['大专', '本科', '硕士', '博士'], '本科') +
-    selField('学习形式', 'e2form', ['全日制', '非全日制'], '') +
-    rangeField('就读时间', ['e2sy', 'e2sm', 'e2ey', 'e2em'], ['2020', '9', '2024', '6']) +
-    selField('学校名称', 'e2school', ['示例大学', '样例学院'], '样例学院') +
-    textField('学院', 'f-e2college', '') +
-    textField('绩点/绩点总分', 'f-e2gpa', ''),
+  ], 'edu'),
+  block('实习经历', [
+    rangeField('起止时间', ['w1sy', 'w1sm', 'w1ey', 'w1em'], ['', '', '', ''], false, true) +
+    textField('公司名称', 'f-w1co', '') + textField('职位名称', 'f-w1title', ''),
   ]),
   block('获奖经历', [
     rangeField('获奖时间', ['a1y', 'a1m'], ['', ''], true) + textField('奖项名称', 'f-a1name', ''),
@@ -153,7 +157,8 @@ document.getElementById('form').innerHTML = [
 ].join('');
 
 /* ---- 下拉行为:菜单渲染在 label 的兄弟 span 内(与真实一致),点选写入 display-value ---- */
-document.querySelectorAll('[data-sel]').forEach((box) => {
+function wire(root) {
+ root.querySelectorAll('[data-sel]').forEach((box) => {
   const opts = box.dataset.opts.split('|');
   const disp = box.querySelector('.sd-Input-display-value-1RTHN');
   const input = box.querySelector('input');
@@ -188,6 +193,25 @@ document.querySelectorAll('[data-sel]').forEach((box) => {
   input.addEventListener('input', (e) => { if (host.innerHTML) render(e.target.value.trim()); });
   // 受控吐回:打字不算提交
   input.addEventListener('blur', () => { input.value = ''; });
+ });
+}
+wire(document);
+let addSeq = 0;
+document.querySelectorAll('[data-add]').forEach((blk) => {
+  blk.querySelector('button').addEventListener('click', () => {
+    const last = blk.querySelector('.apply-fields-BzcXI4i2Pm:last-of-type');
+    const copy = last.cloneNode(true);
+    addSeq++;
+    copy.querySelectorAll('[data-sel]').forEach((b) => {
+      b.dataset.sel = b.dataset.sel + '_n' + addSeq;
+      b.querySelector('.sd-Input-display-value-1RTHN').innerHTML = '';
+      b.querySelector('input').value = '';
+    });
+    copy.querySelectorAll('input:not([type=checkbox]), textarea').forEach((i) => { i.value = ''; });
+    copy.querySelectorAll('[id]').forEach((i) => { i.id = i.id + '_n' + addSeq; });
+    blk.appendChild(copy);
+    wire(copy);
+  });
 });
 document.querySelectorAll('[data-nav]').forEach((n) =>
   n.addEventListener('click', () => { window.NAV_CLICKS++; }));

@@ -385,6 +385,64 @@ const CHECKS = {
     紧急联系人_邮箱不填: v('ec-email') === '',
   }),
 
+  /* 用户从真实 Shopee 页复制来的 DOM 快照(只替换了个人信息)。
+   * React 行为不在快照里,所以这一页【只验识别】:标签定位、规则命中、
+   * 区块归属、「添加」按钮认领 —— 这些恰好是历次填错的根因所在。 */
+  'moka-live-snapshot.html': () => {
+    const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
+    const by = (kw) => s.rows.find((r2) => r2.label.includes(kw));
+    const rule = (kw) => (by(kw) || {}).rule || '';
+    const secOf = (kw) => (by(kw) || {}).sec || '';
+    return {
+      // 标签定位:一个「必填项未填写」都不许出现
+      无一标签是校验提示: !s.rows.some((r2) => /项未填写|必填/.test(r2.label)),
+      // 按钮文字不该混进标签
+      无一标签含删除本条: !s.rows.some((r2) => /删除本条/.test(r2.label)),
+
+      基本_姓名: rule('姓名') === 'fullName',
+      基本_性别: rule('性别') === 'gender',
+      基本_出生日期: rule('出生日期') === 'birthday',
+      基本_最高学历毕业院校: rule('最高学历毕业院校') === 'topSchool',
+      基本_国籍: rule('国籍') === 'nationality',
+
+      问句_校园大使不作答: rule('是否校园大使推荐') === '',
+      问句_调剂不作答: rule('意向工作城市是否可以调剂') === '',
+      问句_渠道不作答: rule('渠道') === '',
+      问句_本科学历不作答: rule('请问你是否填写了本科学历') === '',
+
+      教育_学历: rule('学历') !== '' && secOf('学习形式') === '教育',
+      教育_学习形式: rule('学习形式') === 'edu.studyForm',
+      教育_学校名称: rule('学校名称') === 'edu.school',
+      教育_专业名称: rule('专业名称') === 'edu.major',
+      教育_专业排名不是专业: rule('专业排名') === 'edu.rank',
+      教育_绩点合并栏: rule('绩点') === 'edu.gpaCombined',
+
+      // 就读时间四格:两格已填、两格空(placeholder 年/月)
+      教育_就读时间四格都归教育: s.rows.filter((r2) => r2.sec === '教育'
+        && /timeRange|ym/.test(r2.rule)).length >= 2,
+
+      // 实习起止时间旁有「至今」勾选框,不能因此够不着标题
+      实习_起止时间认得出: s.rows.some((r2) => r2.sec === '工作' && /timeRange|ym/.test(r2.rule)),
+      实习_公司名称: rule('公司名称') === 'work.company',
+
+      获奖_奖项名称: rule('奖项名称') === 'award.name',
+      英语_等级证书: rule('英语等级证书') === 'lang.cert',
+      其他_自我评价: rule('自我评价') === 'intro',
+
+      // 导航栏搜索框不该被当成表单字段填
+      导航_职位搜索不作答: rule('输入职位关键字') === '',
+
+      // 「添加」按钮在区块标题栏里(字段之前),必须按区块归属认领
+      添加按钮_教育认领正确: (() => {
+        const btn = document.getElementById('add-edu');
+        return window.__RQF.addButtonDomain(btn) === 'edu';
+      })(),
+      添加按钮_实习认领正确: window.__RQF.addButtonDomain(document.getElementById('add-work')) === 'work',
+      添加按钮_获奖认领正确: window.__RQF.addButtonDomain(document.getElementById('add-award')) === 'award',
+      添加按钮_英语认领正确: window.__RQF.addButtonDomain(document.getElementById('add-lang')) === 'lang',
+    };
+  },
+
   /* Moka 真实 DOM 逐字复刻。三个致命细节的回归护栏:
    * 值在 display-value(不是 input.value)、校验提示不得当标签、
    * 空年月框靠组件内部 input 的 placeholder 表明身份。 */
@@ -418,7 +476,18 @@ const CHECKS = {
       // month-range 四联:起对已填不动,止对点上(年份表虚拟滚动,靠打字过滤)
       教育1_起对不动: wv('e1sy') === '2024' && wv('e1sm') === '9',
       教育1_止对点上: wv('e1ey') === '2027' && wv('e1em') === '6',
-      教育2_四联都已填不动: wv('e2sy') === '2020' && wv('e2em') === '6',
+      // 页面只给了一段教育,档案有两段 —— 必须点标题栏里的「添加」长出第二段
+      // (按钮在字段之前,位置法够不着,只能按区块归属认领)
+      教育_自动展开第二段: document.querySelectorAll('[data-add="edu"] .apply-fields-BzcXI4i2Pm').length === 2,
+      // 新块由第一块克隆而来,key 是原 key 加 _n1
+      教育2_学历: wv('e1deg_n1') === '本科',
+      教育2_起止: wv('e1sy_n1') === '2020' && wv('e1sm_n1') === '9'
+        && wv('e1ey_n1') === '2024' && wv('e1em_n1') === '6',
+      教育2_学校: wv('e1school_n1') === '样例学院',
+
+      // 起止时间旁边的「至今」勾选框不能把控件数顶过闸门,否则标题够不着,
+      // 已填的起始格不占位,空的结束格会被当成起始格
+      实习_起止四格都对: wv('w1sy') === '2026' && wv('w1sm') === '4',
 
       // item-half 二联:预计毕业时间在区块外 → 不猜归属;获奖时间分两段
       预计毕业时间_区块外不猜: wv('gy') === '' && wv('gm') === '',
@@ -428,7 +497,8 @@ const CHECKS = {
       获奖2_名称: v('f-a2name') === '示例二等奖学金',
 
       学院1: v('f-e1college') === '计算机科学与工程系',
-      绩点2_合并栏: v('f-e2gpa') === '3.63/4.00',
+      实习1_公司: v('f-w1co') === '甲公司',
+
       自我评价: v('f-intro').includes('AI for Science'),
       常驻导航_零误点: window.NAV_CLICKS === 0,
     };
@@ -703,7 +773,7 @@ const loadEngine = async () => {
 
 /* 这些页面自己决定怎么调引擎:custom-widgets 只扫描不填充,
  * progress 需要在填充过程中架观察器,跑完再看就晚了。 */
-const SELF_DRIVEN = new Set(['custom-widgets.html', 'progress.html']);
+const SELF_DRIVEN = new Set(['custom-widgets.html', 'progress.html', 'moka-live-snapshot.html']);
 
 /** 跑当前页面的断言 */
 window.rqfRun = async () => {
