@@ -35,6 +35,8 @@
 <div class="section-title">个人信息</div>
 <div class="blk">
   <div class="item"><span class="lab">姓名</span><div class="ctl"><input id="s-name"></div></div>
+  <!-- 模拟 Moka 的下拉输入口:React 受控状态只接受点选,打字进去会被吐回来 -->
+  <div class="item"><span class="lab">性别</span><div class="ctl"><input id="s-gender"></div></div>
   <div class="item"><span class="lab">邮箱</span><div class="ctl"><input id="s-email"></div></div>
   <div class="item"><span class="lab">最高学历</span><div class="ctl"><input id="s-topdeg"></div></div>
   <div class="item"><span class="lab">最高学历毕业院校</span><div class="ctl"><input id="s-topschool"></div></div>
@@ -129,6 +131,12 @@
   <div class="item"><span class="lab">请问你是否填写了本科学历</span><div class="ctl"><input id="k-bs"></div></div>
 </div>
 
+<script>
+// 受控组件模拟:任何 input 事件后,在自己的"渲染周期"里把值清回去
+document.getElementById('s-gender').addEventListener('input', (e) => {
+  setTimeout(() => { e.target.value = ''; }, 0);
+});
+</script>
 <script src="run.js"></script>
 <script>rqfAuto()</script>
 </body>

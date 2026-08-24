@@ -391,6 +391,10 @@ const CHECKS = {
     const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
     return {
       意向城市: v('s-city') === '上海',
+      // 写进去被组件吐回来的框:值必须是空,报告必须把它归为跳过而不是谎报已填
+      吐回框_最终为空: v('s-gender') === '',
+      吐回框_报告为丢弃而非已填: window.RQF_REPORT.skipped.some((x) => x.label === '性别' && /丢弃/.test(x.reason))
+        && !window.RQF_REPORT.filled.some((x) => x.label === '性别'),
       调剂问句_不作答: v('s-adjust') === '',
       校园大使问句_不作答: v('s-ambassador') === '',
       渠道问句_不作答: v('s-channel') === '',
@@ -617,6 +621,7 @@ window.rqfRun = async () => {
   if (!SELF_DRIVEN.has(page)) {
     report = await window.__RQF.fill(window.RQF_TEST_PROFILE, window.RQF_TEST_FILE);
   }
+  window.RQF_REPORT = report;   // 供断言检查「已填/跳过」的归类是否诚实
   const v = (id) => document.getElementById(id).value;
   const st = (id) => document.getElementById(id).selectedOptions[0]?.textContent || '';
   const result = await checks(v, st);

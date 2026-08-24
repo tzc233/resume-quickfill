@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.12.0';
+  const VERSION = '1.13.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -899,6 +899,10 @@
   const runFill = async (rawProfile, resumeFile) => {
     const P = normalize(rawProfile);
     const report = { url: location.href, filled: [], skipped: [], unmatched: [], fileFilled: false, fileLabel: '' };
+    /* 文本写入先记账,循环结束后统一回读校验:Moka 这类站点的「年/月」框
+     * 其实是下拉组件的输入口,React 受控状态若只接受点选,会在 onChange 后
+     * 把写进去的值吐回来 —— 不校验的话,报告说「已填」,表单数据里却是空的。 */
+    const textWrites = [];
     const doneGroups = new Set();
     const fileEls = [];
     const customs = P.custom || [];
@@ -1238,7 +1242,23 @@
       if (el.maxLength && el.maxLength > 0 && out.length > el.maxLength) out = out.slice(0, el.maxLength);
       setNative(el, out);
       mark(el);
-      report.filled.push({ label: hit.label, value: String(out).slice(0, 60) });
+      textWrites.push({ el, label: hit.label, out: String(out) });
+    }
+
+    /* 回读校验。稍等一拍再读:受控组件的吐回发生在它自己的渲染周期里 */
+    if (textWrites.length) {
+      ui.step('正在校验写入…', 0.94);
+      await sleep(120);
+      for (const w of textWrites) {
+        const now = String(w.el.value || '').trim();
+        if (now === w.out.trim()) {
+          report.filled.push({ label: w.label, value: w.out.slice(0, 60) });
+        } else if (now) {
+          report.skipped.push({ label: w.label, reason: `写入后被页面改成「${now.slice(0, 20)}」,请核对` });
+        } else {
+          report.skipped.push({ label: w.label, reason: '写入后被页面组件丢弃 —— 这个框可能要点选,请手动填' });
+        }
+      }
     }
 
     if (fileEls.length) {
