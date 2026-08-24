@@ -385,6 +385,29 @@ const CHECKS = {
     紧急联系人_邮箱不填: v('ec-email') === '',
   }),
 
+  /* Moka sd-Dropdown:值在内部 input.value,「年」是组件内 addon,只接受点选。
+   * 覆盖四条路径:直接点选、语义匹配点选(学历)、打字过滤兜底(虚拟滚动的年份表)、
+   * 以及与选项行同 class 的常驻导航绝不能被误点。 */
+  'moka-sd.html': (v) => {
+    const wv = (sel) => (document.querySelector(`[data-sd="${sel}"] input`)?.value || '').trim();
+    const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
+    return {
+      姓名_普通文本框照常: v('m-name') === '李思远',
+      性别_点选成功: wv('gender') === '女',
+      学历_语义匹配点选: wv('degree') === '硕士研究生',
+
+      已填的开始年月_不动: wv('sy') === '2024' && wv('sm') === '9',
+      结束年_打字过滤后点到: wv('ey') === '2027',
+      结束月_直接点到: wv('em') === '6',
+
+      学校名称: v('m-school') === '示例大学',
+      常驻导航_零误点: window.NAV_CLICKS === 0,
+
+      诊断_识别为自定义下拉: s.rows.some((r2) => r2.rule === 'gender' && r2.ctrl === '自定义下拉'),
+      诊断_空组件不误判已填: s.rows.some((r2) => r2.rule === 'gender' && r2.filled === false),
+    };
+  },
+
   /* Shopee:基本信息区的「最高学历毕业院校」不消耗教育锚点;教育区块把
    * 「学历/学习形式」排在锚点之前,第二段靠区块标题分段;问句字段一律不作答。 */
   'shopee-style.html': (v) => {

@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.13.0';
+  const VERSION = '1.14.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -1309,6 +1309,7 @@
   const CUSTOM_WIDGET_SEL = [
     '[role="combobox"]', '[role="listbox"]', '[role="radiogroup"]', '[role="switch"]', '[role="spinbutton"]',
     '[contenteditable="true"]', '[contenteditable=""]',
+    '[class*="sd-Dropdown"]',   // Moka:年/月、性别、学历这些框全是它,打字会被吐回,必须点选
     '.ant-select', '.ant-picker', '.ant-cascader', '.ant-radio-group', '.ant-checkbox-group',
     '.el-select', '.el-cascader', '.el-date-editor', '.el-radio-group',
     '.arco-select', '.arco-picker', '.semi-select', '.semi-datepicker',
@@ -1369,6 +1370,7 @@
     '.ant-select-item-option', '.ant-select-item',
     '[role="option"]',
     '.el-select-dropdown__item', '.arco-select-option', '.semi-select-option',
+    '[class*="sd-Menu-container"]',   // Moka:每行选项一个 container,文本在 sd-Select-keyword 里
   ].join(',');
 
   const openOptions = () => Array.from(document.querySelectorAll(OPTION_SEL)).filter((o) => {
@@ -1506,15 +1508,33 @@
   const widgetValue = (el) => {
     const item = el.querySelector('.ant-select-selection-item, .el-select__tags-text, [class*="selection-item"]');
     if (item) return clean(item.textContent || '');
+    /* Moka(sd-*):值在内部 input 的 value 里;innerText 只有「年」这类 addon 单位,
+     * 拿它当值会把空组件误判成已填 */
+    const inp = el.querySelector('input');
+    if (/sd-Dropdown/.test(String(el.className))) return clean((inp && inp.value) || '');
+    if (inp && String(inp.value || '').trim()) return clean(inp.value);
     return clean(el.innerText || '').replace(/请选择|请输入|select|choose/gi, '').trim();
   };
 
   const fillWidget = async (el, key, v) => {
     if (widgetValue(el)) return { ok: false, reason: '已有选择,未覆盖' };
+    /* 快照差分:只认「点开之后才出现」的选项。Moka 的左侧锚点导航也用
+     * sd-Menu-container,不差分的话「教育背景」这类导航项会混进选项列表 */
+    const before = new Set(openOptions());
+    const fresh = () => openOptions().filter((o) => !before.has(o));
     realClick(el);
-    const opts = await waitUntil(() => { const o = openOptions(); return o.length ? o : null; }, 1000);
+    const opts = await waitUntil(() => { const o = fresh(); return o.length ? o : null; }, 1000);
     if (!opts) { closePopup(); return { ok: false, reason: '下拉未能展开,请手动选' }; }
-    const target = pickOption(opts, key, v);
+    let target = pickOption(opts, key, v);
+    if (!target) {
+      /* 年份列表常虚拟滚动,目标不在已渲染的选项里。这类输入框接受打字过滤
+       * (选项行里有 keyword 高亮结构),打进去再从过滤结果里挑 */
+      const inp = el.querySelector('input:not([readonly])');
+      if (inp) {
+        setNative(inp, v);
+        target = await waitUntil(() => pickOption(fresh(), key, v), 800);
+      }
+    }
     if (!target) { closePopup(); return { ok: false, reason: `选项里没有「${v}」,请手动选` }; }
     realClick(target);
     // 轮询到值出现就立刻返回,不用固定等待 —— 后台标签页的定时器会被浏览器节流到 ~1s/次
@@ -1543,6 +1563,14 @@
   const widgetCands = (el) => {
     const own = widgetValue(el);
     const cands = labelCands(el);
+    /* Moka 年/月框的「年」字是组件内部的 addon —— labelCands 只往父级找,
+     * 永远看不到它。补成候选;限两个字以内,免得把「请选择日期」这类占位卷进来。
+     * 权重压过外层兄弟文本:同一行里其它三个框的单位字都在外层文本里。 */
+    const unit = clean(el.innerText || '').replace(/请选择|请输入/g, '').trim();
+    if (unit && unit !== own && unit.length <= 2 && !/日期|时间/.test(unit)) {
+      cands.push({ t: unit, w: 3.5 });
+      cands.sort((a, b) => b.w - a.w);
+    }
     if (!own) return cands;
     return cands.filter((c) => c.t !== own && !(c.t.length >= 2 && own.includes(c.t)));
   };

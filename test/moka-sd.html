@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · Moka sd-Dropdown 点选</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    .section-title { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; font-weight: 600; }
+    .item { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+    .lab { width: 170px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ctl { width: 560px; flex-shrink: 0; display: flex; gap: 8px; align-items: center; }
+    input { padding: 5px 9px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
+    /* 结构与 class 命名照搬真实 Moka(CSS Modules 混淆后缀) */
+    [class^="sd-Dropdown-container"] { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 3px 8px; background: #fff; cursor: pointer; align-items: center; }
+    [class^="sd-Dropdown-container"] input { border: none; outline: none; width: 90px; padding: 2px; }
+    .wide input { width: 200px; }
+    [class^="sd-Input-addon"] { color: #6b7280; font-size: 12.5px; }
+    .sd-menu-portal { position: absolute; z-index: 70; background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 4px; min-width: 120px;
+      max-height: 220px; overflow: auto; }
+    .sd-menu-portal[hidden] { display: none; }
+    [class^="sd-Menu-container"] { display: flex; justify-content: space-between; padding: 5px 10px;
+      border-radius: 5px; cursor: pointer; font-size: 13px; }
+    [class^="sd-Menu-container"]:hover { background: #eef2ff; }
+    nav { border: 1px dashed #d1d5db; border-radius: 8px; padding: 6px 10px; width: 160px;
+      position: fixed; right: 12px; top: 90px; font-size: 12.5px; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">Moka sd-Dropdown(照真实 DOM 复刻)</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  这些框的值在内部 input.value 里;「年」是组件内的 addon 单位字;打字会过滤选项(keyword 高亮结构);
+  值只能靠点选提交。右侧常驻导航同样用 sd-Menu-container,<b>绝不能被当成选项误点</b>。<br>
+  结束年的选项列表模拟虚拟滚动:初始只渲染 1990–1999,必须靠打字过滤才能点到 2027。
+</p>
+
+<!-- 常驻锚点导航:与选项行同 class,必须被快照差分排除 -->
+<nav>
+  <div class="sd-Menu-container-3HY1z" data-nav>教育背景</div>
+  <div class="sd-Menu-container-3HY1z" data-nav>实习经历</div>
+  <div class="sd-Menu-container-3HY1z" data-nav>2024</div>
+</nav>
+
+<div class="section-title">个人信息</div>
+<div class="item"><span class="lab">姓名</span><div class="ctl"><input id="m-name" style="width:100%"></div></div>
+<div class="item"><span class="lab">性别</span><div class="ctl">
+  <span class="wide" data-sd="gender" data-opts="男,女"></span>
+</div></div>
+
+<div class="section-title">教育背景</div>
+<div class="item"><span class="lab">学历</span><div class="ctl">
+  <span class="wide" data-sd="degree" data-opts="大专,本科,硕士研究生,博士研究生"></span>
+</div></div>
+<div class="item"><span class="lab">就读时间</span></div>
+<div class="item"><div class="ctl">
+  <span data-sd="sy" data-kind="year" data-value="2024" data-unit="年"></span>
+  <span data-sd="sm" data-kind="month" data-value="9" data-unit="月"></span>
+  <span>-</span>
+  <span data-sd="ey" data-kind="year" data-unit="年"></span>
+  <span data-sd="em" data-kind="month" data-unit="月"></span>
+</div></div>
+<div class="item"><span class="lab">学校名称</span><div class="ctl"><input id="m-school" style="width:100%"></div></div>
+
+<script>
+window.NAV_CLICKS = 0;
+document.querySelectorAll('[data-nav]').forEach((n) =>
+  n.addEventListener('click', () => { window.NAV_CLICKS++; }));
+
+const RANGE = { year: Array.from({length: 41}, (_, i) => String(1990 + i)),
+                month: Array.from({length: 12}, (_, i) => String(i + 1)) };
+
+for (const host of document.querySelectorAll('[data-sd]')) {
+  const kind = host.dataset.kind || '';
+  const all = kind ? RANGE[kind] : host.dataset.opts.split(',');
+  // 年份列表模拟虚拟滚动:未过滤时只渲染前 10 条
+  const virtual = kind === 'year';
+
+  const box = document.createElement('span');
+  box.className = 'sd-Dropdown-container-1g6Bc';
+  box.innerHTML = '<span class="sd-Input-container-1g6Bc">'
+    + '<input type="text" class="sd-Input-input-3CH76 sd-Input-common-input-2Q4Vc sd-Input-has-addon-1Dpz-"'
+    + ' placeholder="" autocomplete="nope" maxlength="-1">'
+    + (host.dataset.unit ? `<span class="sd-Input-addon-2xQr">${host.dataset.unit}</span>` : '')
+    + '</span>';
+  const input = box.querySelector('input');
+  if (host.dataset.value) input.value = host.dataset.value;
+
+  const dd = document.createElement('div');
+  dd.className = 'sd-menu-portal';
+  dd.hidden = true;
+  document.body.appendChild(dd);
+
+  const render = (kw) => {
+    dd.innerHTML = '';
+    let rows = kw ? all.filter((o) => o.includes(kw)) : all;
+    if (virtual && !kw) rows = rows.slice(0, 10);
+    for (const o of rows) {
+      const it = document.createElement('div');
+      it.className = 'sd-Menu-container-3HY1z sd-Select-pointer-2HwAl';
+      // 行结构照搬真实 DOM:文本在 sd-Select-keyword 里,尾部是选中态图标位
+      it.innerHTML = '<div class="sd-Menu-content-2vKOA"><div class="sd-Menu-content-item-37fPj">'
+        + `<span><span></span><span class="sd-Select-keyword-eVPX_">${o}</span><span></span></span>`
+        + '</div></div><div class="sd-Menu-suffix-tool-3vH_q"></div>';
+      it.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        // 受控组件的正规提交路径:点选 → 写回 input
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(input, o);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        dd.hidden = true;
+      });
+      dd.appendChild(it);
+    }
+  };
+
+  box.addEventListener('mousedown', () => {
+    document.querySelectorAll('.sd-menu-portal').forEach((d) => { if (d !== dd) d.hidden = true; });
+    render('');
+    const r = box.getBoundingClientRect();
+    dd.style.left = (r.left + scrollX) + 'px';
+    dd.style.top = (r.bottom + scrollY + 4) + 'px';
+    dd.hidden = false;
+  });
+  // 打字过滤:模拟 keyword 匹配;同时体现「打字不算提交」——只改选项,不定值
+  input.addEventListener('input', (e) => { if (!dd.hidden) render(e.target.value.trim()); });
+  // 受控吐回:失焦时若值不在选项集里,组件把它清掉(只接受点选的本质)
+  input.addEventListener('blur', () => { if (input.value && !all.includes(input.value.trim())) input.value = ''; });
+
+  host.appendChild(box);
+}
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>
