@@ -65,11 +65,11 @@ function textField(title, id, value, ph) {
 }
 
 // 下拉(Select / select_info):值在 display-value,input 恒空
-function selField(title, key, opts, value, ph) {
+function selField(title, key, opts, value, ph, remote) {
   return `<div class="apply-field-Q2iJ7AtQGX Select-oqOV0aGogs">
     <div class="title-IWWQ0Xa4L7"><span><span>${title}</span></span><span class="required-asterisk-av7daEKsLS">*</span></div>
     <div class="ctrl-CICMG4Fr4_"><div class="sd-Tooltip-container-2zU-8 w-full-mRUtzMQLHs">
-      <div class="sd-Dropdown-container-282zZ" data-sel="${key}" data-opts="${opts.join('|')}" style="width:100%">
+      <div class="sd-Dropdown-container-282zZ" data-sel="${key}" data-opts="${opts.join('|')}" ${remote ? 'data-remote="1"' : ''} style="width:100%">
         <label class="sd-Input-container-3OoVt sd-Select-container-D6nZH select no-adaptive-tooltip sd-Input-lg-39_0c" style="width:100%">
           <span class="sd-Input-display-value-1RTHN sd-Input-display-value-spacing-bhYPY">${value ? `<span class="">${value}</span>` : ''}</span>
           <input type="text" class="sd-Input-input-QsLkW sd-Input-common-input-21SDH sd-Input-has-addon-SMZCZ"
@@ -100,7 +100,7 @@ function rangeField(title, keys, values, half, till) {
     <div class="ctrl-CICMG4Fr4_"><div class="month-range-select date_info wrapper-Wilqy7sjl0">
       <label class="label-ZJNsc2aXvx"></label>${body}${till
         ? '<span class="sign-MhIus99jyR"><label class="sd-Checkbox-container-1n9Pw"><span class="sd-Checkbox-box-2U1yI">'
-          + '<input type="checkbox" class="sd-Checkbox-input-3JNJP"></span>'
+          + `<input type="checkbox" class="sd-Checkbox-input-3JNJP" id="${keys[0]}-till"></span>`
           + '<span class="sd-Checkbox-label-1hBiz"><div class="sd-Checkbox-label-text-1fNQy">至今</div></span></label></span>' : ''}
       <div class="error-xvdaUhi8z1">必填项未填写</div>
     </div><div><div class="describe-GCCjupJ4ID"></div></div></div></div>`;
@@ -134,9 +134,9 @@ document.getElementById('form').innerHTML = [
     selField('学历', 'e1deg', ['大专', '本科', '硕士', '博士'], '硕士') +
     selField('学习形式', 'e1form', ['全日制', '非全日制'], '') +
     rangeField('就读时间', ['e1sy', 'e1sm', 'e1ey', 'e1em'], ['2024', '9', '', '']) +
-    selField('学校名称', 'e1school', ['示例大学', '样例学院'], '示例大学') +
+    selField('学校名称', 'e1school', ['示例大学', '样例学院', '其他大学'], '', '', true) +
     textField('学院', 'f-e1college', '') +
-    selField('专业名称', 'e1major', ['计算机科学与技术', '软件工程'], '计算机科学与技术') +
+    selField('专业名称', 'e1major', ['计算机科学与技术', '软件工程'], '', '', true) +
     selField('专业排名', 'e1rank', ['前10%', '前30%'], '') +
     textField('绩点/绩点总分', 'f-e1gpa', ''),
 
@@ -195,11 +195,25 @@ function wire(root) {
       });
     });
   };
+  /* 远程搜索型下拉(data-remote):点击【不】展开,只有输入后才去「拉取」选项。
+     学校名称/专业名称就是这种,上一版的多点位点击对它们全部失效。 */
+  const remote = box.dataset.remote === '1';
   box.addEventListener('mousedown', () => {
+    if (remote) return;
     document.querySelectorAll('[data-menu]').forEach((h) => { if (h !== host) h.innerHTML = ''; });
     render('');
   });
-  input.addEventListener('input', (e) => { if (host.innerHTML) render(e.target.value.trim()); });
+  input.addEventListener('input', (e) => {
+    if (remote) {
+      const kw = e.target.value.trim();
+      host.innerHTML = '';
+      if (!kw) return;
+      const hit = opts.filter((o) => o.includes(kw));
+      if (!hit.length) return;
+      // 模拟接口延迟
+      setTimeout(() => { if (input.value.trim() === kw) render(hit); }, 260);
+      return;
+    } if (host.innerHTML) render(e.target.value.trim()); });
   // 受控吐回:打字不算提交
   input.addEventListener('blur', () => { input.value = ''; });
  });
@@ -228,6 +242,12 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') document.querySelectorAll('[data-menu]').forEach((h) => { h.innerHTML = ''; });
 });
 </script>
+<div class="apply-block-KRDTLLb5hU"><div class="blockTitle-dcmrfhpkg1"><span class="text-JHHb1llnzL"><span>授权文本</span></span></div>
+ <div class="apply-fields-BzcXI4i2Pm"><label class="sd-Checkbox-container-1n9Pw">
+  <span class="sd-Checkbox-box-2U1yI"><input type="checkbox" class="sd-Checkbox-input-3JNJP" id="agree-x"></span>
+  <span class="sd-Checkbox-label-1hBiz"><div class="sd-Checkbox-label-text-1fNQy">我已阅读并同意《隐私协议》</div></span>
+ </label></div></div>
+
 <script src="run.js"></script>
 <script>rqfAuto()</script>
 </body>

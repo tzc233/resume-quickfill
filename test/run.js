@@ -206,7 +206,11 @@ const CHECKS = {
     实习2_公司: v('w2-company') === '乙公司',
     项目_年月: v('j1-sy') === '2024' && v('j1-sm') === '9' && v('j1-ey') === '2025' && v('j1-em') === '12',
     项目_描述: v('j1-desc').includes('next-token'),
-    至今复选_不该勾: !document.getElementById('w1-now').checked,
+    /* 页面标题就写着「第一段在职,结束时间勾至今」—— 档案里 endTime 是「至今」,
+       日期格填不了,就该勾这个框(旧版一律不碰勾选框,那是能力缺失不是设计)。
+       第二段有真实结束日期,绝不能勾。 */
+    至今复选_在职那段要勾上: document.getElementById('w1-now').checked === true,
+    至今复选_第二段不该勾: !document.getElementById('w2-now').checked,
   }),
 
   'moka-antd.html': (v) => ({
@@ -492,6 +496,16 @@ const CHECKS = {
       实习_起年月都对_月不被自动1顶掉: wv('w1sy') === '2026' && wv('w1sm') === '4',
       教育1_止对月份不是自动1: wv('e1em') === '6',
       教育2_月份不是自动1: wv('e1sm_n1') === '9' && wv('e1em_n1') === '6',
+
+      /* 远程搜索型下拉:点击不展开,只有输入后才「拉取」选项。
+         上一版的多点位点击对它们全部失效,报「下拉未能展开」。 */
+      学校名称_打字才出选项也能填: wv('e1school') === '示例大学',
+      专业名称_远程搜索: wv('e1major') === '计算机科学与技术',
+      学校名称_第二段: wv('e1school_n1') === '样例学院',
+
+      // 结束时间是「至今」:日期格填不了,得勾同一段里的「至今」勾选框
+      至今勾选框已勾: document.getElementById('w1sy-till').checked === true,
+      协议勾选框没被勾: !document.getElementById('agree-x') || !document.getElementById('agree-x').checked,
 
       // item-half 二联:预计毕业时间在区块外 → 不猜归属;获奖时间分两段
       预计毕业时间_区块外不猜: wv('gy') === '' && wv('gm') === '',

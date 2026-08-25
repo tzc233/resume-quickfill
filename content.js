@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.18.0';
+  const VERSION = '1.19.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -183,7 +183,7 @@
     { k: 'soft.desc', re: /软件概述|软件描述/i },
 
     /* ---- 外语能力(锚点:语言种类) ---- */
-    { k: 'lang.name', a: 1, re: /语言种类|语种|外语语言/i },
+    { k: 'lang.name', a: 1, re: /语言种类|语言类型|语种|外语语言/i },
     { k: 'lang.certScore', re: /语言证书及成绩|证书及成绩|证书与成绩/i },
     /* Shopee 的英语水平列表每段只有一栏「英语等级证书」:作为锚点分段后,
      * 档案只有一门语言时第二段会明确报「没有第 2 段」,而不是重复填同一本证书 */
@@ -406,9 +406,6 @@
      * 把整条 fullName 规则作废(那条排除词本是为了防止姓名填成学校名),
      * 姓名于是掉进含「性别」的那段文本,被填成了「女」。
      * 区块摘要文本里出现的词跟本字段无关,不该连坐。 */
-    const EX_MAX = 12;
-    const active = RULES.filter((r) => !(r.ex
-      && cands.some((c) => c.t.length <= EX_MAX && r.ex.test(c.t))));
 
     /* 字段有自己的标签时,就不再看邻居的拼接文本。自己的标签匹配不上,
      * 答案就是「没匹配上」,而不是拿上下文瞎猜 —— 「请问你是否填写了本科学历」
@@ -418,6 +415,13 @@
      * 才退回去用上下文。 */
     const own = cands.filter((c) => c.o && c.t.length >= 2);
     const pool = own.length ? own : cands;
+
+    /* 排除词只在真正参与匹配的候选上判定。拿全部候选判会误伤:
+     * 「期望薪资」旁边就是「当前薪资」,邻居拼接文本里出现「当前」,
+     * 会把 expectedSalary 整条规则作废,期望薪资就永远填不上。 */
+    const EX_MAX = 12;
+    const active = RULES.filter((r) => !(r.ex
+      && pool.some((c) => c.t.length <= EX_MAX && r.ex.test(c.t))));
     // 候选权重优先于规则顺序 —— 字段自身的精确标签必须压过祖先容器的整块文本,
     // 否则区块内每个字段都会被块首的「学校名称/公司名称」锚点抢先命中。
     for (const c of pool) {
@@ -954,6 +958,29 @@
     return out;
   };
 
+  /* 「至今」勾选框:结束时间写「至今」时,日期格填不了,得勾这个框。
+   * 只认标签恰好是「至今 / 在读 / 在职 / present」的勾选框,且只在同一段经历的
+   * 容器内找 —— 协议勾选框绝不会被误勾(它的标签是「我已阅读…」)。 */
+  const TILL_RE = /^(至今|今|在读|在职|present|current|now|till now)$/i;
+
+  const tickTillNow = (el) => {
+    let box = el;
+    for (let d = 0; d < 6 && box.parentElement; d++) {
+      box = box.parentElement;
+      for (const cb of box.querySelectorAll('input[type="checkbox"]')) {
+        const lb = cb.closest('label');
+        const t = clean((cb.labels && cb.labels[0] ? cb.labels[0].innerText : '')
+          || (lb ? lb.innerText : ''));
+        if (!TILL_RE.test(t)) continue;
+        if (!cb.checked) { cb.click(); mark(cb); }
+        return true;
+      }
+      // 爬出这一段经历就停手,免得勾到隔壁区块的
+      if (box.querySelectorAll('input, textarea, select').length > 10) break;
+    }
+    return false;
+  };
+
   const TEXTLIKE = new Set(['text', 'email', 'tel', 'url', 'number', 'date', 'month', 'week', 'time', 'search']);
 
   /* ---------- 主流程 ----------
@@ -1285,7 +1312,15 @@
           // 档案存 YYYY-MM,拆给「年」「月」两个框;月份不补前导零(Moka 显示为 9 而非 09)
           const m = v.match(/^(\d{4})[-/.年]?(\d{1,2})?/);
           v = m ? (ymc === 'y' ? m[1] : String(Number(m[2] || 0) || '')) : '';
-          if (!v) { report.skipped.push({ label: hit.label, reason: `「${entry[field]}」无法拆成年/月` }); continue; }
+          if (!v) {
+            const raw = String(entry[field] || '');
+            if (TILL_RE.test(clean(raw)) && tickTillNow(el)) {
+              report.filled.push({ label: hit.label, value: '已勾选「至今」' });
+            } else {
+              report.skipped.push({ label: hit.label, reason: `「${raw}」无法拆成年/月` });
+            }
+            continue;
+          }
         }
         }
       } else {
@@ -1684,7 +1719,21 @@
         i === order[0] ? 500 : 250);
       if (opts) { openHint.idx = i; break; }
     }
-    if (!opts) { closePopup(); return { ok: false, reason: '下拉未能展开(试过容器/输入框/父层),请手动选' }; }
+    /* 还是没开:学校/专业这类远程搜索下拉往往【不点开】,只在输入后才去拉选项。
+     * 依次用完整值和它的前缀探一次 —— 远程搜索对前缀更友好。 */
+    if (!opts && inp0) {
+      const probes = [String(v), String(v).slice(0, 4), String(v).slice(0, 2)]
+        .filter((x, i, a) => x && a.indexOf(x) === i);
+      for (const probe of probes) {
+        try { inp0.focus(); } catch { /* 组件可能拦截 focus,不影响后面写值 */ }
+        setNative(inp0, probe);
+        opts = await waitUntil(() => { const o = fresh(); return o.length ? o : null; }, 1500);
+        if (opts) break;
+      }
+      // 探测失败要把搜索框擦干净,不能把半截关键词留在页面上
+      if (!opts) setNative(inp0, '');
+    }
+    if (!opts) { closePopup(); return { ok: false, reason: '下拉点不开、打字也不出选项,请手动选' }; }
     let target = pickOption(opts, key, v);
     if (!target) {
       /* 年份列表常虚拟滚动,目标不在已渲染的选项里。这类输入框接受打字过滤
@@ -1696,7 +1745,11 @@
         target = await waitUntil(() => pickOption(fresh(), key, v), 1800);
       }
     }
-    if (!target) { closePopup(); return { ok: false, reason: `选项里没有「${v}」,请手动选` }; }
+    if (!target) {
+      if (inp0 && String(inp0.value || '').trim()) setNative(inp0, '');
+      closePopup();
+      return { ok: false, reason: `选项里没有「${v}」,请手动选` };
+    }
     realClick(target);
     // 轮询到值出现就立刻返回,不用固定等待 —— 后台标签页的定时器会被浏览器节流到 ~1s/次
     const got = await waitUntil(() => widgetValue(el) || null, 600);

@@ -121,7 +121,9 @@ document.getElementById('run').addEventListener('click', async () => {
     f.src = `${file}?run=1&t=${performance.now()}`;
     box.appendChild(f);
     await new Promise((res) => {
-      const t = setTimeout(res, 8000);
+      // 单页上限:moka-real 要逐个点开几十个下拉,还带远程搜索探测,
+      // 8 秒不够 —— 超时的页面不会上报结果,看起来像「没跑」而不是「失败」
+      const t = setTimeout(res, 40000);
       const on = (e) => {
         if (e.data && e.data.__rqf && e.data.page === file) {
           clearTimeout(t); window.removeEventListener('message', on); res();
@@ -132,7 +134,12 @@ document.getElementById('run').addEventListener('click', async () => {
     });
   }
 
+  /* 慢页(moka-real 要逐个点开几十个下拉)可能在超时之后才把结果发回来。
+     行会被全局监听器更新,但汇总如果立刻算就会漏掉它 —— 表现是「20/21 通过、
+     却一个失败都没有」。等一小会儿,把迟到的结果收进来再统计。 */
+  await new Promise((r) => setTimeout(r, 3000));
   const all = PAGES.map(([f]) => results[f]).filter(Boolean);
+  const missing = PAGES.filter(([f]) => !results[f]).map(([f]) => f);
   const passed = all.filter((r) => r.pass).length;
   const asserts = all.reduce((s, r) => s + (r.total || 0), 0);
   const ver = all.find((r) => r.version)?.version || '?';
@@ -141,7 +148,8 @@ document.getElementById('run').addEventListener('click', async () => {
   el.className = allPass ? 'ok' : 'bad';
   el.textContent = allPass
     ? `✅ ${PAGES.length} 张页面全部通过,共 ${asserts} 项断言(引擎 ${ver})`
-    : `❌ ${passed}/${PAGES.length} 页通过,共 ${asserts} 项断言(引擎 ${ver})`;
+    : `❌ ${passed}/${PAGES.length} 页通过,共 ${asserts} 项断言(引擎 ${ver})`
+      + (missing.length ? ` · 未上报(超时):${missing.join('、')}` : '');
   btn.disabled = false;
 });
 </script>
