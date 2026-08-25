@@ -26,10 +26,12 @@ window.RQF_TEST_PROFILE = {
       startTime: '2020-09', endTime: '2024-06', isHighest: '否',
       rank: '2/30(实验班)', gpaScore: '3.63', gpaTotal: '4.00' },
   ],
+  /* 第一段没写性质,靠职位名「实习生」推断;第二段显式标注全职。
+     页面同时有「实习经历」「工作经历」两个区块时必须分流。 */
   work: [
     { company: '甲公司', title: '大模型算法实习生', startTime: '2026-04', endTime: '至今',
       skills: 'GRPO / RL post-training / PyTorch', desc: '客服 Agent 基座 post-training,0.7019→0.7299。' },
-    { company: '乙公司', title: '算法实习生', startTime: '2026-01', endTime: '2026-03',
+    { company: '乙公司', title: '算法工程师', type: '全职', startTime: '2026-01', endTime: '2026-03',
       skills: 'RAG / ReAct / LLM', desc: '知识库智能问答系统 RAG 架构设计与 NPC Agent 原型。' },
   ],
   projects: [
@@ -426,8 +428,13 @@ const CHECKS = {
         && /timeRange|ym/.test(r2.rule)).length >= 2,
 
       // 实习起止时间旁有「至今」勾选框,不能因此够不着标题
-      实习_起止时间认得出: s.rows.some((r2) => r2.sec === '工作' && /timeRange|ym/.test(r2.rule)),
-      实习_公司名称: rule('公司名称') === 'work.company',
+      实习_起止时间认得出: s.rows.some((r2) => r2.sec === '实习' && /timeRange|ym/.test(r2.rule)),
+      /* 页面同时有「工作经历」和「实习经历」两个区块 —— 必须分流:
+         实习区块的字段归 intern,工作区块的归 work。 */
+      工作经历区块_归work: (by('公司名称') || {}).sec === '工作',
+      实习经历区块_归实习: s.rows.some((r2) => r2.sec === '实习' && r2.rule === 'work.company'),
+      添加按钮_工作与实习分得开: window.__RQF.addButtonDomain(document.getElementById('add-fulltime')) === 'work'
+        && window.__RQF.addButtonDomain(document.getElementById('add-work')) === 'intern',
 
       获奖_奖项名称: rule('奖项名称') === 'award.name',
       英语_等级证书: rule('英语等级证书') === 'lang.cert',
@@ -441,7 +448,7 @@ const CHECKS = {
         const btn = document.getElementById('add-edu');
         return window.__RQF.addButtonDomain(btn) === 'edu';
       })(),
-      添加按钮_实习认领正确: window.__RQF.addButtonDomain(document.getElementById('add-work')) === 'work',
+      添加按钮_实习认领正确: window.__RQF.addButtonDomain(document.getElementById('add-work')) === 'intern',
       添加按钮_获奖认领正确: window.__RQF.addButtonDomain(document.getElementById('add-award')) === 'award',
       添加按钮_英语认领正确: window.__RQF.addButtonDomain(document.getElementById('add-lang')) === 'lang',
     };

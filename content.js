@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.19.0';
+  const VERSION = '1.20.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -231,7 +231,17 @@
    */
   const SECTION_DOMAIN = [
     [/教育背景|教育经历|学习经历|院校信息/, 'edu'],
-    [/实习经历|工作经历|职业经历|实习与工作|工作信息/, 'work'],
+    /* 实习经历与工作经历是两个独立区块时,必须分开投放 —— 学生的实习被填进
+     * 「工作经历」是实打实的错。合并型标题(「实习与工作经历」)仍归 work,
+     * 所以它要排在最前面拦掉,免得被下面的「实习经历」误伤。 */
+    /* 「校园工作经历」「学生工作」说的是社团/学生干部,是一段自述文字,
+     * 不是工作经历列表 —— 映射成空域,既不归 work,也顺带结束上一个区块的作用域。
+     * 不拦掉的话它会被下面的「工作经历」命中,凭空多出一个 work 区块,
+     * 把「同时存在实习与工作区块」的分流条件误触发。 */
+    [/校园工作|学生工作|社团经历|校内活动/, ''],
+    [/实习与工作|工作与实习|工作.?实习经历/, 'work'],
+    [/实习经历|实习信息|实习情况/, 'intern'],
+    [/工作经历|职业经历|工作信息|从业经历/, 'work'],
     // OPPO 把竞赛与奖学金合并成一个列表,必须排在 comp 之前(否则「竞赛/获奖经历」被判成 comp)
     [/竞赛.{0,2}获奖|竞赛.{0,2}奖学金|获奖.{0,2}竞赛/, 'honor'],
     [/赛事|竞赛|比赛/, 'comp'],
@@ -283,14 +293,14 @@
   };
 
   const LIST_OF = {
-    edu: 'education', work: 'work', proj: 'projects', paper: 'papers', comp: 'competitions',
+    edu: 'education', work: 'workList', intern: 'internList', proj: 'projects', paper: 'papers', comp: 'competitions',
     award: 'awards', lang: 'languages', prog: 'progLangs', patent: 'patents', soft: 'softwares',
     honor: 'honors',
   };
   // 表单只提供其中一栏时的互相兜底
   const FIELD_FALLBACK = { 'proj.duty': 'role', 'proj.role': 'duty' };
   const DOM_CN = {
-    edu: '教育', work: '工作', proj: '项目', paper: '论文', comp: '竞赛',
+    edu: '教育', work: '工作', intern: '实习', proj: '项目', paper: '论文', comp: '竞赛',
     award: '奖项', lang: '外语', prog: '编程语言', patent: '专利', soft: '软件著作权',
     honor: '竞赛/获奖',
   };
@@ -462,6 +472,11 @@
     const out = { ...P };
     out.education = asList(P.education).map((e) => ({ ...e, endTime: e.endTime || e.eduTime || '' }));
     out.work = asList(P.work).map((w) => ({ ...w, desc: w.desc || w.workDesc || '' }));
+    /* 页面只出现一种标题时,那一种收下全部经历 —— 只有「工作经历」的表单
+     * 若因为条目都是实习就一条都不填,那是帮倒忙。真正分流发生在 fill() 里,
+     * 只有页面同时存在两种标题时才拆。 */
+    out.workList = out.work;
+    out.internList = out.work;
     out.projects = asList(P.projects);
     out.papers = asList(P.papers);
     out.competitions = asList(P.competitions);
@@ -535,6 +550,18 @@
     out.languagesText = typeof P.languages === 'string' ? P.languages
       : join(out.languages, (l) => [l.name, l.cert, l.score].filter(Boolean).join(' '));
     return out;
+  };
+
+  /* 某段经历是不是实习:优先看档案里显式写的性质(type / nature),
+   * 没写就从职位名称推断 ——「算法实习生」这种一看就是实习。
+   * 推断只在没有显式声明时兜底,用户写了什么就以什么为准。 */
+  const INTERN_RE = /实习|intern/i;
+  const FULLTIME_RE = /全职|正式|校招|社招|full.?time/i;
+  const isIntern = (w) => {
+    const t = String((w && (w.type || w.nature)) || '');
+    if (INTERN_RE.test(t)) return true;
+    if (FULLTIME_RE.test(t)) return false;
+    return INTERN_RE.test(String((w && w.title) || ''));
   };
 
   /* 「本科院校」「硕士学位」这类带学历限定的标签,直接按学历定位到对应那段教育经历 */
@@ -725,7 +752,8 @@
   const ADD_BAD = /提交|保存|确认|删除|移除|清空|上传|下载|重置|submit|save|delete|remove|upload|reset/i;
   const ADD_DOMAIN = [
     [/教育|学历|学校|院校|education/i, 'edu'],
-    [/工作|实习|职业|employment|work/i, 'work'],
+    [/实习|intern/i, 'intern'],
+    [/工作|职业|employment|work/i, 'work'],
     [/项目|project/i, 'proj'],
     [/论文|学术|著作|成果|paper|publication/i, 'paper'],
     [/竞赛|比赛|competition/i, 'comp'],
@@ -1014,6 +1042,14 @@
     /* 第一趟:先算出每个字段的匹配结果 —— 通配字段(「起止时间」)需要看前后文才能定归属。
      * 抽成函数是因为「自动展开区块」每点一次 + 号都要重新扫一遍页面。 */
     const sections = scanSections();
+    /* 页面同时存在「实习经历」和「工作经历」两个区块时,按性质分流;
+     * 只有其中一种时,那一种收下全部(见 normalize 里的默认值)。 */
+    const secDoms = new Set(sections.map((x) => x.dom));
+    if (secDoms.has('intern') && secDoms.has('work')) {
+      P.internList = P.work.filter(isIntern);
+      P.workList = P.work.filter((w) => !isIntern(w));
+    }
+
     const collectItems = (collectFiles) => {
       const out = [];
       // 自定义组件(antd 等)优先:它内部的 input 只是搜索框,直接写值失焦即丢
@@ -1154,6 +1190,10 @@
      * 两道闸门防误伤:两边都得是经历列表域,且目标列表确实有这个字段。 */
     const retarget = (dom, field, sec) => {
       if (!sec || sec === dom || !LIST_OF[sec] || !LIST_OF[dom]) return dom;
+      /* 实习与工作条目结构完全相同,区块标题说了算 —— 哪怕那一侧一条都没有,
+       * 也该报「档案里没有第 N 段实习」,而不是拿全职经历去顶。 */
+      const PAIR = { work: 'intern', intern: 'work' };
+      if (PAIR[sec] === dom) return sec;
       const sample = (P[LIST_OF[sec]] || [])[0];
       return (sample && field in sample) ? sec : dom;
     };

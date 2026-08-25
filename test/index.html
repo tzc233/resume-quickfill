@@ -121,9 +121,11 @@ document.getElementById('run').addEventListener('click', async () => {
     f.src = `${file}?run=1&t=${performance.now()}`;
     box.appendChild(f);
     await new Promise((res) => {
-      // 单页上限:moka-real 要逐个点开几十个下拉,还带远程搜索探测,
-      // 8 秒不够 —— 超时的页面不会上报结果,看起来像「没跑」而不是「失败」
-      const t = setTimeout(res, 40000);
+      /* 单页上限放得很宽:moka-real 要逐个点开几十个下拉,还带远程搜索探测,
+         而 iframe 跑在隐藏标签页里 —— 浏览器把 setTimeout 钳到 1 秒一次,
+         引擎每一次轮询等待都被放大 20 倍。真实使用(标签页可见)快得多。
+         超时的页面不会上报结果,表现是「20/21 通过却一个失败都没有」。 */
+      const t = setTimeout(res, 150000);
       const on = (e) => {
         if (e.data && e.data.__rqf && e.data.page === file) {
           clearTimeout(t); window.removeEventListener('message', on); res();
