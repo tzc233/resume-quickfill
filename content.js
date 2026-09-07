@@ -1238,7 +1238,7 @@
      *
      * 必须在填充之前一次性做完:京东把「起止时间」排在「学校名称」之前,
      * 等轮到锚点才改判就晚了 —— 日期已经按位置填成了第一段的。
-     * 症状是「学校填的湖南大学,日期却是硕士那段的」,学校对、日期错,
+     * 症状是「学校填的是本科那所,日期却是硕士那段的」—— 学校对、日期错,
      * 比整栏空着更难发现。 */
     const pinBlocks = (list0) => {
       for (const it of list0) {
@@ -1460,24 +1460,6 @@
           } else if (hit.anchor) {
             if (used.has(field)) { advance(dom); used.clear(); }
             used.add(field);
-            /* 这一段页面上已经有内容(你自己填的,或网站解析简历填进去的)——
-             * 按【内容】认回它对应档案里的哪一段,而不是按位置硬对。
-             *
-             * 京东那个教育区块里已经是「湖南大学」(本科),而它是页面上第一个块,
-             * 按位置就取了档案第一段(硕士)的起止时间 —— 填出「湖南大学 + 硕士日期」
-             * 这种错配。学校名字是对的、日期是错的,比整栏空着更难发现。 */
-            const cur = clean(tag === 'WIDGET' ? widgetValue(el) : String(el.value || ''));
-            if (cur) {
-              const j = list.findIndex((e) => {
-                const t = clean(String(e[field] || ''));
-                return t && (t === cur || t.includes(cur) || cur.includes(t));
-              });
-              if (j >= 0 && j !== ctx.idx[dom]) {
-                ctx.idx[dom] = j;
-                used.clear();
-                used.add(field);
-              }
-            }
           } else if (hit.half !== 'm' && items[idx].sec === dom && ctx.takenSec.has(`${dom}#${ctx.idx[dom]}#${field}`)) {
             /* Shopee 把「学历/学习形式」排在锚点「学校名称」之前:第二段的这些字段
              * 出现时锚点还没轮到,按旧规则会取到第一段的值。放开「非锚点不参与分段」
