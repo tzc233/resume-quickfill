@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.29.0';
+  const VERSION = '1.30.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -116,8 +116,12 @@
     { k: 'edu.endTime',   re: /毕业时间|毕业年月|graduation (date|time)|graduate/i },
 
     /* ---- 工作 / 实习经历(锚点:公司) ---- */
+    /* 「公司性质/类型/规模/行业」不是公司名。而公司名是【锚点】字段 ——
+     * 误命中一次就会把段号推进一格:网易的 company type 抢到这条规则后,
+     * 整块工作经历错位,block1 的字段拿到第 2 段、block2 越界到第 3 段,
+     * 一个误命中连累 6 个字段。 */
     { k: 'work.company', a: 1, re: /公司名称|单位名称|任职公司|工作单位|所在公司|公司|单位|雇主|employer|company name|company/i,
-      ex: /期望|意向|项目/i },
+      ex: /期望|意向|项目|性质|类型|规模|行业|地点|地址|\btype\b|scale|industry|address/i },
     { k: 'work.title', re: /职位名称|岗位名称|担任职位|所任职位|职务|职位|岗位|(job )?title|position/i,
       // 「输入职位关键字」是页面顶部的职位搜索框;「校园组织名称,职位,经历成果」是校园经历的占位文字
       ex: /期望|意向|应聘|申请|投递|搜索|关键字|关键词|筛选|校园|社团|学生工作|apply|applied|desired|search|称谓|mr\b|ms\b|项目/i },
@@ -367,7 +371,10 @@
     /* o = 这条候选是不是「本字段自己的」标签:来自 label/aria/placeholder/name/id,
      * 或者来自只装了一个控件的容器。反之(容器里有多个控件)就是上下文文本,
      * 多半是几个字段的标签拼在一起。 */
-    const push = (s, w, o = true) => { const t = clean(s); if (t && t.length <= 60) out.push({ t, w, o }); };
+    const push = (s, w, o = true, ph = false) => {
+      const t = clean(s);
+      if (t && t.length <= 60) out.push({ t, w, o, ph });
+    };
     try { if (el.labels) for (const l of el.labels) push(l.innerText, 5); } catch { }
     push(el.getAttribute('aria-label'), 5);
     const lb = el.getAttribute('aria-labelledby');
@@ -381,7 +388,7 @@
     /* 占位提示只有「短且不像一句话」时才当标签。网易的日期框写的是
      * 「点击选择 or 按"yyyy-mm-dd"格式输入」—— 这是操作说明,不是字段名,
      * 却因为 placeholder 权重最高,把真标签「出生日期」整个顶掉了。 */
-    push(el.placeholder, phWeight(el.placeholder));
+    push(el.placeholder, phWeight(el.placeholder), true, true);
     /* 逐层向上找标签。每层取两种候选:
      *   ① 兄弟文本 = 父容器文字 减去「通往输入框的那一支」—— 这才是标签所在;
      *   ② 整个父容器文字 —— 兜底。
@@ -455,7 +462,15 @@
      * 把整段自我介绍填进一个该答是/否的下拉。
      * 只有本字段压根没有自己的标签时(比如共用一个「就读时间」标签的两个输入框),
      * 才退回去用上下文。 */
-    const own = cands.filter((c) => c.o && c.t.length >= 2);
+    /* 「点击选择」「请输入」这类操作说明虽然长在本字段身上,却不是标签 ——
+     * 把它算作「自有标签」会直接关掉上下文这条路:网易的结束时间框
+     * placeholder 是「点击选择」,真标签「至」写在旁边,于是 10 个结束时间
+     * 字段一个都匹配不上。
+     * 判据只能看【来源】,不能看权重:真标签的权重跨度很大 ——
+     * 「请问你是否填写了本科学历」是 2.6,单选组的「性别」只有 1.4 ——
+     * 卡任何阈值都会连坐掉真标签。这里只排除「占位符 + phWeight 判定为说明句」
+     * 这一种来源,其余照旧。 */
+    const own = cands.filter((c) => c.o && c.t.length >= 2 && !(c.ph && c.w < 3));
     const pool = own.length ? own : cands;
 
     /* 排除词只在真正参与匹配的候选上判定。拿全部候选判会误伤:
@@ -2367,5 +2382,9 @@
    * 「不会自己加一段」这类问题,光看填充报告看不出是按钮没找到还是点了没反应。 */
   const addButtonDomain = (el) => (el ? sectionDomOf(el, scanSections()) : null);
 
-  window.__RQF = { version: VERSION, fill, scan, addButtonDomain };
+  /* 排查标签定位时要能看到某个元素到底产生了哪些候选、各自什么权重、
+   * 是不是「自有标签」—— 光看最终命中的规则,分不清是候选没生成还是被过滤掉了。 */
+  const debugCands = (el) => (el ? { cands: (el.tagName ? labelCands(el) : []), widget: widgetCands(el) } : null);
+
+  window.__RQF = { version: VERSION, fill, scan, addButtonDomain, debugCands };
 })();

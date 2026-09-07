@@ -109,6 +109,25 @@
  <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
   <input class="ant-input" id="n-title" type="text" placeholder="请输入"></div></div></div>
 
+<!-- 起止时间:标签「至」写在旁边的普通节点里,框自己的 placeholder 是「点击选择」。
+     占位说明如果算「自有标签」,就再也不会去看旁边的「至」—— 网易 10 个结束时间
+     字段全军覆没就是这么来的。另:公司性质不是公司名,它命中 work.company 会把
+     段号推进一格,整块经历错位。 -->
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>公司性质</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
+  <input class="ant-input" id="n-cotype" type="text" placeholder="请输入"></div></div></div>
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>开始时间</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
+  <span class="u-date-hitherto"><input class="ant-input" id="n-w-start" type="text" placeholder="点击选择"></span>
+ </div></div></div>
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><span>至</span></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
+  <span class="u-date-hitherto"><input class="ant-input" id="n-w-end" type="text" placeholder="点击选择"></span>
+ </div></div></div>
+
 <h2>其他</h2>
 <!-- 自研组件库 ehr-ui-*:上传口不该被当成简历投放点之外的东西 -->
 <div class="ant-form-item">

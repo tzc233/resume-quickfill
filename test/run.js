@@ -459,6 +459,14 @@ const CHECKS = {
       学校_下拉点选: wv('n-school') === '示例大学',
       学历_按层级匹配: wv('n-degree') === '全日制硕士',
 
+      // 占位说明「点击选择」不能盖住旁边的真标签「至」
+      至_认作结束时间: lab('*.endTime') === '至',
+      在职起始: v('n-w-start') === '2026-04',
+      '在职结束_从「至」认出来': v('n-w-end') === '至今',
+      公司性质_不当成公司名: !s.rows.some((r2) => /公司性质/.test(r2.label)
+        && r2.rule === 'work.company'),
+      公司性质_留空: v('n-cotype') === '',
+
       简历投进自研组件的上传口: document.getElementById('n-resume').files[0]?.name === '示例简历.pdf',
     };
   },
