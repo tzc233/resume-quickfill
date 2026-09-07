@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.25.0';
+  const VERSION = '1.26.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -108,7 +108,7 @@
     { k: 'edu.gpaTotal', re: /gpa\s*总分|总分|满分/i },
     { k: 'edu.gpaScore', re: /gpa\s*(分数|成绩)|绩点|gpa|平均分|均分/i },
     { k: 'edu.timeRange', r: 1, re: /就读时间|在校时间|教育时间|学习时间/i },
-    { k: 'edu.startTime', re: /入学时间|入学年月|开始就读|enrollment/i },
+    { k: 'edu.startTime', re: /入学时间|入校时间|入学年月|入学日期|开始就读|enrollment/i },
     { k: 'edu.endTime',   re: /毕业时间|毕业年月|graduation (date|time)|graduate/i },
 
     /* ---- 工作 / 实习经历(锚点:公司) ---- */
@@ -345,6 +345,16 @@
     return c.length > 40 ? '' : c;
   };
 
+  /* 占位提示的可信度:短词(「姓名」「年」)基本就是字段名;
+   * 一长串或带指令口吻的(请…/点击…/格式/or)是操作说明,压到兄弟文本之下。 */
+  const PH_NOISE = /请|点击|格式|例如|如:|支持|填写|选择|输入|or\b/i;
+  const phWeight = (raw) => {
+    const t = clean(raw || '');
+    if (!t) return 4;
+    if (t.length > 8 || PH_NOISE.test(String(raw))) return 1.5;
+    return 4;
+  };
+
   const labelCands = (el) => {
     const out = [];
     /* o = 这条候选是不是「本字段自己的」标签:来自 label/aria/placeholder/name/id,
@@ -361,7 +371,10 @@
         if (n) push(n.innerText, 5);
       }
     }
-    push(el.placeholder, 4);
+    /* 占位提示只有「短且不像一句话」时才当标签。网易的日期框写的是
+     * 「点击选择 or 按"yyyy-mm-dd"格式输入」—— 这是操作说明,不是字段名,
+     * 却因为 placeholder 权重最高,把真标签「出生日期」整个顶掉了。 */
+    push(el.placeholder, phWeight(el.placeholder));
     /* 逐层向上找标签。每层取两种候选:
      *   ① 兄弟文本 = 父容器文字 减去「通往输入框的那一支」—— 这才是标签所在;
      *   ② 整个父容器文字 —— 兜底。
@@ -369,7 +382,11 @@
      * 拿到的是「值」而不是「标签」,真正的「学校名称」还在更上层。
      * 因此这里必须往上多走几层(antd 类组件通常嵌套 4~5 层)。 */
     let node = el;
-    for (let d = 0; d < 6 && node; d++) {
+    /* 上溯层数:antd 的「标签一列 / 控件一列」布局本来就深,再套一层单选组
+     * (input → .ant-radio → label → .ant-radio-group → children → control →
+     *  control-wrapper → 才到那一行)就是 7 层。6 层差一步,「性别」永远够不着。
+     * 放深的风险由两道闸门兜着:容器控件数 > 4 就停,以及「有自己的标签就不看邻居」。 */
+    for (let d = 0; d < 8 && node; d++) {
       const parent = node.parentElement || (node.getRootNode && node.getRootNode().host) || null;
       if (!parent || parent === document.body || parent === document.documentElement) break;
       /* 容器里的表单控件超过 4 个,说明它装的是「一整块字段」,它的文字是多个
@@ -1145,7 +1162,13 @@
     const collectItems = (collectFiles) => {
       const out = [];
       // 自定义组件(antd 等)优先:它内部的 input 只是搜索框,直接写值失焦即丢
-      const ws = outerWidgets();
+      /* 单选组里若装的是真的 <input type="radio">(antd / element / arco 都是这样),
+       * 就把这个组从「自定义控件」里摘掉,让里面的原生 radio 照常被收集 ——
+       * 原生路径读得出选中态、点得动,比一律报「需要手动操作」强得多。
+       * 多选组不做这件事:勾选框里混着协议同意,宁可不碰。 */
+      const ws = outerWidgets().filter((w) => !(
+        /radio/i.test(String(w.className)) || w.getAttribute('role') === 'radiogroup')
+        || !w.querySelector('input[type="radio"]'));
       for (const el of collect(document, [])) {
         const tag = el.tagName;
         const type = (el.type || '').toLowerCase();
@@ -1787,6 +1810,8 @@
 
   const NAV_PREV = '.ant-calendar-prev-month-btn, .ant-picker-header-prev-btn, [class*="prev-month"]';
   const NAV_NEXT = '.ant-calendar-next-month-btn, .ant-picker-header-next-btn, [class*="next-month"]';
+  const NAV_PREV_Y = '.ant-calendar-prev-year-btn, .ant-picker-header-super-prev-btn, [class*="prev-year"], [class*="super-prev"]';
+  const NAV_NEXT_Y = '.ant-calendar-next-year-btn, .ant-picker-header-super-next-btn, [class*="next-year"], [class*="super-next"]';
   const CAL_ROOT = '.ant-calendar, .ant-picker-panel-container, .ant-picker-dropdown, .el-picker-panel';
 
   /* 页面上往往挂着好几个日历面板(每个日期控件一个,用完只是隐藏)。
@@ -1799,15 +1824,22 @@
    * 不翻的话,凡是不在当月的日期一律填不上(京东的入学时间差着两三年)。 */
   const navigateTo = async (y, mo) => {
     const want = Number(y) * 12 + Number(mo);
-    for (let guard = 0; guard < 72; guard++) {
-      const cur = panelYM();
-      if (!cur || cur === want) return cur === want;
-      const btn = (visibleCal() || document).querySelector(cur > want ? NAV_PREV : NAV_NEXT);
-      if (!btn || btn.getBoundingClientRect().width < 2) return false;
-      realClick(btn);
-      if (!await waitUntil(() => (panelYM() !== cur ? true : null), 700)) return false;
+    /* 先按【年】跳,再按月微调。出生日期动辄差二十几年 —— 一月一月点要三百多下,
+     * 早就撞上循环上限了。有年份按钮时一次跳 12 个月。 */
+    for (const [step, prev, next] of [[12, NAV_PREV_Y, NAV_NEXT_Y], [1, NAV_PREV, NAV_NEXT]]) {
+      for (let guard = 0; guard < 80; guard++) {
+        const cur = panelYM();
+        if (!cur) return false;
+        const diff = want - cur;
+        if (diff === 0) return true;
+        if (step === 12 && Math.abs(diff) < 12) break;   // 不够一年,交给月步进
+        const btn = (visibleCal() || document).querySelector(diff < 0 ? prev : next);
+        if (!btn || btn.getBoundingClientRect().width < 2) break;
+        realClick(btn);
+        if (!await waitUntil(() => (panelYM() !== cur ? true : null), 700)) break;
+      }
     }
-    return false;
+    return panelYM() === want;
   };
 
   const fillDatePicker = async (el, v) => {
@@ -1924,6 +1956,16 @@
     /* 组件里有 input 时,它就是值的载体(前面两种显示位都没有的情况下):
      * 空的 input 就代表空值,绝不能再退到 innerText —— 那里只有「年」这类
      * addon 单位字,会把空的年份框判成「已有选择」而整片跳过。 */
+    /* 单选/多选组例外:内部 input 的 value 是【选项的值】(male / 1),
+     * 不是这个组件当前的值。拿它当值有两个后果:组件被误判成已填,
+     * 而且下面剔除「组件自身内容」时对不上,选项文字「男 女」就成了标签。
+     * 组的值 = 选中项的文字;一个都没选就是空。 */
+    if (/radio|checkbox/i.test(String(el.className)) || /radiogroup|group/.test(el.getAttribute('role') || '')) {
+      const on = el.querySelector('input:checked');
+      if (!on) return '';
+      const lb = on.closest('label');
+      return clean((lb ? lb.innerText : '') || on.value || '');
+    }
     const inp = el.querySelector('input');
     if (inp) return clean(inp.value || '');
     // 「必填项未填写」「暂无选项」是占位提示不是值 —— 当成值会把空组件误判成已填
@@ -2021,23 +2063,36 @@
   const widgetCands = (el) => {
     const own = widgetValue(el);
     const cands = labelCands(el);
+    const inner = clean(el.innerText || '');
+
     /* Moka 年/月框的「年」字是组件内部的 addon —— labelCands 只往父级找,
-     * 永远看不到它。补成候选;限两个字以内,免得把「请选择日期」这类占位卷进来。
-     * 权重压过外层兄弟文本:同一行里其它三个框的单位字都在外层文本里。 */
-    const unit = clean(el.innerText || '').replace(/请选择|请输入/g, '').trim();
-    if (unit && unit !== own && unit.length <= 2 && !/日期|时间/.test(unit)) {
-      cands.push({ t: unit, w: 3.5, o: true });
-    }
+     * 永远看不到它。补成候选;限两个字以内,免得把整串选项卷进来。 */
+    const unit = inner.replace(/请选择|请输入/g, '').trim();
+    const unitOk = !!unit && unit !== own && unit.length <= 2 && !/日期|时间/.test(unit);
+    if (unitOk) cands.push({ t: unit, w: 3.5, o: true });
+
     /* 组件内部 input 的 placeholder 同样看不到(labelCands 只认元素自身的)。
-     * Moka 的空年/月框正是靠 placeholder="年" 表明身份的。
-     * 但「请选择日期」这种纯提示语要整条丢掉 —— 剥掉「请选择」剩下的「日期」
-     * 是残渣不是标签,给它高权重会把真标签「出生日期」顶掉。 */
+     * 但整句操作说明不是标签:网易的日期框写「点击选择 or 按"yyyy-mm-dd"格式输入」,
+     * 给它最高权重会把真标签「出生日期」顶掉 —— 交给 phWeight 判轻重。 */
     const rawPh = String((el.querySelector('input') || {}).placeholder || '').trim();
     const ph = /^请(选择|输入|填写)/.test(rawPh) ? '' : clean(rawPh);
-    if (ph && ph !== own) cands.push({ t: ph, w: 4, o: true });
+    if (ph && ph !== own) cands.push({ t: ph, w: phWeight(rawPh), o: true });
+
     cands.sort((a, b) => b.w - a.w);
-    if (!own) return cands;
-    return cands.filter((c) => c.t !== own && !(c.t.length >= 2 && own.includes(c.t)));
+
+    /* 组件【内部】的文字一律不能当标签 —— 不只是当前选中值,还包括没选时
+     * 平铺出来的整串选项(网易的单选组平铺「男 女」,学校下拉平铺所有校名)。
+     * 它们看着像标签,其实是内容:「示例大学 样例学院」里有「学院」二字,
+     * 会让学校栏命中 edu.college。
+     *
+     * 例外只有上面两条补进来的。注意 unit 在文本长时保存的是【整段内容】,
+     * 必须用 unitOk 判断它是否真的作为候选被推入过 —— 直接写 c.t === unit
+     * 会把要丢的那段原样放行(第一版就栽在这里)。 */
+    return cands.filter((c) => {
+      if ((unitOk && c.t === unit) || (ph && c.t === ph)) return true;
+      if (own && (c.t === own || (c.t.length >= 2 && own.includes(c.t)))) return false;
+      return !(inner && c.t.length >= 2 && inner.includes(c.t));
+    });
   };
 
   const scanCustomWidgets = (customs, widgets, sections = []) => {

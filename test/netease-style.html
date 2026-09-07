@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>测试沙盒 · 网易互娱(antd 标签列布局 + 两套组件库混用)</title>
+<style>
+ body{font:14px/1.6 -apple-system,"PingFang SC",sans-serif;color:#1f2937;margin:18px}
+ h2{font-size:15px;margin:18px 0 8px;border-left:3px solid #4f46e5;padding-left:8px}
+ .ant-form-item{display:flex;margin:8px 0;align-items:flex-start}
+ .ant-form-item-label{width:190px;flex-shrink:0;text-align:right;padding-right:12px;font-size:13px;padding-top:5px}
+ .ant-form-item-control-wrapper{width:520px;flex-shrink:0}
+ .ant-input{width:100%;padding:5px 9px;border:1px solid #d1d5db;border-radius:4px;font:inherit}
+ .ant-radio-group label{margin-right:14px}
+ .ant-select,.ant-cascader-picker,.ant-calendar-picker{display:inline-block;width:100%}
+ .ant-select-selection,.ant-cascader-picker{border:1px solid #d1d5db;border-radius:4px;
+   padding:4px 9px;background:#fff;min-height:28px;cursor:pointer;display:block}
+ .ant-cascader-picker{display:inline-flex;align-items:center}
+ .ant-cascader-picker input,.ant-calendar-picker input{border:none;outline:none;width:100%;background:transparent}
+ .ant-calendar-picker input{border:1px solid #d1d5db;border-radius:4px;padding:5px 9px}
+ .ant-select-dropdown,.ant-cascader-menus,.ant-calendar{position:absolute;z-index:80;background:#fff;
+   border:1px solid #e5e7eb;border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.14);padding:5px}
+ .ant-select-dropdown[hidden],.ant-cascader-menus[hidden],.ant-calendar[hidden]{display:none}
+ .ant-select-dropdown-menu-item,.ant-cascader-menu-item{padding:5px 10px;border-radius:4px;cursor:pointer;font-size:13px}
+ .ant-cascader-menu{display:inline-block;vertical-align:top;min-width:110px;border-right:1px solid #f1f5f9}
+ .ant-calendar-header{display:flex;justify-content:space-between;font-size:12px;padding:2px 4px 6px}
+ .ant-calendar-header a{cursor:pointer;color:#4f46e5}
+ .ant-calendar-cell{width:30px;height:24px;text-align:center;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<h1 style="font-size:19px">网易互娱式表单</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+ 三个特点:① 标签在<b>独立的一列</b>(<code>ant-form-item-label</code>),不是输入框的兄弟节点;<br>
+ ② 占位提示是<b>整句操作说明</b>(「点击选择 or 按"yyyy-mm-dd"格式输入」),权重最高会把真标签顶掉;<br>
+ ③ 单选组/下拉<b>没选时平铺出全部选项</b>(「男 女」「全日制 博士 硕士…」),看着像标签其实是内容。<br>
+ 另有两套组件库混用:<code>ehr-ui-*</code>(自研)与 <code>ant-*</code>(antd 3)。
+</p>
+
+<h2>基本信息</h2>
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>姓名</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
+  <input class="ant-input" id="n-name" type="text" placeholder="请输入"></div></div></div>
+
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>性别</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control"><span class="ant-form-item-children">
+  <div class="ant-radio-group ant-radio-group-outline" id="n-sex">
+   <label class="ant-radio-wrapper"><span class="ant-radio"><input class="ant-radio-input" type="radio" name="sex" value="male"></span><span>男</span></label>
+   <label class="ant-radio-wrapper"><span class="ant-radio"><input class="ant-radio-input" type="radio" name="sex" value="female"></span><span>女</span></label>
+  </div></span></div></div></div>
+
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>出生日期</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control"><span class="ant-form-item-children">
+  <span class="ant-calendar-picker" data-cal="n-birth" data-mode="day"><div>
+   <input class="ant-calendar-picker-input ant-input" readonly
+          placeholder="点击选择 or 按“yyyy-mm-dd”格式输入"></div></span></span></div></div></div>
+
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>籍贯</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control"><span class="ant-form-item-children">
+  <span class="ant-cascader-picker ant-cascader-picker-show-search" id="n-home">
+   <span class="ant-cascader-picker-label"></span>
+   <input class="ant-input ant-cascader-input" type="text" placeholder="请下拉选择 or 手动输入在匹配项中选择">
+  </span></span></div></div></div>
+
+<h2>2. 教育背景（ ）</h2>
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>学历</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control"><span class="ant-form-item-children">
+  <div data-sel="n-degree"
+       data-opts="全日制博士|全日制硕士|全日制本科|全日制大专|其他（交换、游学等）"></div></span></div></div></div>
+
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>学校名称</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control"><span class="ant-form-item-children">
+  <div data-sel="n-school" data-opts="示例大学|样例学院"></div></span></div></div></div>
+
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>所在学院</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
+  <input class="ant-input" id="n-college" type="text" placeholder="请输入"></div></div></div>
+
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>专业</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
+  <input class="ant-input" id="n-major" type="text" placeholder="请输入"></div></div></div>
+
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>入校时间</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control"><span class="ant-form-item-children">
+  <span class="ant-calendar-picker" data-cal="n-enroll" data-mode="month"><div>
+   <input class="ant-calendar-picker-input ant-input" readonly
+          placeholder="按“yyyy-mm”格式输入"></div></span></span></div></div></div>
+
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>导师</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
+  <input class="ant-input" id="n-advisor" type="text" placeholder="请输入"></div></div></div>
+
+<h2>3. 工作/实习经历</h2>
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>公司名称</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
+  <input class="ant-input" id="n-co" type="text" placeholder="请输入"></div></div></div>
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>职位名称</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="ant-form-item-control">
+  <input class="ant-input" id="n-title" type="text" placeholder="请输入"></div></div></div>
+
+<h2>其他</h2>
+<!-- 自研组件库 ehr-ui-*:上传口不该被当成简历投放点之外的东西 -->
+<div class="ant-form-item">
+ <div class="ant-form-item-label"><label>上传简历</label></div>
+ <div class="ant-form-item-control-wrapper"><div class="css-95pvlz ehr-ui-upload ehr-ui-upload-drag">
+  <span class="ehr-ui-upload ehr-ui-upload-btn" role="button">
+   <input type="file" id="n-resume">
+   <div class="ehr-ui-upload-drag-container"><p class="ehr-ui-upload-text">点击或拖拽上传简历</p></div>
+  </span></div></div></div>
+
+<script>
+/* ---- antd 3 下拉:选项 portal 到 body ---- */
+for (const host of document.querySelectorAll('[data-sel]')) {
+  const opts = host.dataset.opts.split('|');
+  const box = document.createElement('div');
+  box.className = 'ant-select ant-select-enabled';
+  /* 关键:没选时把全部选项平铺在组件里(网易就是这样),
+     它看着像标签,其实是内容 */
+  box.innerHTML = '<div class="ant-select-selection ant-select-selection--single" role="combobox">'
+    + '<div class="ant-select-selection__rendered">'
+    + `<div class="ant-select-selection-selected-value" data-v></div>`
+    + `<div class="ant-select-flat" style="color:#9ca3af;font-size:12px">${opts.join(' ')}</div>`
+    + '</div></div>';
+  const val = box.querySelector('[data-v]');
+  const flat = box.querySelector('.ant-select-flat');
+  const dd = document.createElement('div');
+  dd.className = 'ant-select-dropdown';
+  dd.hidden = true;
+  for (const o of opts) {
+    const it = document.createElement('div');
+    it.className = 'ant-select-dropdown-menu-item';
+    it.setAttribute('role', 'option');
+    it.textContent = o;
+    it.addEventListener('mousedown', (e) => {
+      e.preventDefault(); val.textContent = o; flat.remove(); dd.hidden = true;
+    });
+    dd.appendChild(it);
+  }
+  document.body.appendChild(dd);
+  box.addEventListener('mousedown', () => {
+    document.querySelectorAll('.ant-select-dropdown').forEach((d) => { if (d !== dd) d.hidden = true; });
+    const r = box.getBoundingClientRect();
+    dd.style.left = (r.left + scrollX) + 'px'; dd.style.top = (r.bottom + scrollY + 4) + 'px';
+    dd.hidden = false;
+  });
+  host.appendChild(box);
+}
+
+/* ---- antd 3 日历:中文 title,初始停在 2026-09 ---- */
+for (const box of document.querySelectorAll('[data-cal]')) {
+  const input = box.querySelector('input');
+  const cal = document.createElement('div');
+  cal.className = 'ant-calendar'; cal.hidden = true;
+  document.body.appendChild(cal);
+  let py = 2026, pm = 9;
+  const monthOnly = box.dataset.mode === 'month';
+  const render = () => {
+    const days = new Date(py, pm, 0).getDate();
+    let tds = '';
+    for (let d = 1; d <= days; d++) {
+      tds += `<td role="gridcell" class="ant-calendar-cell" title="${py}年${pm}月${d}日">${d}</td>`
+           + (d % 7 === 0 ? '</tr><tr>' : '');
+    }
+    cal.innerHTML = `<div class="ant-calendar-header">`
+      + `<a class="ant-calendar-prev-year-btn">«</a><a class="ant-calendar-prev-month-btn">‹</a>`
+      + `<b>${py}年${pm}月</b>`
+      + `<a class="ant-calendar-next-month-btn">›</a><a class="ant-calendar-next-year-btn">»</a></div>`
+      + `<table><tbody><tr>${tds}</tr></tbody></table>`;
+    cal.querySelector('.ant-calendar-prev-year-btn').addEventListener('mousedown', (e) => {
+      e.preventDefault(); py--; render(); });
+    cal.querySelector('.ant-calendar-next-year-btn').addEventListener('mousedown', (e) => {
+      e.preventDefault(); py++; render(); });
+    cal.querySelector('.ant-calendar-prev-month-btn').addEventListener('mousedown', (e) => {
+      e.preventDefault(); pm--; if (pm < 1) { pm = 12; py--; } render(); });
+    cal.querySelector('.ant-calendar-next-month-btn').addEventListener('mousedown', (e) => {
+      e.preventDefault(); pm++; if (pm > 12) { pm = 1; py++; } render(); });
+    for (const td of cal.querySelectorAll('.ant-calendar-cell')) {
+      td.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const m = td.getAttribute('title').match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+        const mm = String(m[2]).padStart(2, '0');
+        input.value = monthOnly ? `${m[1]}-${mm}` : `${m[1]}-${mm}-${String(m[3]).padStart(2, '0')}`;
+        cal.hidden = true;
+      });
+    }
+  };
+  box.addEventListener('mousedown', () => {
+    document.querySelectorAll('.ant-calendar').forEach((c) => { if (c !== cal) c.hidden = true; });
+    py = 2026; pm = 9; render();
+    const r = box.getBoundingClientRect();
+    cal.style.left = (r.left + scrollX) + 'px'; cal.style.top = (r.bottom + scrollY + 4) + 'px';
+    cal.hidden = false;
+  });
+}
+
+/* ---- 籍贯级联 ---- */
+(() => {
+  const TREE = { 上海市: ['徐汇区', '浦东新区'], 广东省: ['深圳市'] };
+  const box = document.getElementById('n-home');
+  const label = box.querySelector('.ant-cascader-picker-label');
+  const menus = document.createElement('div');
+  menus.className = 'ant-cascader-menus'; menus.hidden = true;
+  document.body.appendChild(menus);
+  const path = [];
+  const render = () => {
+    const cols = [Object.keys(TREE)];
+    if (path[0]) cols.push(TREE[path[0]] || []);
+    menus.innerHTML = cols.map((os, li) => `<div class="ant-cascader-menu">${
+      os.map((o) => `<div class="ant-cascader-menu-item" data-li="${li}" data-o="${o}">${o}</div>`).join('')}</div>`).join('');
+    for (const it of menus.querySelectorAll('.ant-cascader-menu-item')) {
+      it.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const li = Number(it.dataset.li);
+        path.length = li; path.push(it.dataset.o);
+        if (li === 1) { label.textContent = path.join(' / '); menus.hidden = true; } else render();
+      });
+    }
+  };
+  box.addEventListener('mousedown', () => {
+    path.length = 0; render();
+    const r = box.getBoundingClientRect();
+    menus.style.left = (r.left + scrollX) + 'px'; menus.style.top = (r.bottom + scrollY + 4) + 'px';
+    menus.hidden = false;
+  });
+})();
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

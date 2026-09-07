@@ -393,6 +393,44 @@ const CHECKS = {
     紧急联系人_邮箱不填: v('ec-email') === '',
   }),
 
+  /* 网易互娱:antd「标签一列 / 控件一列」布局 —— 标签不是输入框的兄弟节点。
+   * 三个把真标签顶掉的来源:整句操作说明当占位、单选组平铺出的选项文字、
+   * 下拉未选时平铺出的全部选项。它们权重都比真标签高。 */
+  'netease-style.html': (v) => {
+    const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
+    const wv = (k) => (document.querySelector(`[data-sel="${k}"] [data-v]`)?.textContent || '').trim();
+    const lab = (rule) => (s.rows.find((r2) => r2.rule === rule) || {}).label || '';
+    return {
+      // 标签定位:三类噪声都不许当标签
+      占位说明不当标签: !s.rows.some((r2) => /点击选择|格式输入|下拉选择/.test(r2.label)),
+      单选组选项不当标签: !s.rows.some((r2) => r2.label === '男 女'),
+      下拉平铺选项不当标签: !s.rows.some((r2) => /全日制博士|全日制大专/.test(r2.label)),
+
+      // 真标签要能读到(它在独立的一列里)
+      性别_读到真标签: lab('gender') === '性别',
+      出生日期_读到真标签: lab('birthday') === '出生日期',
+      籍贯_读到真标签: lab('hometown') === '籍贯',
+      学历_读到真标签: lab('edu.degree') === '学历',
+
+      姓名: v('n-name') === '李思远',
+      学院: v('n-college') === '计算机科学与工程系',
+      专业: v('n-major') === '计算机科学与技术',
+      导师_档案无值留空: v('n-advisor') === '',
+      公司: v('n-co') === '甲公司',
+      职位: v('n-title') === '大模型算法实习生',
+
+      性别_单选已选中: document.querySelector('#n-sex input[value=female]').checked,
+      出生日期_日历翻月选中: document.querySelector('[data-cal=n-birth] input').value === '2000-06-15',
+      入校时间_月份模式: document.querySelector('[data-cal=n-enroll] input').value === '2024-09',
+      籍贯_级联到叶子: document.querySelector('#n-home .ant-cascader-picker-label')
+        .textContent.includes('徐汇区'),
+      学校_下拉点选: wv('n-school') === '示例大学',
+      学历_按层级匹配: wv('n-degree') === '全日制硕士',
+
+      简历投进自研组件的上传口: document.getElementById('n-resume').files[0]?.name === '示例简历.pdf',
+    };
+  },
+
   /* 京东的表单【初始是空的】:每个经历区块里只有一个「+ 添加」,一个字段都没有。
    * 两个坑叠在一起 —— 标题容器里挂着说明文字导致标题超长被丢弃;
    * 展开逻辑又明确拒绝「页面上一个该域字段都没有」的情况。 */
