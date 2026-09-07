@@ -18,6 +18,23 @@
  .addBtn___3r3aQ{display:inline-block;padding:4px 14px;border:1px dashed #4f46e5;
    border-radius:4px;color:#4f46e5;cursor:pointer;font-size:13px}
  .gridContainer___1K4Rp{border:1px solid #f1f5f9;border-radius:8px;padding:6px 12px;margin-bottom:8px}
+ .ant-cascader-picker{display:inline-flex;align-items:center;width:260px;border:1px solid #d1d5db;
+   border-radius:4px;padding:3px 8px;background:#fff;cursor:pointer}
+ .ant-cascader-picker input{border:none;outline:none;width:100%;background:transparent}
+ .ant-calendar-picker{display:inline-block;width:150px}
+ .ant-calendar-picker input{width:100%;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font:inherit}
+ .ant-calendar,.ant-cascader-menus{position:absolute;z-index:80;background:#fff;border:1px solid #e5e7eb;
+   border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.14);padding:6px}
+ .ant-calendar[hidden],.ant-cascader-menus[hidden]{display:none}
+ .ant-calendar-header{display:flex;justify-content:space-between;font-size:12px;padding:2px 4px 6px}
+ .ant-calendar-header a{cursor:pointer;color:#4f46e5}
+ .ant-calendar table{border-collapse:collapse}
+ .ant-calendar-cell{width:30px;height:24px;text-align:center;font-size:12px;cursor:pointer}
+ .ant-calendar-cell:hover{background:#eef2ff}
+ .ant-cascader-menu{display:inline-block;vertical-align:top;min-width:110px;max-height:180px;overflow:auto;
+   border-right:1px solid #f1f5f9;padding:2px}
+ .ant-cascader-menu-item{padding:4px 9px;border-radius:4px;cursor:pointer;font-size:13px}
+ .ant-cascader-menu-item:hover{background:#eef2ff}
 </style>
 </head>
 <body>
@@ -39,6 +56,8 @@
   <div class="filedValue___orYso"><input class="ant-input" id="e-name" placeholder="请输入"></div></div>
  <div class="fieldItem___1hMDk"><div class="filedName___2rXII"><span class="requiredStar___28AbY">*</span>手机号码:</div>
   <div class="filedValue___orYso"><input class="ant-input" id="e-phone" placeholder="请输入"></div></div>
+ <div class="fieldItem___1hMDk"><div class="filedName___2rXII"><span class="requiredStar___28AbY">*</span>籍贯:</div>
+  <div class="filedValue___orYso"><span class="ant-cascader-picker" id="e-home"><span class="ant-cascader-picker-label"></span><input class="ant-input ant-cascader-input" placeholder="请选择" readonly></span></div></div>
 </div>
 
 <!-- 关键:标题容器里挂着一段说明文字。整段算进去就超长度上限,
@@ -67,11 +86,13 @@
 
 <script>
 /* 点「+ 添加」在本区块里追加一组字段,与京东行为一致 */
+/* 按京东的真实字段构成。注意 award 块【没有「奖项名称」】——
+   一个能当锚点的字段都没有,这正是荣誉只展开一段的成因。 */
 const TPL = {
-  edu: [['学校名称','school'],['学院名称','college'],['专业名称','major']],
-  intern: [['公司名称','co'],['职位名称','title'],['工作描述','desc']],
-  proj: [['项目名称','pname'],['项目描述','pdesc']],
-  award: [['奖项名称','aname']],
+  edu: [['range','_'],['学校名称','school'],['学院名称','college'],['专业名称','major']],
+  intern: [['range','_'],['公司名称','co'],['职位名称','title'],['工作描述','desc']],
+  proj: [['range','_'],['项目名称','pname'],['项目描述','pdesc']],
+  award: [['奖项类型','atype'],['获奖情况','ainfo']],
 };
 let seq = 0;
 for (const blk of document.querySelectorAll('[data-blk]')) {
@@ -79,14 +100,124 @@ for (const blk of document.querySelectorAll('[data-blk]')) {
   blk.querySelector('.addBtn___3r3aQ').addEventListener('click', () => {
     seq++;
     const wrap = document.createElement('div');
-    wrap.innerHTML = TPL[kind].map(([lab, key]) => `
-      <div class="fieldItem___1hMDk"><div class="filedName___2rXII">${lab}:</div>
-       <div class="filedValue___orYso">${key === 'desc' || key === 'pdesc'
+    wrap.innerHTML = TPL[kind].map(([lab, key]) => {
+      /* 起止时间:两个各自独立的 ant-calendar-picker,标签只有 placeholder
+         「开始日期」「结束日期」—— 京东就是这么写的 */
+      if (lab === 'range') {
+        return `<div class="fieldItem___1hMDk"><div class="filedName___2rXII">
+            <span class="requiredStar___28AbY">*</span>起止时间:</div>
+          <div class="filedValue___orYso"><div class="dateRangePicker___2IyoW">
+            <span class="dateRangeStartPicker___39xpV ant-calendar-picker"><div>
+              <input class="ant-calendar-picker-input ant-input" id="${kind}-sd-${seq}"
+                     placeholder="开始日期" readonly></div></span>
+            <span class="dateRangeSeparator___3CEeh">~</span>
+            <span class="dateRangeEndPicker___fhag9 ant-calendar-picker"><div>
+              <input class="ant-calendar-picker-input ant-input" id="${kind}-ed-${seq}"
+                     placeholder="结束日期" readonly></div></span>
+          </div></div></div>`;
+      }
+      const multi = /desc|info/.test(key);
+      return `<div class="fieldItem___1hMDk"><div class="filedName___2rXII">${lab}:</div>
+       <div class="filedValue___orYso">${multi
          ? `<textarea class="ant-input" id="${kind}-${key}-${seq}" placeholder="请输入"></textarea>`
-         : `<input class="ant-input" id="${kind}-${key}-${seq}" placeholder="请输入">`}</div></div>`).join('');
+         : `<input class="ant-input" id="${kind}-${key}-${seq}" placeholder="请输入">`}</div></div>`;
+    }).join('');
     blk.insertBefore(wrap, blk.querySelector('.contentItem___3Qrnc'));
   });
 }
+</script>
+<script>
+/* ---- antd 3 日历:title 是中文「2024年9月1日」,面板初始停在当月,
+       目标年月要靠「上一月/下一月」翻过去 ---- */
+function wireCalendars(root) {
+  for (const box of root.querySelectorAll('.ant-calendar-picker')) {
+    if (box.dataset.wired) continue;
+    box.dataset.wired = '1';
+    const input = box.querySelector('input');
+    const cal = document.createElement('div');
+    cal.className = 'ant-calendar';
+    cal.hidden = true;
+    document.body.appendChild(cal);
+    // 面板初始停在「当前月」(用一个固定的近期月份,保证测试可复现)
+    let py = 2026, pm = 9;
+
+    const render = () => {
+      const days = new Date(py, pm, 0).getDate();
+      let tds = '';
+      for (let d = 1; d <= days; d++) {
+        tds += `<td role="gridcell" class="ant-calendar-cell" title="${py}年${pm}月${d}日">${d}</td>`
+             + (d % 7 === 0 ? '</tr><tr>' : '');
+      }
+      cal.innerHTML = `<div class="ant-calendar-header">
+          <a class="ant-calendar-prev-month-btn">‹</a><b>${py}年${pm}月</b>
+          <a class="ant-calendar-next-month-btn">›</a></div>
+        <table><tbody><tr>${tds}</tr></tbody></table>`;
+      cal.querySelector('.ant-calendar-prev-month-btn').addEventListener('mousedown', (e) => {
+        e.preventDefault(); pm--; if (pm < 1) { pm = 12; py--; } render();
+      });
+      cal.querySelector('.ant-calendar-next-month-btn').addEventListener('mousedown', (e) => {
+        e.preventDefault(); pm++; if (pm > 12) { pm = 1; py++; } render();
+      });
+      for (const td of cal.querySelectorAll('.ant-calendar-cell')) {
+        td.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          const m = td.getAttribute('title').match(/(\d{4})年(\d{1,2})月/);
+          input.value = `${m[1]}-${String(m[2]).padStart(2, '0')}`;
+          cal.hidden = true;
+        });
+      }
+    };
+
+    box.addEventListener('mousedown', () => {
+      document.querySelectorAll('.ant-calendar').forEach((c) => { if (c !== cal) c.hidden = true; });
+      py = 2026; pm = 9; render();
+      const r = box.getBoundingClientRect();
+      cal.style.left = (r.left + scrollX) + 'px';
+      cal.style.top = (r.bottom + scrollY + 4) + 'px';
+      cal.hidden = false;
+    });
+  }
+}
+
+/* ---- antd 3 级联(籍贯):类名 ant-cascader-picker,含「picker」二字 ---- */
+(() => {
+  const TREE = { 广东省: ['深圳市', '广州市'], 上海市: ['徐汇区', '浦东新区'] };
+  const box = document.getElementById('e-home');
+  const label = box.querySelector('.ant-cascader-picker-label');
+  const menus = document.createElement('div');
+  menus.className = 'ant-cascader-menus';
+  menus.hidden = true;
+  document.body.appendChild(menus);
+  const path = [];
+  const render = () => {
+    const cols = [Object.keys(TREE)];
+    if (path[0]) cols.push(TREE[path[0]] || []);
+    menus.innerHTML = cols.map((opts, li) => `<div class="ant-cascader-menu">${
+      opts.map((o) => `<div class="ant-cascader-menu-item" data-li="${li}" data-o="${o}">${o}</div>`).join('')
+    }</div>`).join('');
+    for (const it of menus.querySelectorAll('.ant-cascader-menu-item')) {
+      it.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const li = Number(it.dataset.li);
+        path.length = li; path.push(it.dataset.o);
+        if (li === 1) { label.textContent = path.join(' / '); menus.hidden = true; }
+        else render();
+      });
+    }
+  };
+  box.addEventListener('mousedown', () => {
+    path.length = 0; render();
+    const r = box.getBoundingClientRect();
+    menus.style.left = (r.left + scrollX) + 'px';
+    menus.style.top = (r.bottom + scrollY + 4) + 'px';
+    menus.hidden = false;
+  });
+})();
+
+// 新展开的区块里也有日历,展开后要重新接线
+const _obs = new MutationObserver(() => wireCalendars(document));
+_obs.observe(document.body, { childList: true, subtree: true });
+wireCalendars(document);
 </script>
 <script src="run.js"></script>
 <script>rqfAuto()</script>

@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.23.0';
+  const VERSION = '1.24.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -81,7 +81,8 @@
       ex: /高中|初中|小学|middle school|high school|primary/i },
     // 「专业排名」含「专业」二字,排名必须排在专业之前,否则排名栏会被填成专业名
     { k: 'edu.rank',     re: /成绩排名|专业排名|年级排名|排名|\brank\b/i },
-    { k: 'edu.major',  re: /专业名称|所学专业|专业|major|field of study|discipline/i, ex: /专业技能|专业证书|专业能力/i },
+    { k: 'edu.major',  re: /专业名称|所学专业|专业|major|field of study|discipline/i,
+      ex: /专业技能|专业证书|专业能力|专业类别|专业门类|学科门类/i },
     { k: 'edu.isHighest', re: /是否最高学历|最高学历\s*[??]/i },
     { k: 'edu.eduType',   re: /学历类型|培养方式|统招/i },
     { k: 'edu.studyForm', re: /学习形式|培养形式|全日制/i },
@@ -218,8 +219,8 @@
     { k: '*.ymYear',  ym: 'y', re: /^年$|^year$/i },
     { k: '*.ymMonth', ym: 'm', re: /^月$|^month$/i },
     { k: '*.timeRange', r: 1, re: /起止时间|起止日期|时间范围/i },
-    { k: '*.startTime', re: /开始时间|起始时间|开始年月|start (date|time)|from/i },
-    { k: '*.endTime',   re: /结束时间|截止时间|结束年月|end (date|time)|\bto\b/i },
+    { k: '*.startTime', re: /开始时间|开始日期|起始时间|起始日期|开始年月|start (date|time)|from/i },
+    { k: '*.endTime',   re: /结束时间|结束日期|截止时间|截止日期|结束年月|end (date|time)|\bto\b/i },
     // 「作品描述」属于作品集,档案里没有对应项,不能让它顺着上下文捡到项目描述
     { k: '*.desc',      re: /描述|内容|简介|说明|description/i, ex: /作品|portfolio|简历解析|解析填充/i },
   ];
@@ -806,16 +807,25 @@
   };
 
   const countBlocks = (items, dom) => {
-    const per = {};
+    const anch = {}, inSec = {};
     let any = false;
     for (const it of items) {
       const h = it.hit;
       if (!h || effDom(it) !== dom) continue;
       any = true;
-      if (h.anchor) per[h.field] = (per[h.field] || 0) + 1;
+      if (h.anchor) anch[h.field] = (anch[h.field] || 0) + 1;
+      /* 兜底计数只数落在该域区块标题下的字段 —— 基本信息区也有「学历」这类同名字段,
+       * 一起数会把段数顶高。 */
+      if (it.sec === dom) inSec[h.field] = (inSec[h.field] || 0) + 1;
     }
-    const counts = Object.values(per);
-    return (counts.length ? Math.max(...counts) : 0) || (any ? 1 : 0);
+    const a = Object.values(anch);
+    if (a.length) return Math.max(...a);
+    /* 没有锚点字段的区块:京东的荣誉块是「奖项类型 / 获奖时间 / 获奖情况」,
+     * 一个「名称」都没有。原来一律返回 1,于是点出第二块后数不出增长,
+     * 判定成「点了没反应」立刻收手 —— 荣誉永远只有一段。 */
+    const b = Object.values(inSec);
+    if (b.length) return Math.max(...b);
+    return any ? 1 : 0;
   };
 
   /** 找该域对应的「+ 添加」:先看按钮文字,再退回「紧跟在该域最后一个字段之后」 */
@@ -869,15 +879,23 @@
         // 每轮重新找按钮:组件重渲染后旧引用可能已经失效
         const btn = pickAddButton(findAddButtons(), items, dom, sections);
         if (!btn) break;
+        const beforeLen = items.length;
         realClick(btn.el);
+        /* 「长出来了没有」用两个信号判,任一成立即可:
+         *   ① 该域的段数变多了;
+         *   ② 页面上的字段总数变多了 —— 有些区块数不出段数(没有锚点字段),
+         *      但新块确实渲染出来了。只靠 ① 会误判成「点了没反应」而收手。
+         * 等待时间给足:京东一段教育经历有十几个字段,React 渲染没那么快。 */
         const grown = await waitUntil(() => {
           const next = collectItems(false);
-          return countBlocks(next, dom) > have ? next : null;
-        }, 900);
-        if (!grown) break;                   // 点了没长出新区块 —— 立刻停手
+          return (countBlocks(next, dom) > have || next.length > beforeLen) ? next : null;
+        }, 2500);
+        if (!grown) break;                   // 点了确实没动静 —— 立刻停手
         items = grown;
-        have = countBlocks(items, dom);
         added++;
+        const now = countBlocks(items, dom);
+        // 数得出来就用真实段数,数不出来就按点击次数记账,免得原地打转
+        have = now > have ? now : have + 1;
       }
       if (added) expanded.push(`${DOM_CN[dom]}+${added}`);
       else if (have < need) {
@@ -1574,8 +1592,10 @@
   const widgetKind = (el) => {
     const cls = String(el.className || '');
     const role = el.getAttribute('role') || '';
-    if (/picker|date/i.test(cls) || role === 'spinbutton') return '自定义日期';
+    /* 级联必须排在日期之前:antd 3 的类名是 ant-cascader-picker,含「picker」二字,
+     * 按日期处理会去找日历格子,自然一无所获(籍贯栏就是这么废掉的)。 */
     if (/cascader/i.test(cls)) return '自定义级联';
+    if (/picker|date|calendar/i.test(cls) || role === 'spinbutton') return '自定义日期';
     if (/radio/i.test(cls) || role === 'radiogroup') return '自定义单选';
     if (/checkbox/i.test(cls)) return '自定义多选';
     if (el.isContentEditable) return '富文本';
@@ -1665,14 +1685,67 @@
   /* ---------- 自定义日期选择器 ----------
    * 不去翻日历:antd 的日期格子带 title="2027-06-15" / "2027-06",可以精确命中。
    * 命中不了再退回「往输入框打字 + 回车」,由组件自己解析。 */
-  const CELL_SEL = '.ant-picker-cell, .el-date-table td, [role="gridcell"]';
+  const CELL_SEL = '.ant-picker-cell, .ant-calendar-cell, .el-date-table td, [role="gridcell"]';
 
-  const findCell = (title) => Array.from(document.querySelectorAll(CELL_SEL)).find((c) => {
-    if ((c.getAttribute('title') || '') !== title) return false;
+  /* 日期格子的 title 各家写法完全不同:antd 4 是 ISO「2024-09-01」,
+   * antd 3 中文 locale 是「2024年9月1日」,还有补零与不补零的差别。
+   * 按字符串相等比对必然漏 —— 一律解析成数字再比。 */
+  const cellYMD = (c) => {
+    const t = String(c.getAttribute('title') || c.getAttribute('aria-label') || '').trim();
+    const m = t.match(/(\d{4})\D{0,3}(\d{1,2})?\D{0,3}(\d{1,2})?/);
+    if (!m) return null;
+    return [Number(m[1]), Number(m[2] || 0), Number(m[3] || 0)];
+  };
+
+  const findCell = (y, mo, d) => Array.from(document.querySelectorAll(CELL_SEL)).find((c) => {
     if (/disabled/.test(c.className)) return false;
+    const cd = cellYMD(c);
+    if (!cd) return false;
+    if (cd[0] !== Number(y) || cd[1] !== Number(mo || 0) || cd[2] !== Number(d || 0)) return false;
     const r = c.getBoundingClientRect();
     return r.width > 2 && r.height > 2;
   });
+
+  /* 面板当前停在哪个年月:取可见日格里出现最多的那个 (年,月)。
+   * 比读表头文字可靠 —— 表头的写法同样各家不一。 */
+  const panelYM = () => {
+    const n = new Map();
+    for (const c of document.querySelectorAll(CELL_SEL)) {
+      const cd = cellYMD(c);
+      if (!cd || !cd[1] || !cd[2]) continue;
+      if (c.getBoundingClientRect().width < 2) continue;
+      const k = cd[0] * 12 + cd[1];
+      n.set(k, (n.get(k) || 0) + 1);
+    }
+    let best = 0, bn = 0;
+    for (const [k, v] of n) if (v > bn) { bn = v; best = k; }
+    return best;
+  };
+
+  const NAV_PREV = '.ant-calendar-prev-month-btn, .ant-picker-header-prev-btn, [class*="prev-month"]';
+  const NAV_NEXT = '.ant-calendar-next-month-btn, .ant-picker-header-next-btn, [class*="next-month"]';
+  const CAL_ROOT = '.ant-calendar, .ant-picker-panel-container, .ant-picker-dropdown, .el-picker-panel';
+
+  /* 页面上往往挂着好几个日历面板(每个日期控件一个,用完只是隐藏)。
+   * 翻月按钮若用 document.querySelector 取,拿到的永远是第一个面板的按钮 ——
+   * 那个多半是隐藏的,于是除了第一个日期,后面全部翻不动、填不上。 */
+  const visibleCal = () => Array.from(document.querySelectorAll(CAL_ROOT))
+    .find((c) => c.getBoundingClientRect().width > 2 && c.querySelector(CELL_SEL));
+
+  /* 日历打开时停在当月,目标年月往往不在面板里。按月份差点上一月/下一月翻过去 ——
+   * 不翻的话,凡是不在当月的日期一律填不上(京东的入学时间差着两三年)。 */
+  const navigateTo = async (y, mo) => {
+    const want = Number(y) * 12 + Number(mo);
+    for (let guard = 0; guard < 72; guard++) {
+      const cur = panelYM();
+      if (!cur || cur === want) return cur === want;
+      const btn = (visibleCal() || document).querySelector(cur > want ? NAV_PREV : NAV_NEXT);
+      if (!btn || btn.getBoundingClientRect().width < 2) return false;
+      realClick(btn);
+      if (!await waitUntil(() => (panelYM() !== cur ? true : null), 700)) return false;
+    }
+    return false;
+  };
 
   const fillDatePicker = async (el, v) => {
     if (widgetValue(el)) return { ok: false, reason: '已有选择,未覆盖' };
@@ -1684,16 +1757,21 @@
 
     const input = el.querySelector('input');
     realClick(input || el);
-    const opened = await waitUntil(() => (findCell(y) || (mo && findCell(`${y}-${mo}`))
-      || (mo && findCell(`${y}-${mo}-${d || '01'}`)) || null), 1000);
+    // 面板出来了没有:任何一个可解析的日期格子都算
+    const opened = await waitUntil(() => (panelYM() || findCell(y, mo, 0) || findCell(y, 0, 0)
+      ? true : null), 1200);
 
-    // 日期面板可能停在年/月视图,按 日 → 月 → 年 的精度顺序逐个尝试
-    const titles = [];
-    if (mo && d) titles.push(`${y}-${mo}-${d}`);
-    if (mo) titles.push(`${y}-${mo}`, `${y}-${mo}-01`);
-    titles.push(y);
-    for (const t of titles) {
-      const cell = findCell(t);
+    // 目标不在当前面板时,按月份差翻过去
+    if (opened && mo) await navigateTo(y, Number(mo));
+
+    /* 面板可能停在年/月/日任一视图,按 日 → 月 → 年 的精度顺序逐个尝试。
+     * 档案只精确到月时,也试一次当月 1 号 —— 日视图里没有「整月」这个格子。 */
+    const tries = [];
+    if (mo && d) tries.push([y, mo, d]);
+    if (mo) tries.push([y, mo, 0], [y, mo, 1]);
+    tries.push([y, 0, 0]);
+    for (const [ty, tm, td] of tries) {
+      const cell = findCell(ty, tm, td);
       if (!cell) continue;
       realClick(cell);
       const got = await waitUntil(() => widgetValue(el) || null, 400);
@@ -1777,7 +1855,8 @@
      * 于是成功的点选也被报成「点选未生效」。 */
     const disp = el.querySelector('[class*="display-value"]');
     if (disp) return clean(disp.textContent || '');
-    const item = el.querySelector('.ant-select-selection-item, .el-select__tags-text, [class*="selection-item"]');
+    const item = el.querySelector('.ant-select-selection-item, .el-select__tags-text, '
+      + '[class*="selection-item"], [class*="picker-label"], [class*="selection-selected-value"]');
     if (item) return clean(item.textContent || '');
     /* 组件里有 input 时,它就是值的载体(前面两种显示位都没有的情况下):
      * 空的 input 就代表空值,绝不能再退到 innerText —— 那里只有「年」这类

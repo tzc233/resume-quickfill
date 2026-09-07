@@ -16,6 +16,7 @@ window.RQF_TEST_PROFILE = {
     city: '上海', cityPath: '上海/上海市/徐汇区',
     expectedCity: '上海', expectedCityPath: '上海/上海市/浦东新区', expectedCity2: '深圳',
     nationality: '中国', ethnicity: '汉族', gradYear: '2027', highestSchoolCity: '上海',
+    hometown: '上海市', hometownPath: '上海市/徐汇区',
     lastMajor: '计算机科学与技术',
   },
   education: [
@@ -355,7 +356,8 @@ const CHECKS = {
     联系电话: v('b-phone') === '13800138000',
     电子邮箱: v('b-email') === 'test@example.com',
     国籍: v('b-nation') === '中国',
-    籍贯_档案无值: v('b-hometown') === '',
+    // 普通文本框取 hometown;级联控件另有 hometownPath(见 jd-empty)
+    籍贯_文本框: v('b-hometown') === '上海市',
     证件号_档案无值: v('b-id') === '',
     意向面试地点: v('b-interview') === '上海',
     工作1_公司: v('w1-company') === '甲公司',
@@ -406,14 +408,32 @@ const CHECKS = {
       锚点导航_未被当成标题: secs.filter((x) => x === '教育经历').length === 1,
 
       // 从零展开:每个区块按档案段数点出对应数量
-      教育_从零展开两段: document.querySelectorAll('[data-blk=edu] .fieldItem___1hMDk').length === 6,
-      实习_从零展开两段: document.querySelectorAll('[data-blk=intern] .fieldItem___1hMDk').length === 6,
-      项目_从零展开一段: document.querySelectorAll('[data-blk=proj] .fieldItem___1hMDk').length === 2,
-      奖项_从零展开三段: document.querySelectorAll('[data-blk=award] .fieldItem___1hMDk').length === 3,
+      教育_从零展开两段: document.querySelectorAll('[data-blk=edu] .fieldItem___1hMDk').length === 8,
+      实习_从零展开两段: document.querySelectorAll('[data-blk=intern] .fieldItem___1hMDk').length === 8,
+      项目_从零展开一段: document.querySelectorAll('[data-blk=proj] .fieldItem___1hMDk').length === 3,
+      /* 荣誉块里一个能当锚点的字段都没有(只有奖项类型/获奖情况)。
+         原来数不出段数就一律算 1,点出第二块后判定「没反应」而收手。 */
+      奖项_无锚点也能展开三段: document.querySelectorAll('[data-blk=award] .fieldItem___1hMDk').length === 6,
 
       // 展开后要真的填进去
       基本_姓名: v('e-name') === '李思远',
-      教育1_学校: q('[data-blk=edu] input').value === '示例大学',
+      教育1_学校: [...document.querySelectorAll('[data-blk=edu] input')]
+        .filter((i) => /school/.test(i.id))[0].value === '示例大学',
+      // 起止时间是两个独立日历控件,标签只有 placeholder「开始日期 / 结束日期」
+      教育1_起止时间: (() => {
+        const sd = document.getElementById('edu-sd-1'), ed = document.getElementById('edu-ed-1');
+        return sd && ed && sd.value === '2024-09' && ed.value === '2027-06';
+      })(),
+      实习_起止时间: (() => {
+        const sd = [...document.querySelectorAll('[id^=intern-sd-]')].map((i) => i.value);
+        return sd.length === 2 && sd[0] === '2026-04';
+      })(),
+      // 籍贯是 ant-cascader-picker(类名含 picker),不能被判成日期控件
+      /* 籍贯是 ant-cascader-picker —— 类名含「picker」二字。级联的判定必须排在
+         日期之前,否则会被当成日历去找日期格子,一无所获。 */
+      籍贯_识别为级联: s.rows.some((r2) => r2.label.includes('籍贯') && r2.ctrl.includes('级联')),
+      籍贯_按路径选到叶子: document.querySelector('#e-home .ant-cascader-picker-label')
+        .textContent.includes('徐汇区'),
       教育_两段学校不同: (() => {
         const xs = [...document.querySelectorAll('[data-blk=edu] input')]
           .filter((i) => /school/.test(i.id)).map((i) => i.value);
@@ -421,9 +441,9 @@ const CHECKS = {
       })(),
       实习_公司: [...document.querySelectorAll('[data-blk=intern] input')]
         .filter((i) => /-co-/.test(i.id)).map((i) => i.value).join('|') === '甲公司|乙公司',
-      奖项_三段名称各不相同: (() => {
-        const xs = [...document.querySelectorAll('[data-blk=award] input')].map((i) => i.value);
-        return xs.length === 3 && new Set(xs).size === 3 && xs.every(Boolean);
+      奖项_三段获奖情况各不相同: (() => {
+        const xs = [...document.querySelectorAll('[data-blk=award] textarea')].map((i) => i.value);
+        return xs.length === 3 && xs.every(Boolean);
       })(),
     };
   },
