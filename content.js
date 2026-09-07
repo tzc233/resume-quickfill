@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.24.0';
+  const VERSION = '1.25.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -1114,8 +1114,22 @@
      * 月就必须由我写完。只在紧跟着的那一格生效,不波及任何别的字段。 */
     let ymYearJustFilled = false;
 
-    const ctx = { domain: null, idx: {}, used: {}, taken: new Set(), takenSec: new Set() };
-    for (const d of Object.keys(LIST_OF)) { ctx.idx[d] = 0; ctx.used[d] = new Set(); }
+    const ctx = { domain: null, idx: {}, used: {}, usedIdx: {}, pinned: null,
+      taken: new Set(), takenSec: new Set() };
+    for (const d of Object.keys(LIST_OF)) {
+      ctx.idx[d] = 0; ctx.used[d] = new Set(); ctx.usedIdx[d] = new Set();
+    }
+
+    /* 段号推进改成「取下一个还没被占用的段」,而不是简单 +1。
+     * 页面上已有的块可能对应档案的任意一段(见下面 pinBlocks),剩下的块
+     * 就该去认领剩下的段 —— 简单递增会漏掉没人认领的那一段。
+     * 没有任何块被钉住时,行为与原来的 0,1,2… 完全一致。 */
+    const nextFree = (dom) => {
+      const n = (P[LIST_OF[dom]] || []).length;
+      for (let k = 0; k < n; k++) if (!ctx.usedIdx[dom].has(k)) return k;
+      return n;   // 全用完了 —— 后续块会明确报「档案里没有第 N 段」
+    };
+    const advance = (dom) => { ctx.idx[dom] = nextFree(dom); };
 
     /* 第一趟:先算出每个字段的匹配结果 —— 通配字段(「起止时间」)需要看前后文才能定归属。
      * 抽成函数是因为「自动展开区块」每点一次 + 号都要重新扫一遍页面。 */
@@ -1218,6 +1232,47 @@
     let items = collectItems(true);
     // 档案段数多于页面区块数时,先把「+ 添加」点出来
     items = await expandBlocks(P, items, collectItems, report, sections);
+
+    /* 页面上已经有内容的经历块 —— 你自己填的,或网站解析简历填进去的 ——
+     * 按锚点的现有值认回它对应档案里的哪一段,并把段号钉到【整块】的所有字段上。
+     *
+     * 必须在填充之前一次性做完:京东把「起止时间」排在「学校名称」之前,
+     * 等轮到锚点才改判就晚了 —— 日期已经按位置填成了第一段的。
+     * 症状是「学校填的湖南大学,日期却是硕士那段的」,学校对、日期错,
+     * 比整栏空着更难发现。 */
+    const pinBlocks = (list0) => {
+      for (const it of list0) {
+        const h = it.hit;
+        if (!h || !h.anchor || !h.dom || h.dom === '*') continue;
+        const dom = effDom(it);
+        const entries = P[LIST_OF[dom]] || [];
+        if (entries.length < 2) continue;   // 只有一段可选,认不认都一样
+        const cur = clean(it.tag === 'WIDGET' ? widgetValue(it.el) : String(it.el.value || ''));
+        if (!cur) continue;
+        const j = entries.findIndex((e) => {
+          const t = clean(String(e[h.field] || ''));
+          return t && (t === cur || t.includes(cur) || cur.includes(t));
+        });
+        if (j < 0 || ctx.usedIdx[dom].has(j)) continue;
+        /* 这一块的范围:从锚点往上走,走到再往上就会圈进同域另一个锚点为止 */
+        let box = it.el;
+        for (let d = 0; d < 8 && box.parentElement; d++) {
+          const up = box.parentElement;
+          if (up === document.body) break;
+          const others = list0.some((o) => o !== it && o.hit && o.hit.anchor
+            && effDom(o) === dom && up.contains(o.el));
+          if (others) break;
+          box = up;
+        }
+        const pin = { dom, idx: j };
+        for (const o of list0) if (o.hit && box.contains(o.el)) o.pin = pin;
+        ctx.usedIdx[dom].add(j);
+      }
+      /* 初始段号仍然是 0,不跳过被钉住的段 —— 经历区块【之外】引用该列表的字段
+       * (基本信息区的「预计毕业时间」取第一段教育的结束时间)应当照常拿第一段。
+       * 钉住只影响后面未钉块的推进目标。 */
+    };
+    pinBlocks(items);
 
     /* 通配字段(「起止时间」「描述」)的归属判定。
      * 两种真实布局需要同时成立:
@@ -1359,6 +1414,13 @@
         let field = hit.field;
         // 「本科院校」这类带学历限定的标签直接按学历定位,不参与区块计数
         let i = dom === 'edu' ? scopedEduIdx(list, hit.label) : -1;
+        // 进入一个「已按内容认回段号」的块:先把段号切过去,块内字段照常走原逻辑
+        const pin = items[idx].pin;
+        if (i < 0 && pin && pin.dom === dom && ctx.pinned !== pin) {
+          ctx.pinned = pin;
+          ctx.idx[dom] = pin.idx;
+          ctx.used[dom].clear();
+        }
         const scoped = i >= 0;
         if (i < 0) {
           ctx.domain = dom;
@@ -1374,7 +1436,7 @@
           const singleDate = ('date' in s0) && !('startTime' in s0);
           if (hit.ym && singleDate) {
             if (hit.ym === 'y') {
-              if (used.has('ymStart')) { ctx.idx[dom]++; used.clear(); }
+              if (used.has('ymStart')) { advance(dom); used.clear(); }
               used.add('ymStart');
             }
             field = 'date';
@@ -1384,7 +1446,7 @@
              * 第三个「年」出现时说明已进入结束时间。 */
             if (hit.ym === 'y') {
               if (used.has('ymStart')) {
-                if (used.has('ymEnd')) { ctx.idx[dom]++; used.clear(); used.add('ymStart'); }
+                if (used.has('ymEnd')) { advance(dom); used.clear(); used.add('ymStart'); }
                 else used.add('ymEnd');
               } else used.add('ymStart');
             }
@@ -1393,17 +1455,35 @@
             // 「就读时间 [___]-[___]」共用一个标签的两个输入框:先起后止
             if (!used.has('startTime')) field = 'startTime';
             else if (!used.has('endTime')) field = 'endTime';
-            else { ctx.idx[dom]++; used.clear(); field = 'startTime'; }
+            else { advance(dom); used.clear(); field = 'startTime'; }
             used.add(field);
           } else if (hit.anchor) {
-            if (used.has(field)) { ctx.idx[dom]++; used.clear(); }
+            if (used.has(field)) { advance(dom); used.clear(); }
             used.add(field);
+            /* 这一段页面上已经有内容(你自己填的,或网站解析简历填进去的)——
+             * 按【内容】认回它对应档案里的哪一段,而不是按位置硬对。
+             *
+             * 京东那个教育区块里已经是「湖南大学」(本科),而它是页面上第一个块,
+             * 按位置就取了档案第一段(硕士)的起止时间 —— 填出「湖南大学 + 硕士日期」
+             * 这种错配。学校名字是对的、日期是错的,比整栏空着更难发现。 */
+            const cur = clean(tag === 'WIDGET' ? widgetValue(el) : String(el.value || ''));
+            if (cur) {
+              const j = list.findIndex((e) => {
+                const t = clean(String(e[field] || ''));
+                return t && (t === cur || t.includes(cur) || cur.includes(t));
+              });
+              if (j >= 0 && j !== ctx.idx[dom]) {
+                ctx.idx[dom] = j;
+                used.clear();
+                used.add(field);
+              }
+            }
           } else if (hit.half !== 'm' && items[idx].sec === dom && ctx.takenSec.has(`${dom}#${ctx.idx[dom]}#${field}`)) {
             /* Shopee 把「学历/学习形式」排在锚点「学校名称」之前:第二段的这些字段
              * 出现时锚点还没轮到,按旧规则会取到第一段的值。放开「非锚点不参与分段」
              * 的限制,但必须以区块标题为闸门 —— 基本信息区的「学历」不在教育区块里,
              * 不会把段号带偏(当年正是为了它才禁止非锚点参与计数)。 */
-            ctx.idx[dom]++; used.clear();
+            advance(dom); used.clear();
           }
           i = ctx.idx[dom];
         }
@@ -1415,6 +1495,7 @@
         // 占位条目的使命到此为止:序列已推进,值绝不该被写(框里本来就有值)
         if (hit.occupied) continue;
         semKey = field;
+        if (!scoped) ctx.usedIdx[dom].add(i);
         ctx.taken.add(`${dom}#${i}#${field}`);
         if (!scoped && items[idx].sec === dom) ctx.takenSec.add(`${dom}#${i}#${field}`);
         v = String(entry[field] ?? '').trim();

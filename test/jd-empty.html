@@ -65,6 +65,24 @@
 <div class="gridContainer___1K4Rp" data-blk="edu">
  <div class="titleContainer___2E0OM"><span>教育经历<span class="redTitle___2-QVW">*</span></span>
   <div class="titledesc___2Ke5H">从最高学历开始填写，包括第一学历到最高学历的全部信息，填写后请仔细检查学历信息是否正确。</div></div>
+ <!-- 已经存在一段,而且填的是【本科】(档案里的第二段)。按位置硬对会把
+      第一段硕士的起止时间填进来 —— 学校对、日期错,比整栏空着更难发现。 -->
+ <div class="apply-fields-BzcXI4i2Pm" data-pre="1">
+  <div class="fieldItem___1hMDk"><div class="filedName___2rXII"><span class="requiredStar___28AbY">*</span>起止时间:</div>
+   <div class="filedValue___orYso"><div class="dateRangePicker___2IyoW">
+     <span class="dateRangeStartPicker___39xpV ant-calendar-picker"><div>
+       <input class="ant-calendar-picker-input ant-input" id="edu-sd-0" placeholder="开始日期" readonly></div></span>
+     <span class="dateRangeSeparator___3CEeh">~</span>
+     <span class="dateRangeEndPicker___fhag9 ant-calendar-picker"><div>
+       <input class="ant-calendar-picker-input ant-input" id="edu-ed-0" placeholder="结束日期" readonly></div></span>
+   </div></div></div>
+  <div class="fieldItem___1hMDk"><div class="filedName___2rXII">学校名称:</div>
+   <div class="filedValue___orYso"><input class="ant-input" id="edu-school-0" placeholder="请输入" value="样例学院"></div></div>
+  <div class="fieldItem___1hMDk"><div class="filedName___2rXII">学院名称:</div>
+   <div class="filedValue___orYso"><input class="ant-input" id="edu-college-0" placeholder="请输入"></div></div>
+  <div class="fieldItem___1hMDk"><div class="filedName___2rXII">专业名称:</div>
+   <div class="filedValue___orYso"><input class="ant-input" id="edu-major-0" placeholder="请输入"></div></div>
+ </div>
  <div class="contentItem___3Qrnc"><a role="button" class="am-button addBtn___3r3aQ"><span>+ 添加</span></a></div>
 </div>
 
@@ -100,6 +118,7 @@ for (const blk of document.querySelectorAll('[data-blk]')) {
   blk.querySelector('.addBtn___3r3aQ').addEventListener('click', () => {
     seq++;
     const wrap = document.createElement('div');
+    wrap.className = 'apply-fields-BzcXI4i2Pm';
     wrap.innerHTML = TPL[kind].map(([lab, key]) => {
       /* 起止时间:两个各自独立的 ant-calendar-picker,标签只有 placeholder
          「开始日期」「结束日期」—— 京东就是这么写的 */

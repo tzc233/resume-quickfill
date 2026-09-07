@@ -408,7 +408,13 @@ const CHECKS = {
       锚点导航_未被当成标题: secs.filter((x) => x === '教育经历').length === 1,
 
       // 从零展开:每个区块按档案段数点出对应数量
-      教育_从零展开两段: document.querySelectorAll('[data-blk=edu] .fieldItem___1hMDk').length === 8,
+      /* 教育区块预先存在一段(填的是本科=档案第二段)。需要:
+         ① 再点出一段;② 已有那段的日期要跟【本科】对上,不能拿第一段硕士的日期。 */
+      教育_已有一段再补一段: document.querySelectorAll('[data-blk=edu] .apply-fields-BzcXI4i2Pm').length === 2,
+      已有段_按内容认回本科而非按位置: document.getElementById('edu-sd-0').value === '2020-09'
+        && document.getElementById('edu-ed-0').value === '2024-06',
+      已有段_学校不被覆盖: document.getElementById('edu-school-0').value === '样例学院',
+      已有段_学院按本科填: document.getElementById('edu-college-0').value === '信息科学与工程学院',
       实习_从零展开两段: document.querySelectorAll('[data-blk=intern] .fieldItem___1hMDk').length === 8,
       项目_从零展开一段: document.querySelectorAll('[data-blk=proj] .fieldItem___1hMDk').length === 3,
       /* 荣誉块里一个能当锚点的字段都没有(只有奖项类型/获奖情况)。
@@ -417,10 +423,13 @@ const CHECKS = {
 
       // 展开后要真的填进去
       基本_姓名: v('e-name') === '李思远',
-      教育1_学校: [...document.querySelectorAll('[data-blk=edu] input')]
-        .filter((i) => /school/.test(i.id))[0].value === '示例大学',
+      新增段_填第一段硕士: (() => {
+        const xs = [...document.querySelectorAll('[data-blk=edu] input')]
+          .filter((i) => /school/.test(i.id)).map((i) => i.value);
+        return xs.length === 2 && xs.includes('样例学院') && xs.includes('示例大学');
+      })(),
       // 起止时间是两个独立日历控件,标签只有 placeholder「开始日期 / 结束日期」
-      教育1_起止时间: (() => {
+      新增段_起止时间是硕士的: (() => {
         const sd = document.getElementById('edu-sd-1'), ed = document.getElementById('edu-ed-1');
         return sd && ed && sd.value === '2024-09' && ed.value === '2027-06';
       })(),
@@ -434,11 +443,7 @@ const CHECKS = {
       籍贯_识别为级联: s.rows.some((r2) => r2.label.includes('籍贯') && r2.ctrl.includes('级联')),
       籍贯_按路径选到叶子: document.querySelector('#e-home .ant-cascader-picker-label')
         .textContent.includes('徐汇区'),
-      教育_两段学校不同: (() => {
-        const xs = [...document.querySelectorAll('[data-blk=edu] input')]
-          .filter((i) => /school/.test(i.id)).map((i) => i.value);
-        return xs.length === 2 && xs[0] === '示例大学' && xs[1] === '样例学院';
-      })(),
+
       实习_公司: [...document.querySelectorAll('[data-blk=intern] input')]
         .filter((i) => /-co-/.test(i.id)).map((i) => i.value).join('|') === '甲公司|乙公司',
       奖项_三段获奖情况各不相同: (() => {
