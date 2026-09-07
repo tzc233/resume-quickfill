@@ -311,7 +311,22 @@ const CHECKS = {
   'expand-blocks.html': () => {
     const q = (c) => [...document.querySelectorAll('.' + c)].map((e) => e.value);
     const edu = q('edu-school'), work = q('work-company'), paper = q('paper-name'), comp = q('comp-name');
+    /* 逐字段台账:诊断报告的「结果 / 段号」两列全靠它。
+     * 页面上有 2 个「学校名称」,必须各自拿到自己那一行,不能按标签串在一起。 */
+    const log = (window.__RQF_LAST || {}).fields || [];
+    const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
+    const schoolRows = s.rows.filter((r) => /学校名称/.test(r.label));
+    const compRow = s.rows.find((r) => /竞赛名称/.test(r.label));
     return {
+      台账_每个字段一条: log.length >= s.rows.length - 6,
+      台账_有已填的: log.some((r) => r.st === '已填'),
+      台账_带段号: log.some((r) => /教育#/.test(r.slot || '')),
+      扫描行_带结果列: s.rows.some((r) => r.res === '已填'),
+      两个学校名称_各自有结果: schoolRows.length === 2
+        && schoolRows.every((r) => r.res === '已填'),
+      两个学校名称_段号不同: schoolRows.length === 2
+        && schoolRows[0].slot !== schoolRows[1].slot,
+      竞赛_档案只有1项_多出的段落有原因: !compRow || compRow.res !== '',
       教育_展开到2段: edu.length === 2,
       教育1: edu[0] === '示例大学',
       教育2: edu[1] === '样例学院',

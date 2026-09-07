@@ -194,19 +194,30 @@ async function doScan() {
       : '未识别到任何区块标题(泛化标签将只能靠前后邻居猜归属)',
     `共 ${rows.length} 个字段:${miss.length} 个未命中规则,${warns} 个标签定位可疑`,
     '',
-    '| 字段标签 | 控件 | 命中规则 | 区块 | 已有值 | 提示 |',
-    '| --- | --- | --- | --- | --- | --- |',
-    ...rows.map((r) => `| ${r.label} | ${r.ctrl} | ${r.rule || '—'} | ${r.sec || ''} | ${r.filled ? '是' : ''} | ${r.note || ''} |`),
+    /* 一行一个字段,结果直接写在这一行上。原来「填充结果」是另一张按标签分组的表,
+     * 页面上有两个「学院名称」时根本对不上是哪一行没填成。 */
+    '| 字段标签 | 控件 | 命中规则 | 区块 | 段号 | 结果 | 原因 / 提示 |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    ...rows.map((r) => {
+      const res = r.res === '已填' ? '✅ 已填'
+        : r.res === '跳过' ? '⏭️ 跳过'
+          : r.res === '未处理' ? '⚪️ 未处理'
+            : (r.filled ? '(页面已有值)' : '—');
+      const why = [r.why, r.note].filter(Boolean).join(' · ');
+      return `| ${r.label} | ${r.ctrl} | ${r.rule || '—'} | ${r.sec || ''} `
+        + `| ${r.slot || ''} | ${res} | ${why} |`;
+    }),
   ];
   /* 上次填充的跳过原因 —— 排查时最该看的一列。同一个原因归并计数,
    * 「12 个字段都是『已有选择,未覆盖』」这种系统性问题一眼就看出来。 */
   if (lastSkips.length || lastFilled) {
     /* 「未命中规则」那个数会骗人:京东 91 个字段只有 8 个未命中,听着不错,
      * 实际只填上 24 个 —— 大头是「认出来了但没填成」。把真实覆盖率摆在最前面。 */
-    const touched = lastFilled + lastSkips.length;
+    const nUn = rows.filter((r) => r.res === '未处理' || !r.res).length;
     lines.push('', `## 上次填充结果:**页面 ${rows.length} 个字段,填上 ${lastFilled} 个**`
       + `,跳过 ${lastSkips.length} 个`
-      + (rows.length > touched ? `,另有 ${rows.length - touched} 个没被处理(多为附件口/禁填项)` : ''), '');
+      + (nUn ? `,${nUn} 个没被处理(未命中规则 / 附件口 / 禁填区)` : ''),
+      '', '> 逐字段的结果见上表的「结果」列;下面按原因归并,便于看出系统性问题。', '');
     const byReason = new Map();
     for (const sk of lastSkips) {
       const k = String(sk.reason || '未说明');

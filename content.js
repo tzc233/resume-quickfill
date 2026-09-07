@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.28.0';
+  const VERSION = '1.29.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -1428,8 +1428,30 @@
       const t = String(s || '').trim();
       return t.length > 14 ? `${t.slice(0, 14)}…` : t;
     };
+    /* 逐字段结果台账。诊断报告原来是两张对不上的表:字段清单来自一次全新扫描,
+     * 填充结果只按标签分组 —— 页面上有两个「学院名称」时,根本分不清是哪一行没填上。
+     * 这里给【每个】字段留一条记录,扫描时按元素本身取回,重复标签也不会串。
+     *
+     * 状态怎么来:每轮开头记下 skipped/filled 的长度,下一轮开头再比一次 ——
+     * 中间新增的那几条就属于上一个字段。这样不用去改散落在十几处的 push。 */
+    const fieldOut = new WeakMap();
+    const fieldLog = [];
+    let cur = null, markS = 0, markF = 0;
+    const closeCur = () => {
+      if (!cur) return;
+      const sk = report.skipped.slice(markS);
+      if (sk.length) { cur.st = '跳过'; cur.why = sk.map((x) => x.reason).join(' / '); }
+      else if (report.filled.length > markF) cur.st = '已填';
+      cur = null;
+    };
+
     for (let idx = 0; idx < items.length; idx++) {
       const { el, tag, type, cands } = items[idx];
+      closeCur();
+      cur = { label: '', st: '未处理', why: '', slot: '' };
+      markS = report.skipped.length; markF = report.filled.length;
+      fieldLog.push(cur);
+      try { fieldOut.set(el, cur); } catch { /* 极少数代理对象不能作 WeakMap 键 */ }
       /* 进度按 DOM 顺序推进(识别 3% → 展开 13% → 填充 93% → 附件 100%)。
        * 每隔几个字段 yield 一次:这段循环大部分是同步的,不交还控制权的话
        * 进度条到最后才一次性跳到头,和「卡住」看起来没区别。 */
@@ -1453,6 +1475,7 @@
         continue;
       }
 
+      cur.label = String(hit.label || '');
       ui.step(`正在填充 ${idx + 1}/${items.length} · ${shortLabel(hit.label)}`, frac);
 
       // 「紧急联系人」这类区块要的是别人的信息,整段不碰
@@ -1540,6 +1563,7 @@
           }
           i = ctx.idx[dom];
         }
+        cur.slot = `${DOM_CN[dom] || dom}#${i + 1}`;
         const entry = list[i];
         if (!entry) {
           if (!hit.occupied) {
@@ -1643,8 +1667,9 @@
       if (el.maxLength && el.maxLength > 0 && out.length > el.maxLength) out = out.slice(0, el.maxLength);
       setNative(el, out);
       mark(el);
-      textWrites.push({ el, label: hit.label, out: String(out) });
+      textWrites.push({ el, label: hit.label, out: String(out), rec: cur });
     }
+    closeCur();   // 最后一个字段没有「下一轮」来替它结账
 
     /* 回读校验。稍等一拍再读:受控组件的吐回发生在它自己的渲染周期里 */
     if (textWrites.length) {
@@ -1652,12 +1677,20 @@
       await sleep(120);
       for (const w of textWrites) {
         const now = String(w.el.value || '').trim();
+        /* 文本框的成败要等这一趟回读才知道,循环里那次结账只能记成「未处理」——
+         * 记录本身还留着,这里补写回去。 */
+        const put = (st, why) => { if (w.rec) { w.rec.st = st; w.rec.why = why || ''; } };
         if (now === w.out.trim()) {
           report.filled.push({ label: w.label, value: w.out.slice(0, 60) });
+          put('已填');
         } else if (now) {
-          report.skipped.push({ label: w.label, reason: `写入后被页面改成「${now.slice(0, 20)}」,请核对` });
+          const why = `写入后被页面改成「${now.slice(0, 20)}」,请核对`;
+          report.skipped.push({ label: w.label, reason: why });
+          put('跳过', why);
         } else {
-          report.skipped.push({ label: w.label, reason: '写入后被页面组件丢弃 —— 这个框可能要点选,请手动填' });
+          const why = '写入后被页面组件丢弃 —— 这个框可能要点选,请手动填';
+          report.skipped.push({ label: w.label, reason: why });
+          put('跳过', why);
         }
       }
     }
@@ -1692,7 +1725,10 @@
         filled: report.filled.map((x) => x.label),
         skipped: report.skipped.map((x) => ({ label: x.label, reason: x.reason })),
         expanded: report.expanded || [],
+        /* 逐字段台账。只带状态/原因/段号,【不带值】—— 这份报告是要贴出去的。 */
+        fields: fieldLog,
       };
+      window.__RQF_FIELDOUT = fieldOut;
     } catch { /* 页面可能禁止写 window,报告本身不受影响 */ }
 
     const nf = report.filled.length + (report.fileFilled ? 1 : 0);
@@ -2153,7 +2189,7 @@
     });
   };
 
-  const scanCustomWidgets = (customs, widgets, sections = []) => {
+  const scanCustomWidgets = (customs, widgets, sections = [], outcomeOf = () => null) => {
     const rows = [];
     for (const el of widgets) {
       const cands = widgetCands(el);
@@ -2164,8 +2200,12 @@
       /* 单选/多选组的 innerText 就是所有选项文字,无从判断是否已选中。
        * 与其误报「已填」害你跳过必填项,不如一律报未填。 */
       const guessable = !/单选|多选/.test(kind);
+      const oc = outcomeOf(el, String((hit && hit.label) || ''));
       rows.push({
         label,
+        res: oc ? oc.st : '',
+        why: oc ? String(oc.why || '').slice(0, 60).replace(/\|/g, '/') : '',
+        slot: oc ? oc.slot : '',
         ctrl: SUPPORTED_WIDGETS.has(kind) ? kind : `${kind}(需手动)`,
         rule: key,
         sec: secName(sectionDomOf(el, sections)),
@@ -2241,6 +2281,23 @@
     const P = normalize(rawProfile || {});
     const customs = P.custom || [];
     const rows = [];
+    /* 上次填充的逐字段台账。优先按【元素本身】取回,重复标签也不会串;
+     * 组件被 React 重渲染过的,元素换了新的,退回按「标签+出现次序」对齐。 */
+    const fo = (typeof window !== 'undefined' && window.__RQF_FIELDOUT) || null;
+    const log = (typeof window !== 'undefined' && window.__RQF_LAST
+      && window.__RQF_LAST.url === location.href && window.__RQF_LAST.fields) || [];
+    const queues = new Map();
+    for (const r of log) {
+      if (!r.label) continue;
+      if (!queues.has(r.label)) queues.set(r.label, []);
+      queues.get(r.label).push(r);
+    }
+    const outcomeOf = (el, label) => {
+      let r = null;
+      try { r = fo && fo.get(el); } catch { r = null; }
+      if (!r) { const q = queues.get(label); if (q && q.length) r = q.shift(); }
+      return r || null;
+    };
     const widgets = outerWidgets();
     const sections = scanSections();
     for (const el of collect(document, [])) {
@@ -2259,11 +2316,16 @@
         : type === 'file' ? !!(el.files && el.files.length)
           : tag === 'SELECT' ? (!!el.value && el.selectedIndex > 0)
             : !!String(el.value || '').trim();
+      const lab = String((hit && hit.label) || (cands[0] && cands[0].t) || '(无标签)')
+        .slice(0, 40).replace(/\|/g, '/');
+      const oc = outcomeOf(el, String((hit && hit.label) || ''));
       rows.push({
         // 显示真正命中的那条候选文本 —— 权重最高的那条可能是字段值而非标签,会误导排查
         // 竖线会撑破弹窗里拼的 Markdown 表格
-        label: String((hit && hit.label) || (cands[0] && cands[0].t) || '(无标签)')
-          .slice(0, 40).replace(/\|/g, '/'),
+        label: lab,
+        res: oc ? oc.st : '',
+        why: oc ? String(oc.why || '').slice(0, 60).replace(/\|/g, '/') : '',
+        slot: oc ? oc.slot : '',
         ctrl: tag === 'INPUT' ? `input:${type || 'text'}` : tag.toLowerCase(),
         rule: hit && hit.range ? `${key}(起止区间)` : key,
         sec: secName(sectionDomOf(el, sections)),
@@ -2272,7 +2334,7 @@
         filled,
       });
     }
-    const wRows = scanCustomWidgets(customs, widgets, sections);
+    const wRows = scanCustomWidgets(customs, widgets, sections, outcomeOf);
     rows.push(...wRows);
     /* 采样配额:标签可疑的字段(有 note)最值钱 —— 它们多半是坏掉的组件;
      * 未命中的其次(常是导航/搜索这类本就不该填的)。相同骨架只留一份,
