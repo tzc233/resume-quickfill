@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>测试沙盒 · 京东校招(antd 3 + 锚点导航)</title>
+<style>
+ body{font:14px/1.6 -apple-system,"PingFang SC",sans-serif;color:#1f2937;margin:16px;padding-left:150px}
+ .anchorNav___1a{position:fixed;left:8px;top:16px;width:120px;font-size:12.5px;
+   border:1px dashed #d1d5db;border-radius:8px;padding:6px}
+ .anchorNav___1a li{list-style:none;padding:3px 0;cursor:pointer}
+ .blockTitle___2b{font-size:15px;font-weight:600;margin:18px 0 8px;border-left:3px solid #4f46e5;padding-left:8px}
+ .fieldItem___1hMDk{display:flex;gap:10px;margin:7px 0;align-items:flex-start}
+ .filedName___2rXII{width:200px;flex-shrink:0;font-size:13px;padding-top:5px}
+ .filedValue___orYso{width:560px;flex-shrink:0}
+ .ant-input{width:100%;padding:5px 9px;border:1px solid #d1d5db;border-radius:4px;font:inherit}
+ textarea.ant-input{min-height:52px}
+ .ant-select{display:block;width:100%;cursor:pointer}
+ .ant-select-selection{border:1px solid #d1d5db;border-radius:4px;padding:4px 9px;background:#fff;min-height:28px}
+ .ant-select-dropdown{position:absolute;z-index:60;background:#fff;border:1px solid #e5e7eb;
+   border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.12);padding:4px;min-width:160px}
+ .ant-select-dropdown[hidden]{display:none}
+ .ant-select-dropdown-menu-item{padding:5px 10px;border-radius:4px;cursor:pointer;font-size:13px}
+</style>
+</head>
+<body>
+
+<!-- 锚点导航:把每个区块名再列一遍,且位于整张表单【之前】。
+     不排除它的话,「最近的前置标题」对表单里每个字段都会变成这里的最后一项。 -->
+<ul class="anchorNav___1a">
+ <li><span class="navTitle___3c">教育经历</span></li>
+ <li><span class="navTitle___3c">实习经历</span></li>
+ <li><span class="navTitle___3c">项目经历</span></li>
+ <li><span class="navTitle___3c">论文/期刊</span></li>
+ <li><span class="navTitle___3c">发明成果专利</span></li>
+</ul>
+
+<div class="blockTitle___2b">基本信息</div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">姓名</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-name" placeholder="请输入"></div></div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">手机号码</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-phone" placeholder="请输入"></div></div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">兴趣爱好</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-hobby" placeholder="请输入"></div></div>
+
+<div class="blockTitle___2b">教育经历</div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">学校名称</div>
+ <div class="filedValue___orYso"><div data-sel="j-school" data-opts="示例大学|样例学院"></div></div></div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">学院名称</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-college" placeholder="请输入"></div></div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">专业名称</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-major" placeholder="请输入"></div></div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">导师</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-advisor" placeholder="请输入"></div></div>
+
+<div class="blockTitle___2b">实习经历</div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">公司名称</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-co" placeholder="请输入"></div></div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">职位名称</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-title" placeholder="请输入"></div></div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">工作描述，可用数据简要说明在本段实习中取得的工作成果和成绩</div>
+ <div class="filedValue___orYso"><textarea class="ant-input" id="j-wdesc" placeholder="请输入"></textarea></div></div>
+
+<div class="blockTitle___2b">校园经历</div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">校园经历描述</div>
+ <div class="filedValue___orYso"><textarea class="ant-input" id="j-campus" placeholder="请输入"></textarea></div></div>
+
+<div class="blockTitle___2b">论文/期刊</div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">论文名称</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-pname" placeholder="请输入"></div></div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">刊物/机构</div>
+ <div class="filedValue___orYso"><div data-sel="j-ptype" data-opts="示例会议 2026(CCF A)|示例期刊(SCI 一区)"></div></div></div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">作者顺序</div>
+ <div class="filedValue___orYso"><div data-sel="j-porder" data-opts="第一作者|第二作者|第三作者"></div></div></div>
+
+<div class="blockTitle___2b">发明成果专利</div>
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">专利</div>
+ <div class="filedValue___orYso"><input type="file" id="j-patent"></div></div>
+
+<script>
+/* antd 3 的下拉:.ant-select > .ant-select-selection[role=combobox],选项层 portal 到 body */
+for (const host of document.querySelectorAll('[data-sel]')) {
+  const opts = host.dataset.opts.split('|');
+  const box = document.createElement('div');
+  box.className = 'ant-select ant-select-enabled';
+  box.innerHTML = '<div class="ant-select-selection ant-select-selection--single" role="combobox">'
+    + '<div class="ant-select-selection__rendered">'
+    + `<div class="ant-select-selection-selected-value" data-v></div></div></div>`;
+  const val = box.querySelector('[data-v]');
+
+  const dd = document.createElement('div');
+  dd.className = 'ant-select-dropdown';
+  dd.hidden = true;
+  for (const o of opts) {
+    const it = document.createElement('div');
+    it.className = 'ant-select-dropdown-menu-item';
+    it.setAttribute('role', 'option');
+    it.textContent = o;
+    it.addEventListener('mousedown', (e) => { e.preventDefault(); val.textContent = o; dd.hidden = true; });
+    dd.appendChild(it);
+  }
+  document.body.appendChild(dd);
+  box.addEventListener('mousedown', () => {
+    document.querySelectorAll('.ant-select-dropdown').forEach((d) => { if (d !== dd) d.hidden = true; });
+    const r = box.getBoundingClientRect();
+    dd.style.left = (r.left + scrollX) + 'px';
+    dd.style.top = (r.bottom + scrollY + 4) + 'px';
+    dd.hidden = false;
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') dd.hidden = true; });
+  host.appendChild(box);
+}
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

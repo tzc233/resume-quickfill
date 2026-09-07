@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.20.0';
+  const VERSION = '1.21.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -131,7 +131,7 @@
 
     /* ---- 论文(锚点:论文名称) ---- */
     { k: 'paper.name', a: 1, re: /论文名称|文章名称|paper title/i },
-    { k: 'paper.type', re: /论文类型|会议.?期刊|期刊名称|会议名称|发表(期刊|会议)|journal|conference/i },
+    { k: 'paper.type', re: /论文类型|会议.?期刊|期刊名称|会议名称|发表(期刊|会议)|刊物|journal|conference/i },
     { k: 'paper.authorOrder', re: /作者顺序|作者排序|署名顺序/i },
     { k: 'paper.url',  re: /论文链接|文章链接/i },
     { k: 'paper.date', re: /发表时间|发表日期|publish/i },
@@ -238,7 +238,7 @@
      * 不是工作经历列表 —— 映射成空域,既不归 work,也顺带结束上一个区块的作用域。
      * 不拦掉的话它会被下面的「工作经历」命中,凭空多出一个 work 区块,
      * 把「同时存在实习与工作区块」的分流条件误触发。 */
-    [/校园工作|学生工作|社团经历|校内活动/, ''],
+    [/校园工作|学生工作|社团经历|校内活动|校园经历|社会实践/, ''],
     [/实习与工作|工作与实习|工作.?实习经历/, 'work'],
     [/实习经历|实习信息|实习情况/, 'intern'],
     [/工作经历|职业经历|工作信息|从业经历/, 'work'],
@@ -721,9 +721,13 @@
       text: labelCands(el).map((c) => c.t).join(' '),
       accept: (el.accept || '').toLowerCase(),
     }));
-    const bad = /头像|照片|证件照|头图|logo|avatar|photo|图片|picture/;
+    /* 明确不是简历的上传口。京东那页并排放着 成绩单/证书/专利/作品集 五六个口子,
+     * 原来只挡头像 —— 页面若恰好只剩一个「专利」口,简历就会被投进去。 */
+    const bad = /头像|照片|证件照|头图|logo|avatar|photo|图片|picture/
+      .source + '|' + /成绩单|证书|专利|软著|作品集|获奖证明|身份证|学生证|在读证明|offer|portfolio|transcript|certificate/.source;
     const imgOnly = (a) => a && /image|png|jpe?g|gif/.test(a) && !/pdf|doc/.test(a);
-    const ok = info.filter((i) => !bad.test(i.text) && !imgOnly(i.accept));
+    const badRe = new RegExp(bad, 'i');
+    const ok = info.filter((i) => !badRe.test(i.text) && !imgOnly(i.accept));
     const prefer = ok.find((i) => /简历|resume|\bcv\b|附件|attachment|上传文件|upload/.test(i.text));
     const chosen = prefer || (ok.length === 1 ? ok[0] : null);
     return chosen ? { el: chosen.el, label: chosen.text.slice(0, 30) || '文件上传' } : null;
@@ -873,6 +877,23 @@
   const HEADING_SEL = 'h1,h2,h3,h4,h5,h6,legend,'
     + '[class*="title" i],[class*="header" i],[class*="section" i],[class*="subtitle" i]';
 
+  /* 锚点导航(左侧目录 / 顶部标签)会把每个区块名再列一遍。这些目录项在 DOM 里
+   * 往往排在整张表单【之前】,于是「最近的前置标题」对表单里每个字段都变成了
+   * 目录的最后一项 —— 京东那页连「姓名」都被判进了「发明成果专利」区块。
+   *
+   * 判据:目录的容器里挤着好几个区块名,却一个表单控件都没有。
+   * 逐层上溯,先撞见控件就说明这是真区块,先撞见「多个候选且无控件」就是目录。 */
+  const isNavList = (el, all) => {
+    let box = el;
+    for (let d = 0; d < 4 && box.parentElement; d++) {
+      box = box.parentElement;
+      if (box === document.body || box === document.documentElement) break;
+      if (box.querySelector('input, textarea, select')) return false;
+      if (all.filter((o) => box.contains(o.el)).length >= 2) return true;
+    }
+    return false;
+  };
+
   const scanSections = () => {
     const out = [];
     for (const el of document.querySelectorAll(HEADING_SEL)) {
@@ -889,7 +910,7 @@
       if (r.width < 2 && r.height < 2) continue;
       out.push({ el, dom: hit[1], text: t });
     }
-    return out;
+    return out.filter((x) => !isNavList(x.el, out));
   };
 
   /** 某元素落在哪个区块下:取 DOM 顺序上最近的一个前置标题 */

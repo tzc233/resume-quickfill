@@ -391,6 +391,40 @@ const CHECKS = {
     紧急联系人_邮箱不填: v('ec-email') === '',
   }),
 
+  /* 京东校招(antd 3):左侧锚点导航把每个区块名再列一遍,且位于表单【之前】。
+   * 不排除它的话,「最近的前置标题」对每个字段都会变成导航的最后一项,
+   * 连「姓名」都被判进「发明成果专利」区块 —— 整页的区块判定失效。 */
+  'jd-style.html': (v) => {
+    const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
+    const wv = (k) => (document.querySelector(`[data-sel="${k}"] [data-v]`)?.textContent || '').trim();
+    const secOf = (kw) => (s.rows.find((r2) => r2.label.includes(kw)) || {}).sec || '';
+    return {
+      导航目录未被当成区块标题: !s.sections.some((x) => x.text.includes('发明成果专利'))
+        || s.sections.filter((x) => x.text.includes('发明成果专利')).length === 1,
+      基本信息不落进专利区块: secOf('姓名') === '',
+      教育字段归教育: secOf('学院名称') === '教育',
+      实习字段归实习: secOf('公司名称') === '实习',
+      论文字段归论文: secOf('论文名称') === '论文',
+
+      姓名: v('j-name') === '李思远',
+      手机: v('j-phone') === '13800138000',
+      学院: v('j-college') === '计算机科学与工程系',
+      专业: v('j-major') === '计算机科学与技术',
+      公司: v('j-co') === '甲公司',
+      职位: v('j-title') === '大模型算法实习生',
+      工作描述: v('j-wdesc').includes('post-training'),
+      校园经历: v('j-campus').includes('科研助理'),
+      论文名称: v('j-pname').startsWith('Alpha'),
+
+      学校名称_antd3下拉: wv('j-school') === '示例大学',
+      刊物机构_归paper类型: wv('j-ptype').includes('CCF A'),
+      作者顺序: wv('j-porder') === '第一作者',
+
+      // 头像/附件上传口不该被当成简历投放点
+      专利上传_不乱传: document.getElementById('j-patent').files.length === 0,
+    };
+  },
+
   /* 用户从真实 Shopee 页复制来的 DOM 快照(只替换了个人信息)。
    * React 行为不在快照里,所以这一页【只验识别】:标签定位、规则命中、
    * 区块归属、「添加」按钮认领 —— 这些恰好是历次填错的根因所在。 */
