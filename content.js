@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.22.0';
+  const VERSION = '1.23.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -246,7 +246,7 @@
     [/竞赛.{0,2}获奖|竞赛.{0,2}奖学金|获奖.{0,2}竞赛/, 'honor'],
     [/赛事|竞赛|比赛/, 'comp'],
     [/项目经验|项目经历|科研项目/, 'proj'],
-    [/获奖经历|获奖情况|荣誉奖项|荣誉与奖项|奖励情况/, 'award'],
+    [/获奖经历|获奖情况|荣誉奖项|荣誉与奖项|荣誉奖励|奖励情况/, 'award'],
     [/论文|期刊|学术成果|发表情况/, 'paper'],
 
     // prog 必须排在 lang 之前:「编程语言能力」同时含「语言能力」
@@ -795,12 +795,22 @@
 
   /** 页面上某个域现有几段。一段里可能有多个锚点字段(honor 的 kind+name、
    * lang 的 name+cert),按锚点总数算会虚高一倍,须按同名锚点的出现次数取最大值 */
+  /* 实习区块里的字段命中的是 work.* 规则(两者条目结构相同),分流只发生在填充阶段。
+   * 数段数时必须同样按区块标题改判,否则「实习经历」永远数出 0 段,
+   * 从零展开点一次就以为没长出东西而收手。 */
+  const PAIR_DOM = { work: 'intern', intern: 'work' };
+  const effDom = (it) => {
+    const h = it.hit;
+    if (!h || !h.dom) return null;
+    return (it.sec && PAIR_DOM[it.sec] === h.dom) ? it.sec : h.dom;
+  };
+
   const countBlocks = (items, dom) => {
     const per = {};
     let any = false;
     for (const it of items) {
       const h = it.hit;
-      if (!h || h.dom !== dom) continue;
+      if (!h || effDom(it) !== dom) continue;
       any = true;
       if (h.anchor) per[h.field] = (per[h.field] || 0) + 1;
     }
@@ -848,7 +858,11 @@
     for (const dom of Object.keys(LIST_OF)) {
       const need = (P[LIST_OF[dom]] || []).length;
       let have = countBlocks(items, dom);
-      if (!have || need <= have) continue;   // 页面上没有这个域,或已经够用
+      if (need <= have) continue;            // 已经够用
+      /* have === 0 也要展开:京东的表单初始是空的,每个经历区块里只有一个
+       * 「+ 添加」。原来「页面上没有这个域就跳过」会让整张表一个字段都填不出来。
+       * 但不能无条件点 —— 必须页面确实有这个域的区块标题,按钮才认领得到。 */
+      if (!have && !(sections || []).some((x) => x.dom === dom)) continue;
       let added = 0;
       while (have < need && added < 6) {
         ui.step(`展开「${DOM_CN[dom] || dom}」区块 ${have + 1}/${need}…`, 0.05 + 0.08 * (added / 6));
@@ -901,10 +915,28 @@
     return false;
   };
 
+  /* 标题容器里常挂着一段说明文字(京东的 titledesc:「从最高学历开始填写…」)。
+   * 整段算进去就超了长度上限,整个区块标题被丢掉 —— 京东的「教育经历」「实习经历」
+   * 正是因为带说明文字而没被识别,而没有说明文字的几个区块识别正常。 */
+  const HEAD_NOISE = '[class*="desc" i],[class*="tip" i],[class*="hint" i],'
+    + '[class*="note" i],[class*="count" i],[class*="extra" i]';
+
+  const headingText = (el) => {
+    const raw = clean(el.textContent || '');
+    if (raw.length <= 20) return raw;
+    try {
+      const c = el.cloneNode(true);
+      for (const n of c.querySelectorAll(HEAD_NOISE)) n.remove();
+      const t = clean(c.textContent || '');
+      if (t && t.length < raw.length) return t;
+    } catch { /* 克隆失败就按原文走 */ }
+    return raw;
+  };
+
   const scanSections = () => {
     const out = [];
     for (const el of document.querySelectorAll(HEADING_SEL)) {
-      const t = clean(el.textContent || '');
+      const t = headingText(el);
       /* 长度上限按可信度分级:真正的标题标签(h1~h6/legend)语义明确,
        * 允许带括号说明(「实习经历(第一段在职…)」);仅靠 class 名匹配上的
        * 放宽了容易把整段说明文字误当标题。 */
@@ -1532,7 +1564,9 @@
     '[role="combobox"]', '[role="listbox"]', '[role="radiogroup"]', '[role="switch"]', '[role="spinbutton"]',
     '[contenteditable="true"]', '[contenteditable=""]',
     '[class*="sd-Dropdown"]',   // Moka:年/月、性别、学历这些框全是它,打字会被吐回,必须点选
-    '.ant-select', '.ant-picker', '.ant-cascader', '.ant-radio-group', '.ant-checkbox-group',
+    '.ant-select', '.ant-picker', '.ant-radio-group', '.ant-checkbox-group',
+    // antd 3 的类名是 ant-cascader-picker / ant-calendar-picker,精确类选择器够不着
+    '[class*="ant-cascader" i]', '[class*="ant-calendar-picker" i]',
     '.el-select', '.el-cascader', '.el-date-editor', '.el-radio-group',
     '.arco-select', '.arco-picker', '.semi-select', '.semi-datepicker',
   ].join(',');

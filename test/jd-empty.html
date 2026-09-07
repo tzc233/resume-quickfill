@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>测试沙盒 · 京东空表单(每个区块只有「+ 添加」)</title>
+<style>
+ body{font:14px/1.6 -apple-system,"PingFang SC",sans-serif;color:#1f2937;margin:16px;padding-left:170px}
+ .ant-anchor-wrapper{position:fixed;left:8px;top:16px;width:150px;font-size:12.5px;
+   border:1px dashed #d1d5db;border-radius:8px;padding:6px}
+ .ant-anchor-link{padding:2px 0}
+ .titleContainer___2E0OM{font-size:15px;font-weight:600;margin:16px 0 6px;
+   border-left:3px solid #4f46e5;padding-left:8px}
+ .titledesc___2Ke5H{font-size:12px;font-weight:400;color:#9ca3af}
+ .fieldItem___1hMDk{display:flex;gap:10px;margin:6px 0;align-items:flex-start}
+ .filedName___2rXII{width:180px;flex-shrink:0;font-size:13px;padding-top:5px}
+ .filedValue___orYso{width:520px;flex-shrink:0}
+ .ant-input{width:100%;padding:5px 9px;border:1px solid #d1d5db;border-radius:4px;font:inherit}
+ .addBtn___3r3aQ{display:inline-block;padding:4px 14px;border:1px dashed #4f46e5;
+   border-radius:4px;color:#4f46e5;cursor:pointer;font-size:13px}
+ .gridContainer___1K4Rp{border:1px solid #f1f5f9;border-radius:8px;padding:6px 12px;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<!-- 真实的锚点导航:12 条链接,class 里带 title,位于表单之前 -->
+<div class="ant-anchor-wrapper"><div class="ant-anchor fixed">
+ <div class="ant-anchor-link"><a class="ant-anchor-link-title" title="招聘信息来源">招聘信息来源</a></div>
+ <div class="ant-anchor-link"><a class="ant-anchor-link-title" title="基本信息">基本信息</a></div>
+ <div class="ant-anchor-link"><a class="ant-anchor-link-title" title="教育经历">教育经历</a></div>
+ <div class="ant-anchor-link"><a class="ant-anchor-link-title" title="实习经历">实习经历</a></div>
+ <div class="ant-anchor-link"><a class="ant-anchor-link-title" title="项目经历">项目经历</a></div>
+ <div class="ant-anchor-link"><a class="ant-anchor-link-title" title="荣誉奖励">荣誉奖励</a></div>
+ <div class="ant-anchor-link"><a class="ant-anchor-link-title" title="论文/期刊">论文/期刊</a></div>
+</div></div>
+
+<div class="gridContainer___1K4Rp">
+ <div class="titleContainer___2E0OM"><span>基本信息<span class="redTitle___2-QVW">*</span></span></div>
+ <div class="fieldItem___1hMDk"><div class="filedName___2rXII"><span class="requiredStar___28AbY">*</span>姓名:</div>
+  <div class="filedValue___orYso"><input class="ant-input" id="e-name" placeholder="请输入"></div></div>
+ <div class="fieldItem___1hMDk"><div class="filedName___2rXII"><span class="requiredStar___28AbY">*</span>手机号码:</div>
+  <div class="filedValue___orYso"><input class="ant-input" id="e-phone" placeholder="请输入"></div></div>
+</div>
+
+<!-- 关键:标题容器里挂着一段说明文字。整段算进去就超长度上限,
+     整个区块标题会被丢掉 —— 京东的教育/实习正是这样漏掉的。 -->
+<div class="gridContainer___1K4Rp" data-blk="edu">
+ <div class="titleContainer___2E0OM"><span>教育经历<span class="redTitle___2-QVW">*</span></span>
+  <div class="titledesc___2Ke5H">从最高学历开始填写，包括第一学历到最高学历的全部信息，填写后请仔细检查学历信息是否正确。</div></div>
+ <div class="contentItem___3Qrnc"><a role="button" class="am-button addBtn___3r3aQ"><span>+ 添加</span></a></div>
+</div>
+
+<div class="gridContainer___1K4Rp" data-blk="intern">
+ <div class="titleContainer___2E0OM"><span>实习经历</span>
+  <div class="titledesc___2Ke5H">据说这部分信息超级重要，是面试官的重要参考信息呢！</div></div>
+ <div class="contentItem___3Qrnc"><a role="button" class="am-button addBtn___3r3aQ"><span>+ 添加</span></a></div>
+</div>
+
+<div class="gridContainer___1K4Rp" data-blk="proj">
+ <div class="titleContainer___2E0OM"><span>项目经历</span></div>
+ <div class="contentItem___3Qrnc"><a role="button" class="am-button addBtn___3r3aQ"><span>+ 添加</span></a></div>
+</div>
+
+<div class="gridContainer___1K4Rp" data-blk="award">
+ <div class="titleContainer___2E0OM"><span>荣誉奖励</span></div>
+ <div class="contentItem___3Qrnc"><a role="button" class="am-button addBtn___3r3aQ"><span>+ 添加</span></a></div>
+</div>
+
+<script>
+/* 点「+ 添加」在本区块里追加一组字段,与京东行为一致 */
+const TPL = {
+  edu: [['学校名称','school'],['学院名称','college'],['专业名称','major']],
+  intern: [['公司名称','co'],['职位名称','title'],['工作描述','desc']],
+  proj: [['项目名称','pname'],['项目描述','pdesc']],
+  award: [['奖项名称','aname']],
+};
+let seq = 0;
+for (const blk of document.querySelectorAll('[data-blk]')) {
+  const kind = blk.dataset.blk;
+  blk.querySelector('.addBtn___3r3aQ').addEventListener('click', () => {
+    seq++;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = TPL[kind].map(([lab, key]) => `
+      <div class="fieldItem___1hMDk"><div class="filedName___2rXII">${lab}:</div>
+       <div class="filedValue___orYso">${key === 'desc' || key === 'pdesc'
+         ? `<textarea class="ant-input" id="${kind}-${key}-${seq}" placeholder="请输入"></textarea>`
+         : `<input class="ant-input" id="${kind}-${key}-${seq}" placeholder="请输入">`}</div></div>`).join('');
+    blk.insertBefore(wrap, blk.querySelector('.contentItem___3Qrnc'));
+  });
+}
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

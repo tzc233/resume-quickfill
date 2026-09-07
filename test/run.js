@@ -391,6 +391,43 @@ const CHECKS = {
     紧急联系人_邮箱不填: v('ec-email') === '',
   }),
 
+  /* 京东的表单【初始是空的】:每个经历区块里只有一个「+ 添加」,一个字段都没有。
+   * 两个坑叠在一起 —— 标题容器里挂着说明文字导致标题超长被丢弃;
+   * 展开逻辑又明确拒绝「页面上一个该域字段都没有」的情况。 */
+  'jd-empty.html': (v) => {
+    const s = window.__RQF.scan(window.RQF_TEST_PROFILE);
+    const secs = s.sections.map((x) => x.text);
+    const q = (sel) => document.querySelector(sel);
+    return {
+      // 标题带说明文字也要认得出
+      教育经历标题_说明文字不影响识别: s.sections.some((x) => x.text === '教育经历' && x.dom === '教育'),
+      实习经历标题_说明文字不影响识别: s.sections.some((x) => x.text === '实习经历' && x.dom === '实习'),
+      荣誉奖励_收进奖项域: s.sections.some((x) => x.text === '荣誉奖励' && x.dom === '奖项'),
+      锚点导航_未被当成标题: secs.filter((x) => x === '教育经历').length === 1,
+
+      // 从零展开:每个区块按档案段数点出对应数量
+      教育_从零展开两段: document.querySelectorAll('[data-blk=edu] .fieldItem___1hMDk').length === 6,
+      实习_从零展开两段: document.querySelectorAll('[data-blk=intern] .fieldItem___1hMDk').length === 6,
+      项目_从零展开一段: document.querySelectorAll('[data-blk=proj] .fieldItem___1hMDk').length === 2,
+      奖项_从零展开三段: document.querySelectorAll('[data-blk=award] .fieldItem___1hMDk').length === 3,
+
+      // 展开后要真的填进去
+      基本_姓名: v('e-name') === '李思远',
+      教育1_学校: q('[data-blk=edu] input').value === '示例大学',
+      教育_两段学校不同: (() => {
+        const xs = [...document.querySelectorAll('[data-blk=edu] input')]
+          .filter((i) => /school/.test(i.id)).map((i) => i.value);
+        return xs.length === 2 && xs[0] === '示例大学' && xs[1] === '样例学院';
+      })(),
+      实习_公司: [...document.querySelectorAll('[data-blk=intern] input')]
+        .filter((i) => /-co-/.test(i.id)).map((i) => i.value).join('|') === '甲公司|乙公司',
+      奖项_三段名称各不相同: (() => {
+        const xs = [...document.querySelectorAll('[data-blk=award] input')].map((i) => i.value);
+        return xs.length === 3 && new Set(xs).size === 3 && xs.every(Boolean);
+      })(),
+    };
+  },
+
   /* 京东校招(antd 3):左侧锚点导航把每个区块名再列一遍,且位于表单【之前】。
    * 不排除它的话,「最近的前置标题」对每个字段都会变成导航的最后一项,
    * 连「姓名」都被判进「发明成果专利」区块 —— 整页的区块判定失效。 */
