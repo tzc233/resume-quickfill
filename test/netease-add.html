@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>测试沙盒 · 纯图标加号</title>
+  <style>
+    body { font: 14px/1.6 -apple-system, "PingFang SC", sans-serif; width: 900px; margin: 24px auto; padding: 0 16px; color: #1f2937; }
+    h2 { font-size: 15px; margin: 20px 0 8px; border-left: 3px solid #4f46e5; padding-left: 8px; }
+    .ant-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+    .ant-form-item-label { width: 150px; flex-shrink: 0; color: #374151; font-size: 13px; }
+    .ant-input { width: 420px; padding: 5px 9px; border: 1px solid #d9d9d9; border-radius: 4px; font: inherit; }
+    .blk { border: 1px solid #f0f0f0; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; background: #fcfcfd; }
+    /* 图标按钮:宽高来自 font-size,没有文字节点 */
+    .anticon { display: inline-block; width: 18px; height: 18px; line-height: 1; cursor: pointer; color: #1890ff; }
+    .anticon svg { width: 1em; height: 1em; }
+    .u-operation-btn { display: inline-flex; gap: 10px; margin: 4px 0 12px; }
+    .f-cp { cursor: pointer; color: #1890ff; }
+    .ant-upload { display: inline-block; border: 1px dashed #d9d9d9; padding: 14px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:19px">纯图标加号(网易互娱结构)</h1>
+<p style="color:#9ca3af;font-size:12.5px">
+  加号是 <code>&lt;i aria-label="图标: plus-circle"&gt;</code>,<strong>textContent 为空</strong>;
+  紧挨着还有一个同款写法的 <code>close-circle</code> 删除图标、以及一个 <code>anticon-plus</code> 的头像上传口 ——
+  这两个一次都不能被点。
+</p>
+
+<!-- 头像上传:也是个 anticon-plus,点下去会弹文件选择框 -->
+<div class="ant-upload" id="avatar">
+  <i aria-label="图标: plus" class="anticon anticon-plus">
+    <svg viewBox="64 64 896 896" data-icon="plus" width="1em" height="1em" fill="currentColor"><path d="M482 152h60v720h-60z"></path></svg>
+  </i>
+  <div style="font-size:12px;color:#9ca3af">上传头像</div>
+</div>
+
+<h2>教育经历</h2>
+<div id="edu-list">
+  <div class="blk">
+    <div class="ant-row"><div class="ant-form-item-label"><label>学校名称</label></div>
+      <input class="ant-input edu-school" type="text" placeholder="请输入"></div>
+    <div class="ant-row"><div class="ant-form-item-label"><label>专业</label></div>
+      <input class="ant-input edu-major" type="text" placeholder="请输入"></div>
+  </div>
+</div>
+<div class="ant-col ant-col-2 u-operation-btn" data-list="edu">
+  <i aria-label="图标: close-circle" class="anticon anticon-close-circle f-cp" data-bad="edu-del">
+    <svg viewBox="64 64 896 896" data-icon="close-circle" width="1em" height="1em" fill="currentColor"><path d="M512 64C264.6 64 64 264.6 64 512z"></path></svg>
+  </i>
+  <i aria-label="图标: plus-circle" class="anticon anticon-plus-circle f-link f-cp" data-add="edu">
+    <svg viewBox="64 64 896 896" data-icon="plus-circle" width="1em" height="1em" fill="currentColor"><path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64z"></path></svg>
+  </i>
+</div>
+
+<h2>工作经历</h2>
+<div id="work-list">
+  <div class="blk">
+    <div class="ant-row"><div class="ant-form-item-label"><label>公司名称</label></div>
+      <input class="ant-input work-company" type="text" placeholder="请输入"></div>
+    <div class="ant-row"><div class="ant-form-item-label"><label>职位名称</label></div>
+      <input class="ant-input work-title" type="text" placeholder="请输入"></div>
+  </div>
+</div>
+<div class="ant-col ant-col-2 u-operation-btn" data-list="work">
+  <i aria-label="图标: close-circle" class="anticon anticon-close-circle f-cp" data-bad="work-del">
+    <svg viewBox="64 64 896 896" data-icon="close-circle" width="1em" height="1em" fill="currentColor"><path d="M512 64C264.6 64 64 264.6 64 512z"></path></svg>
+  </i>
+  <i aria-label="图标: plus-circle" class="anticon anticon-plus-circle f-link f-cp" data-add="work">
+    <svg viewBox="64 64 896 896" data-icon="plus-circle" width="1em" height="1em" fill="currentColor"><path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448z"></path></svg>
+  </i>
+</div>
+
+<h2>论文</h2>
+<div id="paper-list">
+  <div class="blk">
+    <div class="ant-row"><div class="ant-form-item-label"><label>论文名称</label></div>
+      <input class="ant-input paper-name" type="text" placeholder="请输入"></div>
+    <div class="ant-row"><div class="ant-form-item-label"><label>作者顺序</label></div>
+      <input class="ant-input paper-order" type="text" placeholder="请输入"></div>
+  </div>
+</div>
+<!-- 图标 + 文字同在一个 span 里:要留外层(文字才认得出是哪个域),不能只点里面的 i -->
+<span class="f-cp" data-add="paper"><i aria-label="图标: plus-circle" class="anticon anticon-plus-circle">
+  <svg viewBox="64 64 896 896" data-icon="plus-circle" width="1em" height="1em" fill="currentColor"><path d="M512 64C264.6 64 64 264.6 64 512z"></path></svg>
+</i>添加论文</span>
+
+<script>
+window.BAD_CLICKS = [];
+for (const el of document.querySelectorAll('[data-bad]')) {
+  el.addEventListener('click', () => window.BAD_CLICKS.push(el.dataset.bad));
+}
+document.getElementById('avatar').addEventListener('click', () => window.BAD_CLICKS.push('avatar'));
+
+const TPL = {
+  edu: `<div class="ant-row"><div class="ant-form-item-label"><label>学校名称</label></div>
+        <input class="ant-input edu-school" type="text" placeholder="请输入"></div>
+        <div class="ant-row"><div class="ant-form-item-label"><label>专业</label></div>
+        <input class="ant-input edu-major" type="text" placeholder="请输入"></div>`,
+  work: `<div class="ant-row"><div class="ant-form-item-label"><label>公司名称</label></div>
+        <input class="ant-input work-company" type="text" placeholder="请输入"></div>
+        <div class="ant-row"><div class="ant-form-item-label"><label>职位名称</label></div>
+        <input class="ant-input work-title" type="text" placeholder="请输入"></div>`,
+  paper: `<div class="ant-row"><div class="ant-form-item-label"><label>论文名称</label></div>
+        <input class="ant-input paper-name" type="text" placeholder="请输入"></div>
+        <div class="ant-row"><div class="ant-form-item-label"><label>作者顺序</label></div>
+        <input class="ant-input paper-order" type="text" placeholder="请输入"></div>`,
+};
+for (const el of document.querySelectorAll('[data-add]')) {
+  el.addEventListener('click', () => {
+    const k = el.dataset.add;
+    const blk = document.createElement('div');
+    blk.className = 'blk';
+    blk.innerHTML = TPL[k];
+    document.getElementById(k + '-list').appendChild(blk);
+  });
+}
+</script>
+<script src="run.js"></script>
+<script>rqfAuto()</script>
+</body>
+</html>

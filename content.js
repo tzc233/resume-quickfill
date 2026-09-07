@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.26.0';
+  const VERSION = '1.27.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -793,22 +793,55 @@
     [/编程语言|programming/i, 'prog'],
   ];
 
+  /* 加号可以完全没有文字。网易互娱的「教育经历」加号是个纯图标:
+   *   <i aria-label="图标: plus-circle" class="anticon anticon-plus-circle"><svg data-icon="plus-circle">
+   * textContent 是空的,按文字判会被整个漏掉 —— 这正是教育/工作/外语都报
+   * 「未找到可用的『+ 添加』」的原因。所以图标也算数,但判据要够窄:
+   *   · 只认 plus 家族(plus / plus-circle / plus-square),
+   *   · 明确排除紧挨着它的 close-circle(删除)以及 minus/trash 之类;
+   *   · 排除上传口 —— 头像上传也是个 anticon-plus,点下去会弹文件选择框。 */
+  const ICON_ADD = /(^|[^a-z])(plus|add)([^a-z]|$)/i;
+  const ICON_BAD = /close|minus|delete|trash|remove|cross|times|clear|upload|camera|picture|photo|avatar|image/i;
+  const clsOf = (el) => {
+    const c = el.className;
+    return typeof c === 'string' ? c : (c && c.baseVal) || '';
+  };
+  const iconSig = (el) => {
+    const svg = el.querySelector('svg[data-icon]');
+    return [el.getAttribute('aria-label') || '', el.getAttribute('data-icon') || '',
+      clsOf(el), svg ? svg.getAttribute('data-icon') || '' : ''].join(' ');
+  };
+  const isPlusIcon = (el) => {
+    if (el.closest('[class*="upload" i], [class*="avatar" i]')) return false;
+    const sig = iconSig(el);
+    return ICON_ADD.test(sig) && !ICON_BAD.test(sig);
+  };
+
   const findAddButtons = () => {
-    const sel = 'button, a, [role="button"], [class*="add" i], [class*="plus" i]';
+    const sel = 'button, a, [role="button"], [class*="add" i], [class*="plus" i], '
+      + 'i[aria-label], [data-icon], span[class*="icon" i]';
     const cand = [];
     for (const el of document.querySelectorAll(sel)) {
-      const t = clean(el.textContent || el.getAttribute('aria-label') || '');
-      if (!t || t.length > 16) continue;      // 过长的多半是段落而非按钮
-      if (ADD_BAD.test(t)) continue;
-      if (!ADD_TEXT.test(t) && t !== '+' && t !== '＋') continue;
+      const raw = clean(el.textContent || '');
+      const t = raw || clean(el.getAttribute('aria-label') || '');
+      let icon = false;
+      if (raw && raw.length <= 16 && !ADD_BAD.test(raw)
+        && (ADD_TEXT.test(raw) || raw === '+' || raw === '＋')) {
+        // 文字明说了是「添加」
+      } else if (!raw && isPlusIcon(el)) {
+        icon = true;                          // 没文字,但是个加号图标
+      } else continue;
       const r = el.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
       const cs = getComputedStyle(el);
       if (cs.visibility === 'hidden' || cs.display === 'none') continue;
-      cand.push({ el, text: t });
+      cand.push({ el, text: icon ? '' : t, icon });
     }
-    // 嵌套时保留最内层 —— 那才是真正可点的那个
-    return cand.filter((b) => !cand.some((o) => o !== b && b.el.contains(o.el)));
+    /* 嵌套时保留最内层 —— 那才是真正可点的那个。唯一例外:
+     * <span class="f-cp"><i data-icon="plus-circle"></i>添加IT技能</span>
+     * 外层带文字、内层是图标,这时要留外层(文字才认得出是哪个域)。 */
+    return cand.filter((b) => !cand.some((o) => o !== b && b.el.contains(o.el)
+      && !(o.icon && !b.icon)));
   };
 
   /** 页面上某个域现有几段。一段里可能有多个锚点字段(honor 的 kind+name、

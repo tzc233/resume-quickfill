@@ -291,6 +291,23 @@ const CHECKS = {
     };
   },
 
+  'netease-add.html': () => {
+    const q = (c) => [...document.querySelectorAll('.' + c)].map((e) => e.value);
+    const edu = q('edu-school'), work = q('work-company'), paper = q('paper-name');
+    return {
+      教育_纯图标加号也认得出: edu.length === 2,
+      教育1: edu[0] === '示例大学',
+      教育2: edu[1] === '样例学院',
+      工作_纯图标加号: work.length === 2,
+      工作1: work[0] === '甲公司',
+      工作2: work[1] === '乙公司',
+      论文_图标加文字同层_留外层: paper.length === 3,
+      论文1: paper[0].startsWith('Alpha'),
+      论文3: paper[2].startsWith('Gamma'),
+      删除图标和头像上传口_一次都没被点: window.BAD_CLICKS.length === 0,
+    };
+  },
+
   'expand-blocks.html': () => {
     const q = (c) => [...document.querySelectorAll('.' + c)].map((e) => e.value);
     const edu = q('edu-school'), work = q('work-company'), paper = q('paper-name'), comp = q('comp-name');
