@@ -422,6 +422,16 @@ const CHECKS = {
 
       // 头像/附件上传口不该被当成简历投放点
       专利上传_不乱传: document.getElementById('j-patent').files.length === 0,
+
+      /* 页面右下角的 AI 助手是 textarea,会被通配规则当成「描述」填掉,
+         而且内容直接显示在页面上 —— 必须整条跳过。 */
+      AI助手对话框_不填: v('j-ai') === '',
+      AI助手_扫描也不认: !(window.__RQF.scan(window.RQF_TEST_PROFILE).rows
+        .find((r2) => /回答由/.test(r2.label)) || {}).rule,
+
+      // 证件号码档案里为空,但规则要认得出英文标签(不认就连「未填写」都报不出来)
+      证件号_英文标签也认得: !!s.rows.find((r2) => r2.label.includes('id no')
+        || r2.label.includes('证件号码')),
     };
   },
 

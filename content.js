@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.21.0';
+  const VERSION = '1.22.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -38,7 +38,7 @@
     { k: 'fullName',  re: /姓名|中文名|^name$|full ?name|your ?name|candidate ?name|legal ?name/i,
       // 「导师姓名」曾被填成本人姓名 —— 凡是他人的姓名字段一律排除
       ex: /公司|学校|院校|银行|紧急|联系人姓名|家属|亲属|推荐人|监护人|导师|指导教师|项目名称|论文名称|奖项名称|竞赛名称|软件名称|专利名称|user ?name|company|school|university|bank|emergency|referr|advisor|supervisor/i },
-    { k: 'idNumber',  re: /证件号码|身份证号|身份证件|证件号|id (number|card)/i },
+    { k: 'idNumber',  re: /证件号码|身份证号|身份证件|证件号|id\s*(no|number|card)\b/i },
     { k: 'email',     re: /邮箱|电子邮件|e ?mail/i, ex: /验证码|verif|otp|\bcode\b/i },
     { k: 'phone',     re: /手机|电话|联系号码|联系方式|phone|mobile|\bcell\b/i,
       ex: /紧急|亲属|家属|座机|区号|验证码|emergency|country ?code|area ?code|verif|otp/i },
@@ -404,6 +404,11 @@
    * 自定义问答优先于内置规则:它是用户覆盖内置行为的唯一手段。
    * 内置规则内部按 RULES 顺序;任一候选文本命中排除词则整条规则作废。
    */
+  /* 页面上的 AI 助手 / 在线客服 / 意见反馈输入框不是申请表字段,但它们常是
+   * textarea,会被通配规则(*.desc)当成「描述」填掉 —— 内容还明晃晃显示在页面上。
+   * 靠免责声明这类固定话术识别,比靠位置可靠。 */
+  const SKIP_FIELD = /回答由.{0,6}ai.{0,6}生成|仅供参考.{0,10}甄别|智能(助手|客服|问答)|在线客服|意见反馈|问题反馈/i;
+
   const matchRules = (cands, customs) => {
     for (const c of cands) {
       for (const cu of customs || []) {
@@ -411,6 +416,8 @@
         if (kws.some((k) => c.t.includes(k))) return { custom: true, value: String(cu.a || '').trim(), label: c.t };
       }
     }
+    // 放在自定义问答之后:用户真想填它,仍可用自定义问答显式指定
+    if (cands.some((c) => SKIP_FIELD.test(c.t))) return null;
     /* 排除词只在「像标签」的短候选上判定。曾经按全体候选判定,结果:姓名框的
      * 兄弟文本是「性别 女 出生日期 年龄 最高学历毕业院校」—— 里面的「院校」
      * 把整条 fullName 规则作废(那条排除词本是为了防止姓名填成学校名),

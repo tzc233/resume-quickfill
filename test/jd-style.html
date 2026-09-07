@@ -110,6 +110,18 @@ for (const host of document.querySelectorAll('[data-sel]')) {
   host.appendChild(box);
 }
 </script>
+<!-- 页面右下角的 AI 助手:不是申请表的一部分,但它是 textarea,
+     会被通配规则(*.desc)当成「描述」填掉,内容还直接显示在页面上。 -->
+<div style="position:fixed;right:10px;bottom:10px;width:220px;border:1px solid #d1d5db;
+            border-radius:8px;padding:8px;background:#fff;font-size:12px">
+  <div>投递进展 · 如何更新简历</div>
+  <textarea class="ant-input" id="j-ai" placeholder="请输入问题"></textarea>
+  <div>回答由 AI 生成，内容仅供参考，请仔细甄别</div>
+</div>
+
+<div class="fieldItem___1hMDk"><div class="filedName___2rXII">证件号码 ID No.</div>
+ <div class="filedValue___orYso"><input class="ant-input" id="j-idno" placeholder="请输入"></div></div>
+
 <script src="run.js"></script>
 <script>rqfAuto()</script>
 </body>
