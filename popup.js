@@ -201,7 +201,12 @@ async function doScan() {
   /* 上次填充的跳过原因 —— 排查时最该看的一列。同一个原因归并计数,
    * 「12 个字段都是『已有选择,未覆盖』」这种系统性问题一眼就看出来。 */
   if (lastSkips.length || lastFilled) {
-    lines.push('', `## 上次填充结果:已填 ${lastFilled} 项,跳过 ${lastSkips.length} 项`, '');
+    /* 「未命中规则」那个数会骗人:京东 91 个字段只有 8 个未命中,听着不错,
+     * 实际只填上 24 个 —— 大头是「认出来了但没填成」。把真实覆盖率摆在最前面。 */
+    const touched = lastFilled + lastSkips.length;
+    lines.push('', `## 上次填充结果:**页面 ${rows.length} 个字段,填上 ${lastFilled} 个**`
+      + `,跳过 ${lastSkips.length} 个`
+      + (rows.length > touched ? `,另有 ${rows.length - touched} 个没被处理(多为附件口/禁填项)` : ''), '');
     const byReason = new Map();
     for (const sk of lastSkips) {
       const k = String(sk.reason || '未说明');
@@ -210,8 +215,8 @@ async function doScan() {
     }
     const sorted = [...byReason.entries()].sort((a, b) => b[1].length - a[1].length);
     for (const [reason, labels] of sorted) {
-      lines.push(`- **${reason}**(${labels.length} 项):${labels.slice(0, 12).join('、')}`
-        + (labels.length > 12 ? ' …' : ''));
+      // 不截断:被省掉的那几项往往正是问题所在(京东 20 项里只看得到 12 项)
+      lines.push(`- **${reason}**(${labels.length} 项):${labels.join('、')}`);
     }
   } else {
     lines.push('', '## 上次填充结果:本页还没点过「一键填充」', '',

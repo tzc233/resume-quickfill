@@ -10,7 +10,7 @@
 (() => {
   if (window.__RQF) return;
 
-  const VERSION = '1.27.0';
+  const VERSION = '1.28.0';
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -94,7 +94,11 @@
     // 「最高学历」归入基本信息,恒指向第一段教育经历,不受经历区块顺序影响
     { k: 'degreeAward', re: /最高学位/i },
     { k: 'degree',      re: /最高学历|highest (education|degree)/i },
-    { k: 'edu.degreeAward', re: /学位|academic degree/i },
+    /* 这条指的是【学位名】(学士/硕士),不是日期也不是是非题。
+     * 网易的「获得学位证时间」、京东的「是否双学位」都带「学位」二字,
+     * 被它抓走后往日期框里写「硕士」—— 写不进去还白占一个段位。 */
+    { k: 'edu.degreeAward', re: /学位|academic degree/i,
+      ex: /时间|日期|年月|编号|是否|双学位|dual/i },
     // 「请问你是否填写了本科学历」这类问句问的是"是/否",不是学历本身
     { k: 'edu.degree',      re: /学历|degree|education level|qualification/i, ex: /是否|请问/ },
     // 顺序要紧:三条都含「实验室」,笼统的那条必须垫底
@@ -220,7 +224,10 @@
     { k: '*.ymMonth', ym: 'm', re: /^月$|^month$/i },
     { k: '*.timeRange', r: 1, re: /起止时间|起止日期|时间范围/i },
     { k: '*.startTime', re: /开始时间|开始日期|起始时间|起始日期|开始年月|start (date|time)|from/i },
-    { k: '*.endTime',   re: /结束时间|结束日期|截止时间|截止日期|结束年月|end (date|time)|\bto\b/i },
+    /* 单独一个「至」就是结束时间。网易把起止拆成两个框、中间那个标签只写「至」,
+     * 7 个结束时间字段因此全部漏掉。只认【完全等于】「至」/「到」,
+     * 不能用子串 —— 「至今」「截至」「志愿」里都有这个字。 */
+    { k: '*.endTime',   re: /^至$|^到$|^~$|^-$|结束时间|结束日期|截止时间|截止日期|结束年月|end (date|time)|\bto\b/i },
     // 「作品描述」属于作品集,档案里没有对应项,不能让它顺着上下文捡到项目描述
     { k: '*.desc',      re: /描述|内容|简介|说明|description/i, ex: /作品|portfolio|简历解析|解析填充/i },
   ];
@@ -1216,8 +1223,16 @@
       }
       for (const el of ws) {
         const cands = widgetCands(el);
-        out.push({ el, tag: 'WIDGET', type: widgetKind(el), cands,
-          hit: matchRules(cands, customs), sec: sectionDomOf(el, sections) });
+        const kind = widgetKind(el);
+        let hit = matchRules(cands, customs);
+        /* 日期控件只接受日期类字段。网易的获奖区块里,日期框的上下文文字把
+         * 「奖项说明 湖南大学二等奖学金」整段卷了进来,于是日期框命中 award.name,
+         * 拿奖项名字去填日历 —— 写不进去还白占一个段位。
+         * 只管这一个方向:反过来【不】成立 —— 年/月本来就常做成下拉,
+         * Moka 的出生日期、起止年月全是 sd-Dropdown。 */
+        if (hit && hit.field && /日期/.test(kind) && !DATE_FIELD.test(hit.field)) hit = null;
+        out.push({ el, tag: 'WIDGET', type: kind, cands,
+          hit, sec: sectionDomOf(el, sections) });
       }
       // 两类元素混在一起,必须还原成页面上的先后顺序,否则区块计数会乱
       out.sort((a, b) => {
@@ -1527,7 +1542,14 @@
         }
         const entry = list[i];
         if (!entry) {
-          if (!hit.occupied) report.skipped.push({ label: hit.label, reason: `档案中没有第 ${i + 1} 段${DOM_CN[dom] || ''}经历` });
+          if (!hit.occupied) {
+            /* 光说「没有第 3 段」没法排查 —— 到底是页面真有 3 块,还是段号分配
+             * 跑偏了?把已占用的段号一并写出来,报告里一眼能分辨。 */
+            const taken = [...ctx.usedIdx[dom]].sort((a, b) => a - b).map((k) => k + 1);
+            report.skipped.push({ label: hit.label,
+              reason: `档案只有 ${list.length} 段${DOM_CN[dom] || ''}经历,这个字段被分到第 ${i + 1} 段`
+                + (taken.length ? `(第 ${taken.join('、')} 段已被占用)` : '') });
+          }
           continue;
         }
         // 占位条目的使命到此为止:序列已推进,值绝不该被写(框里本来就有值)
@@ -1707,6 +1729,9 @@
     '.el-select', '.el-cascader', '.el-date-editor', '.el-radio-group',
     '.arco-select', '.arco-picker', '.semi-select', '.semi-datepicker',
   ].join(',');
+
+  /* 日期类字段名 —— 用来判断某个规则该不该落在日期控件上 */
+  const DATE_FIELD = /time|date|^ym|birthday|graduat/i;
 
   const widgetKind = (el) => {
     const cls = String(el.className || '');
