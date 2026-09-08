@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><title>网易诊断回归</title>
+<style>input,textarea,.ant-select,.u-date-hitherto{display:block;width:280px;min-height:28px;margin:8px}.ant-calendar-cell{width:60px;height:30px}</style>
+<h2>工作经历</h2>
+<label>公司名称<input id="company"></label>
+<label>工作职责<textarea id="work"></textarea></label>
+<label>项目名称<input id="project"></label>
+<label>项目描述<textarea id="desc"></textarea></label>
+<div class="ant-form-item"><div class="ant-form-item-label">学历</div><div><span>全日制 博士 MBA 硕士 本科 大专</span><div class="ant-select" id="degree"><input readonly></div></div></div>
+<div class="ant-form-item"><div class="ant-form-item-label">出生日期</div><div class="u-date-hitherto" id="date"><input id="dateValue"><span class="ant-calendar-picker"><input readonly placeholder="点击选择 or 按格式输入"></span></div></div>
+<div class="ant-calendar" hidden id="calendar"><div class="ant-calendar-cell" title="2000-06-15" id="cell">15</div></div>
+<script src="../content.js"></script>
+<script>
+window.rqfRun=async()=>{
+ const checks={}; const profile={basic:{birthday:'2000-06-15'},work:[{company:'合成公司',desc:'工作内容'}],projects:[{name:'合成项目',desc:'项目内容'}]};
+ const date=document.getElementById('date'),input=document.getElementById('dateValue'),cal=document.getElementById('calendar');
+ date.onclick=()=>{cal.hidden=false};document.getElementById('cell').onclick=()=>{input.value='2000-06-15';cal.hidden=true};
+ let scan=__RQF.scan(profile);
+ checks['学历明确标签胜过相邻选项']=scan.rows.some(r=>r.rule==='edu.degree'&&r.label==='学历');
+ checks['复合日期只收集一次']=scan.rows.filter(r=>r.rule==='birthday').length===1;
+ await __RQF.fill(profile);
+ checks['项目描述保持项目归属']=document.getElementById('desc').value==='项目内容';
+ checks['工作描述保持工作归属']=document.getElementById('work').value==='工作内容';
+ checks['日期完整控件填写']=input.value==='2000-06-15';
+ scan=__RQF.scan(profile);
+ checks['日期记录回读证据']=scan.rows.some(r=>r.rule==='birthday'&&r.evidence.actions.some(a=>a.phase==='verify'&&a.ok));
+ input.value='';input.readOnly=true;document.getElementById('cell').onclick=()=>{input.value='2001-01-01';cal.hidden=true};
+ const second=await __RQF.fill(profile);
+ checks['错误日期不能报成功']=!second.filled.some(r=>r.label==='出生日期');
+ scan=__RQF.scan(profile);
+ checks['已命中但失败的日期也采样']=scan.rows.some(r=>r.rule==='birthday'&&r.snip&&r.evidence.actions.length);
+ const fails=Object.keys(checks).filter(k=>!checks[k]);const result={page:'netease-diagnostics.html',pass:!fails.length,total:Object.keys(checks).length,fails};
+ document.body.append(Object.entries(checks).map(([k,v])=>`${v?'✅':'❌'} ${k}`).join('\n'));return result;
+};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>

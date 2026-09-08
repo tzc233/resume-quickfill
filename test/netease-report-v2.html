@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>网易第二份报告回归</title>
+<style>.ant-calendar-picker,.ant-select{display:inline-block;min-width:160px;min-height:28px} input{width:150px;height:24px}.ant-calendar-month-panel-cell{width:80px;height:32px}.ant-calendar{width:240px;min-height:40px}[hidden]{display:none!important}</style>
+<h2>工作经历</h2>
+<label>公司名称<input id="company"></label>
+<label>项目名称<input id="project"></label>
+<div class="ant-form-item"><div class="ant-form-item-label">项目时间</div><div class="ant-calendar-picker"><input id="start" readonly placeholder="点击选择"></div><span>至</span><div class="ant-calendar-picker"><input id="end" readonly placeholder="点击选择"></div></div>
+<div class="ant-form-item"><div class="ant-form-item-label">学历</div><label><input id="check" type="checkbox">全日制</label><div class="ant-select"><span class="ant-select-selection-selected-value">硕士</span><input readonly></div></div>
+<div class="ant-form-item"><div class="ant-form-item-label">家庭所在地</div><input id="home"></div>
+<div class="ant-form-item"><div class="ant-form-item-label">出生日期</div><div class="ant-calendar-picker"><input id="birth" readonly></div></div>
+<div class="ant-calendar" hidden id="calendar"><div class="ant-calendar-month-panel-cell"><a title="2024-09" id="month">九月</a></div></div>
+<div class="ant-calendar" hidden id="unknown">不支持的日期面板</div>
+<script src="../content.js"></script><script>
+window.rqfRun=async()=>{
+const checks={},p={basic:{birthday:'2000-06-15',city:'合成现居城市'},education:[{degree:'硕士'}],work:[{company:'合成公司'}],projects:[{name:'合成项目',startTime:'2024-09',endTime:'2025-12'}]};
+let target;for(const id of ['start','end'])document.getElementById(id).onclick=()=>{target=document.getElementById(id);month.title=id==='start'?'2024-09':'2025-12';calendar.hidden=false};
+month.onclick=()=>{target.value=month.title;calendar.hidden=true};birth.onclick=()=>unknown.hidden=false;
+let scan=__RQF.scan(p);checks['项目起止日期按结构识别']=scan.rows.some(r=>r.rule==='proj.startTime')&&scan.rows.some(r=>r.rule==='proj.endTime');
+const report=await __RQF.fill(p);scan=__RQF.scan(p);
+checks['月面板开始日期正确']=start.value==='2024-09';checks['月面板结束日期正确']=end.value==='2025-12';
+checks['未操作复选框不借用下拉结果']=scan.rows.filter(r=>r.ctrl==='input:checkbox').every(r=>!r.res);
+checks['复选框保持未勾选']=!check.checked;
+checks['家庭所在地不使用现居城市']=home.value==='';
+checks['未知面板和未展开区分']=report.skipped.some(r=>r.reason.includes('日历已展开但日期格未识别'));
+checks['未知面板结构进入诊断']=scan.rows.some(r=>r.rule==='birthday'&&r.evidence.actions.some(a=>a.panel));
+const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'netease-report-v2.html',pass:!fails.length,total:Object.keys(checks).length,fails};
+};if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>

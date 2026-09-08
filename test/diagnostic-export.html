@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><title>诊断导出脱敏测试</title>
+<div id="status"></div><div id="result"></div><div id="chips"></div><button id="btn-fill"></button><button id="btn-scan"></button><button id="btn-check"></button><button id="btn-opts"></button>
+<script>
+const sample={version:'1.34.0',rows:[{label:'合成用户0817 pdf',ctrl:'自定义下拉',rule:'',sec:'工作',slot:'',res:'未处理',why:'合成奖项内容',note:'',filled:false,snip:'<div>[文]</div>',evidence:{candidates:[{t:'合成奖项内容',source:'ancestor'}],actions:[{phase:'failed-open',popups:[]}],diagnosis:{classification:'未识别，未进入填写流程',suggestions:['comp.name'],profileAvailability:['competitions:1段']}}}],sections:[],redactions:['合成用户0817.pdf'],lastFill:{filled:[],skipped:[{label:'合成奖项内容',reason:'选项里没有合成奖项内容'}]}};
+window.rqfApi={tabs:{query:async()=>[{id:1,title:'测试',url:'https://example.test/form'}]},storage:{local:{get:async()=>({profile:{basic:{fullName:'合成用户'},awards:[{name:'合成奖项内容'}]}})}},scripting:{executeScript:async()=>[{result:sample}]}};
+window.rqfEnsureHost=async()=>true;
+let exported='';Object.defineProperty(navigator,'clipboard',{value:{writeText:async s=>{exported=s}}});
+</script><script src="../popup.js"></script><script>
+window.rqfRun=async()=>{await doScan();const checks={
+'导出包含诊断证据':exported.includes('ancestor'),
+'文件名和姓名隐藏':!exported.includes('合成用户'),
+'表格原因候选中的奖项隐藏':!exported.includes('合成奖项内容'),
+'保留控件结构':exported.includes('自定义下拉'),
+'所有失败进入可执行索引':exported.includes('可执行诊断索引')&&exported.includes('failed-open'),
+'未识别字段包含语义建议':exported.includes('comp.name')};const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'diagnostic-export.html',pass:!fails.length,total:Object.keys(checks).length,fails}};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>

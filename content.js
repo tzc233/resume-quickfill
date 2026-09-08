@@ -8,9 +8,8 @@
  *   4) 支持多段教育 / 工作 / 项目经历(Moka、北森等 ATS 的可重复区块)。
  * ========================================================================== */
 (() => {
-  if (window.__RQF) return;
-
-  const VERSION = '1.30.0';
+  const VERSION = '1.36.0';
+  if (window.__RQF && window.__RQF.version === VERSION) return;
 
   /* ---------- 文本规整:拆 camelCase、转小写、去标点与提示词 ---------- */
   const clean = (s) => String(s ?? '')
@@ -66,7 +65,7 @@
     { k: 'availableDate',  re: /到岗|入职时间|onboard|available (date|time)|start date|earliest start/i },
     { k: 'yearsExp',       re: /工作年限|工作经验年|years? of (work )?experience|experience years?/i },
     { k: 'city',      re: /现居|居住地|居住城市|所在城市|当前城市|所在地|current (city|location)|\bcity\b/i,
-      ex: /期望|意向|preferred|desired|籍贯|户口|hometown|native|学校|院校|公司/i },
+      ex: /家庭|期望|意向|preferred|desired|籍贯|户口|hometown|native|学校|院校|公司/i },
 
     /* ---- 校园工作(须早于 work.desc,否则被「经历描述」抢走) ---- */
     { k: 'campusWork', re: /校园工作经历|校园经历|校园组织|学生工作|学生干部|校内活动|社团经历/i },
@@ -112,6 +111,11 @@
     { k: 'edu.gpaTotal', re: /gpa\s*总分|总分|满分/i },
     { k: 'edu.gpaScore', re: /gpa\s*(分数|成绩)|绩点|gpa|平均分|均分/i },
     { k: 'edu.timeRange', r: 1, re: /就读时间|在校时间|教育时间|学习时间/i },
+    { k: 'edu.degreeAwardDate', re: /获得学位证时间|学位授予日期/i },
+    { k: 'proj.startTime', re: /^项目开始时间$/ },
+    { k: 'proj.endTime', re: /^项目结束时间$/ },
+    { k: 'work.startTime', re: /^工作开始时间$/ },
+    { k: 'work.endTime', re: /^工作结束时间$/ },
     { k: 'edu.startTime', re: /入学时间|入校时间|入学年月|入学日期|开始就读|enrollment/i },
     { k: 'edu.endTime',   re: /毕业时间|毕业年月|graduation (date|time)|graduate/i },
 
@@ -333,7 +337,7 @@
       if (n.nodeType === 3) { out += ' ' + n.data; return; }
       if (n.nodeType !== 1) return;
       if (keep && n !== keep && !n.contains(keep)) {
-        try { if (n.matches(NOISE_SEL)) return; } catch { /* 选择器不支持则不跳过 */ }
+        try { if (n.matches(NOISE_SEL + ',[role=option],.ant-select-selection-selected-value,.ant-select-selection-item,[class*=display-value]')) return; } catch { /* 选择器不支持则不跳过 */ }
       }
       for (const c of n.childNodes) walk(c);
     };
@@ -373,7 +377,7 @@
      * 多半是几个字段的标签拼在一起。 */
     const push = (s, w, o = true, ph = false) => {
       const t = clean(s);
-      if (t && t.length <= 60) out.push({ t, w, o, ph });
+      if (t && t.length <= 60) out.push({ t, w, o, ph, source: ph ? 'placeholder' : w === 5.5 ? 'form-label' : w === 5 ? 'label/aria' : w === 2 ? 'attribute' : 'ancestor' });
     };
     try { if (el.labels) for (const l of el.labels) push(l.innerText, 5); } catch { }
     push(el.getAttribute('aria-label'), 5);
@@ -389,6 +393,12 @@
      * 「点击选择 or 按"yyyy-mm-dd"格式输入」—— 这是操作说明,不是字段名,
      * 却因为 placeholder 权重最高,把真标签「出生日期」整个顶掉了。 */
     push(el.placeholder, phWeight(el.placeholder), true, true);
+    // 先取同一表单项明确的标签，避开兄弟控件中的选项和当前值。
+    const row = el.closest('.ant-form-item, .el-form-item, .ehr-ui-form-item');
+    if (row) {
+      const label = row.querySelector('.ant-form-item-label, .el-form-item__label, .ehr-ui-form-item-label');
+      if (label && !label.contains(el) && el.type !== 'checkbox') push(label.innerText, 5.5);
+    }
     /* 逐层向上找标签。每层取两种候选:
      *   ① 兄弟文本 = 父容器文字 减去「通往输入框的那一支」—— 这才是标签所在;
      *   ② 整个父容器文字 —— 兜底。
@@ -441,7 +451,7 @@
    * 靠免责声明这类固定话术识别,比靠位置可靠。 */
   const SKIP_FIELD = /回答由.{0,6}ai.{0,6}生成|仅供参考.{0,10}甄别|智能(助手|客服|问答)|在线客服|意见反馈|问题反馈/i;
 
-  const matchRules = (cands, customs) => {
+  const matchRules = (cands, customs, section = null) => {
     for (const c of cands) {
       for (const cu of customs || []) {
         const kws = String(cu.q || '').split(/[,,、;;]/).map((s) => clean(s)).filter(Boolean);
@@ -488,6 +498,7 @@
         if (rule.ex && rule.ex.test(c.t)) continue;
         if (!rule.re.test(c.t)) continue;
         const [dom, field] = rule.k.includes('.') ? rule.k.split('.') : [null, rule.k];
+        if (dom === 'prog' && field === 'level' && section === 'lang') return null;
         return { dom, field, anchor: !!rule.a, range: !!rule.r, ym: rule.ym || '', label: c.t };
       }
     }
@@ -945,6 +956,10 @@
        * 「+ 添加」。原来「页面上没有这个域就跳过」会让整张表一个字段都填不出来。
        * 但不能无条件点 —— 必须页面确实有这个域的区块标题,按钮才认领得到。 */
       if (!have && !(sections || []).some((x) => x.dom === dom)) continue;
+      if (dom === 'prog' && have && !items.some(it => it.hit?.dom === dom && it.hit.anchor)) {
+        report.skipped.push({label:`${DOM_CN[dom]}经历`,reason:'缺少可确认段数的名称字段，未自动新增'});
+        continue;
+      }
       let added = 0;
       while (have < need && added < 6) {
         ui.step(`展开「${DOM_CN[dom] || dom}」区块 ${have + 1}/${need}…`, 0.05 + 0.08 * (added / 6));
@@ -1234,14 +1249,14 @@
         // 被自定义组件包住的原生输入框交给组件本身处理,避免往搜索框里打字
         if (ws.some((w) => w.contains(el))) continue;
         const cands = labelCands(el);
-        out.push({ el, tag, type, cands, hit: matchRules(cands, customs), sec: sectionDomOf(el, sections) });
+        out.push({ el, tag, type, cands, hit: matchRules(cands, customs, sectionDomOf(el, sections)), sec: sectionDomOf(el, sections) });
       }
       for (const el of ws) {
         const cands = widgetCands(el);
         const kind = widgetKind(el);
-        let hit = matchRules(cands, customs);
+        let hit = matchRules(cands, customs, sectionDomOf(el, sections));
         /* 日期控件只接受日期类字段。网易的获奖区块里,日期框的上下文文字把
-         * 「奖项说明 湖南大学二等奖学金」整段卷了进来,于是日期框命中 award.name,
+         * 「奖项说明 某某大学二等奖学金」整段卷了进来,于是日期框命中 award.name,
          * 拿奖项名字去填日历 —— 写不进去还白占一个段位。
          * 只管这一个方向:反过来【不】成立 —— 年/月本来就常做成下拉,
          * Moka 的出生日期、起止年月全是 sd-Dropdown。 */
@@ -1413,6 +1428,8 @@
        * 也该报「档案里没有第 N 段实习」,而不是拿全职经历去顶。 */
       const PAIR = { work: 'intern', intern: 'work' };
       if (PAIR[sec] === dom) return sec;
+      const related = new Set(['award', 'comp', 'honor']);
+      if (!related.has(dom) || !related.has(sec)) return dom;
       const sample = (P[LIST_OF[sec]] || [])[0];
       return (sample && field in sample) ? sec : dom;
     };
@@ -1776,7 +1793,7 @@
     '[class*="sd-Dropdown"]',   // Moka:年/月、性别、学历这些框全是它,打字会被吐回,必须点选
     '.ant-select', '.ant-picker', '.ant-radio-group', '.ant-checkbox-group',
     // antd 3 的类名是 ant-cascader-picker / ant-calendar-picker,精确类选择器够不着
-    '[class*="ant-cascader" i]', '[class*="ant-calendar-picker" i]',
+    '.u-date-hitherto', '[class*="ant-cascader" i]', '[class*="ant-calendar-picker" i]',
     '.el-select', '.el-cascader', '.el-date-editor', '.el-radio-group',
     '.arco-select', '.arco-picker', '.semi-select', '.semi-datepicker',
   ].join(',');
@@ -1798,7 +1815,11 @@
   };
 
   const collectCustom = (root, out) => {
-    for (const el of root.querySelectorAll(CUSTOM_WIDGET_SEL)) out.push(el);
+    for (const el of root.querySelectorAll(CUSTOM_WIDGET_SEL)) {
+      // 同名包装也用于普通可输入的“至今”文本框；仅把含日历的复合控件整体接管。
+      if (el.matches('.u-date-hitherto') && !el.querySelector('.ant-calendar-picker,.ant-picker,[role=grid]')) continue;
+      out.push(el);
+    }
     for (const n of root.querySelectorAll('*')) if (n.shadowRoot) collectCustom(n.shadowRoot, out);
     return out;
   };
@@ -1838,7 +1859,7 @@
   };
 
   const OPTION_SEL = [
-    '.ant-select-item-option', '.ant-select-item',
+    '.ant-select-item-option', '.ant-select-item', '.ant-select-dropdown-menu-item',
     '[role="option"]',
     '.el-select-dropdown__item', '.arco-select-option', '.semi-select-option',
     '[class*="sd-Menu-container"]',   // Moka:每行选项一个 container,文本在 sd-Select-keyword 里
@@ -1848,6 +1869,44 @@
     if (o.getAttribute('aria-disabled') === 'true' || /disabled/.test(o.className)) return false;
     const r = o.getBoundingClientRect();
     return r.width > 2 && r.height > 2;
+  });
+
+  const elementDebug = (el) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      tag: el.tagName.toLowerCase(),
+      role: el.getAttribute('role') || '',
+      cls: String(el.className || '').trim().split(/\s+/).slice(0, 4).join(' '),
+      visible: r.width > 2 && r.height > 2,
+      disabled: !!el.disabled || el.getAttribute('aria-disabled') === 'true',
+      readonly: !!el.readOnly,
+    };
+  };
+
+  const activePopupElements = () => {
+    const selectors = [
+      '.ant-calendar-picker-container', '.ant-calendar', '.ant-picker-dropdown',
+      '.ant-select-dropdown', '.ant-cascader-menus', '.el-select-dropdown',
+      '.el-picker-panel', '[role="listbox"]', '[role="dialog"]',
+    ].join(',');
+    return Array.from(document.querySelectorAll(selectors))
+      .filter((el) => calendarVisible(el) && el.getAttribute('aria-hidden') !== 'true'
+        && !/(^|\s)[^\s]*(?:hidden|leave)(?:\s|$)/i.test(String(el.className || '')))
+      .filter((el, i, all) => !all.some((outer, j) => i !== j && outer.contains(el)))
+      .slice(0, 6);
+  };
+
+  const visiblePopupDebug = () => activePopupElements()
+      .map((el) => ({ ...elementDebug(el), options: el.querySelectorAll(OPTION_SEL).length,
+        structure: domSnip(el).slice(0, 2400) }));
+
+  const optionDebug = (opts) => opts.slice(0, 30).map((o) => {
+    const t = clean(o.textContent || '');
+    return {
+      text: t.length <= 16 ? t : `[选项文本:${t.length}字]`,
+      ...elementDebug(o),
+    };
   });
 
   const pickOption = (opts, key, v) => {
@@ -1871,6 +1930,15 @@
       const mOpts = opts.filter((o) => /^(0?[1-9]|1[0-2])\s*月?$/.test(txt(o)));
       if (mOpts.length >= 3) return mOpts.find((o) => Number(txt(o).replace('月', '')) === Number(dm[2])) || null;
     }
+    if (key === 'rank') {
+      const ratio = String(v).match(/^(\d+)\s*\/\s*(\d+)/);
+      const percent = ratio && +ratio[1] > 0 && +ratio[2] >= +ratio[1] ? 100 * +ratio[1] / +ratio[2] : null;
+      if (percent !== null) {
+        const bands = opts.map(o => ({o, n:Number(txt(o).match(/^前\s*(\d+(?:\.\d+)?)$/)?.[1])}))
+          .filter(x => x.n >= percent && x.n <= 100).sort((a,b) => a.n-b.n);
+        if (bands.length) return bands[0].o;
+      }
+    }
     const nv = clean(v);
     return opts.find((o) => txt(o) === nv)
       || opts.find((o) => { const t = txt(o); return t && (t.includes(nv) || nv.includes(t)); })
@@ -1880,20 +1948,41 @@
   /* ---------- 自定义日期选择器 ----------
    * 不去翻日历:antd 的日期格子带 title="2027-06-15" / "2027-06",可以精确命中。
    * 命中不了再退回「往输入框打字 + 回车」,由组件自己解析。 */
-  const CELL_SEL = '.ant-picker-cell, .ant-calendar-cell, .el-date-table td, [role="gridcell"]';
+  const CELL_SEL = '.ant-picker-cell, .ant-calendar-cell, .ant-calendar-month-panel-cell, .ant-calendar-year-panel-cell, .el-date-table td, [role="gridcell"]';
 
   /* 日期格子的 title 各家写法完全不同:antd 4 是 ISO「2024-09-01」,
    * antd 3 中文 locale 是「2024年9月1日」,还有补零与不补零的差别。
    * 按字符串相等比对必然漏 —— 一律解析成数字再比。 */
+  const calendarVisible = el => !!el && el.getBoundingClientRect().width > 2
+    && el.getBoundingClientRect().height > 2 && getComputedStyle(el).visibility !== 'hidden';
+  const monthPanel = () => Array.from(document.querySelectorAll('.ant-calendar-month-panel'))
+    .find((el) => calendarVisible(el) && !/hidden|leave/i.test(String(el.closest('.ant-calendar-picker-container')?.className || '')));
+  const monthPanelYear = panel => {
+    const text = (panel?.querySelector('.ant-calendar-month-panel-year-select-content') || panel?.querySelector('.ant-calendar-month-panel-year-select'))?.textContent || '';
+    return Number(text.match(/\d{4}/)?.[0]) || 0;
+  };
+  const CN_MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+  const calendarState = () => {
+    const panel = monthPanel();
+    return panel ? {view:'month', year:monthPanelYear(panel), cells:panel.querySelectorAll('.ant-calendar-month-panel-cell').length}
+      : {view:visibleCal() ? 'other' : 'closed', yearMonth:panelYM()};
+  };
+
   const cellYMD = (c) => {
-    const t = String(c.getAttribute('title') || c.getAttribute('aria-label') || '').trim();
+    const titled = c.hasAttribute('title') || c.hasAttribute('aria-label') ? c : c.querySelector('[title],[aria-label]');
+    const t = String(titled?.getAttribute('title') || titled?.getAttribute('aria-label') || '').trim();
     const m = t.match(/(\d{4})\D{0,3}(\d{1,2})?\D{0,3}(\d{1,2})?/);
-    if (!m) return null;
-    return [Number(m[1]), Number(m[2] || 0), Number(m[3] || 0)];
+    if (m) return [Number(m[1]), Number(m[2] || 0), Number(m[3] || 0)];
+    if (c.matches('.ant-calendar-month-panel-cell')) {
+      const month = CN_MONTHS.indexOf(t || c.textContent.trim()) + 1;
+      const year = monthPanelYear(c.closest('.ant-calendar-month-panel'));
+      if (month && year) return [year, month, 0];
+    }
+    return null;
   };
 
   const findCell = (y, mo, d) => Array.from(document.querySelectorAll(CELL_SEL)).find((c) => {
-    if (/disabled/.test(c.className)) return false;
+    if (/disabled/.test(c.className) || c.getAttribute('aria-disabled') === 'true' || !calendarVisible(c)) return false;
     const cd = cellYMD(c);
     if (!cd) return false;
     if (cd[0] !== Number(y) || cd[1] !== Number(mo || 0) || cd[2] !== Number(d || 0)) return false;
@@ -1927,11 +2016,25 @@
    * 翻月按钮若用 document.querySelector 取,拿到的永远是第一个面板的按钮 ——
    * 那个多半是隐藏的,于是除了第一个日期,后面全部翻不动、填不上。 */
   const visibleCal = () => Array.from(document.querySelectorAll(CAL_ROOT))
-    .find((c) => c.getBoundingClientRect().width > 2 && c.querySelector(CELL_SEL));
+    .find((c) => calendarVisible(c) && c.querySelector(CELL_SEL));
 
   /* 日历打开时停在当月,目标年月往往不在面板里。按月份差点上一月/下一月翻过去 ——
    * 不翻的话,凡是不在当月的日期一律填不上(京东的入学时间差着两三年)。 */
   const navigateTo = async (y, mo) => {
+    // 月份视图的十二个格子共用表头年份。只使用该视图内部的翻年按钮。
+    if (monthPanel() && monthPanelYear(monthPanel())) {
+      for (let guard = 0; guard < 80; guard++) {
+        const panel = monthPanel(), year = monthPanelYear(panel);
+        if (!year) return false;
+        if (year === Number(y)) return true;
+        const button = panel.querySelector(year > Number(y)
+          ? '.ant-calendar-month-panel-prev-year-btn' : '.ant-calendar-month-panel-next-year-btn');
+        if (!calendarVisible(button) || button.getAttribute('aria-disabled') === 'true') return false;
+        realClick(button);
+        if (!await waitUntil(() => monthPanelYear(monthPanel()) !== year, 700)) return false;
+      }
+      return false;
+    }
     const want = Number(y) * 12 + Number(mo);
     /* 先按【年】跳,再按月微调。出生日期动辄差二十几年 —— 一月一月点要三百多下,
      * 早就撞上循环上限了。有年份按钮时一次跳 12 个月。 */
@@ -1951,7 +2054,11 @@
     return panelYM() === want;
   };
 
+  const actionTrace = new WeakMap();
   const fillDatePicker = async (el, v) => {
+    const trace = []; actionTrace.set(el, trace);
+    trace.push({ phase: 'before', target: elementDebug(el), input: elementDebug(el.querySelector('input')),
+      popups: visiblePopupDebug() });
     if (widgetValue(el)) return { ok: false, reason: '已有选择,未覆盖' };
     const m = String(v).match(/^(\d{4})[-/.年]?(\d{1,2})?[-/.月]?(\d{1,2})?/);
     if (!m) return { ok: false, reason: `「${v}」不是日期,请手动选` };
@@ -1960,13 +2067,37 @@
     const d = m[3] ? m[3].padStart(2, '0') : '';
 
     const input = el.querySelector('input');
+    trace.push({ phase: 'trigger', target: elementDebug(input || el) });
     realClick(input || el);
     // 面板出来了没有:任何一个可解析的日期格子都算
-    const opened = await waitUntil(() => (panelYM() || findCell(y, mo, 0) || findCell(y, 0, 0)
-      ? true : null), 1200);
+    let opened = await waitUntil(() => activePopupElements().find((n) => n.matches(CAL_ROOT) || n.querySelector(CAL_ROOT)), 1200);
 
+    if (!opened && input && input !== el) {
+      trace.push({ phase: 'retry-trigger', reason: '内部输入框未展开', target: elementDebug(el),
+        popups: visiblePopupDebug() });
+      realClick(el);
+      opened = await waitUntil(() => activePopupElements().find((n) => n.matches(CAL_ROOT) || n.querySelector(CAL_ROOT)), 700);
+    }
+    const visiblePanel = activePopupElements().find((n) => n.matches(CAL_ROOT) || n.querySelector(CAL_ROOT));
+    const recognized = !!(monthPanelYear(monthPanel()) || panelYM() || findCell(y, mo, 0) || findCell(y, 0, 0));
+    trace.push({ phase: 'opened', state: recognized ? 'recognized' : visiblePanel ? 'unknown-structure' : 'not-found',
+      popups: visiblePopupDebug() });
+    trace.push({calendar:calendarState()});
+    if (visiblePanel) trace.push({ panel: domSnip(visiblePanel) });
+    const verified = async () => {
+      await sleep(160);
+      const raw = String((el.querySelector('input') || {}).value || widgetValue(el));
+      const nums = raw.match(/\d+/g) || [];
+      const expected = [y, mo, d].filter(Boolean);
+      const ok = expected.every((part, i) => Number(part) === Number(nums[i]));
+      trace.push({ phase: 'verify', ok, actualShape: raw ? `date:${nums.length}parts` : 'empty' });
+      return ok ? raw : null;
+    };
     // 目标不在当前面板时,按月份差翻过去
-    if (opened && mo) await navigateTo(y, Number(mo));
+    if (opened && mo) {
+      const navigated = await navigateTo(y, Number(mo));
+      trace.push({navigation:navigated ? 'reached' : 'unavailable',calendar:calendarState()});
+    }
 
     /* 面板可能停在年/月/日任一视图,按 日 → 月 → 年 的精度顺序逐个尝试。
      * 档案只精确到月时,也试一次当月 1 号 —— 日视图里没有「整月」这个格子。 */
@@ -1977,8 +2108,10 @@
     for (const [ty, tm, td] of tries) {
       const cell = findCell(ty, tm, td);
       if (!cell) continue;
-      realClick(cell);
-      const got = await waitUntil(() => widgetValue(el) || null, 400);
+      trace.push({ phase: 'select-cell', cell: cellYMD(cell), target: elementDebug(cell) });
+      realClick(cell.querySelector('a,button,[role=button]') || cell);
+      await waitUntil(() => widgetValue(el) || null, 400);
+      const got = await verified();
       if (got) return { ok: true, value: got };
     }
 
@@ -1989,11 +2122,12 @@
       for (const type of ['keydown', 'keyup']) {
         input.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', keyCode: 13, bubbles: true }));
       }
-      const got = await waitUntil(() => widgetValue(el) || null, 400);
+      await waitUntil(() => widgetValue(el) || null, 400);
+      const got = await verified();
       if (got) return { ok: true, value: got };
     }
     closePopup();
-    return { ok: false, reason: opened ? '日历里没找到该日期,请手动选' : '日历未能展开,请手动选' };
+    return { ok: false, reason: recognized ? '日历里没找到该日期或回读不一致,请手动选' : visiblePanel ? '日历已展开但日期格未识别,请提供面板诊断' : '日历未能展开,请手动选' };
   };
 
   /* ---------- 自定义级联选择(城市等) ----------
@@ -2077,6 +2211,7 @@
     }
     const inp = el.querySelector('input');
     if (inp) return clean(inp.value || '');
+    if (el.querySelector('.ant-select-selection__placeholder')) return '';
     // 「必填项未填写」「暂无选项」是占位提示不是值 —— 当成值会把空组件误判成已填
     return clean(el.innerText || '')
       .replace(/请选择|请输入|请填写|(必填)?项?未填写|暂无选项|select|choose/gi, '').trim();
@@ -2088,6 +2223,9 @@
   const openHint = { idx: -1 };
 
   const fillWidget = async (el, key, v, force) => {
+    const trace=[];actionTrace.set(el,trace);
+    trace.push({ phase: 'before', target: elementDebug(el), input: elementDebug(el.querySelector('input')),
+      popups: visiblePopupDebug() });
     const cur = widgetValue(el);
     if (cur && !force) return { ok: false, reason: '已有选择,未覆盖' };
     if (cur && String(cur).trim() === String(v).trim()) return { ok: true, value: cur };
@@ -2109,9 +2247,11 @@
       const t = targets[i];
       if (!t) continue;
       if (t.tagName === 'INPUT') { try { t.focus(); } catch { } }
+      trace.push({ phase: 'trigger', index: i, target: elementDebug(t) });
       realClick(t);
       opts = await waitUntil(() => { const o = fresh(); return o.length ? o : null; },
         i === order[0] ? 500 : 250);
+      trace.push({ phase: 'after-trigger', index: i, options: fresh().length, popups: visiblePopupDebug() });
       if (opts) { openHint.idx = i; break; }
     }
     /* 还是没开:学校/专业这类远程搜索下拉往往【不点开】,只在输入后才去拉选项。
@@ -2128,7 +2268,8 @@
       // 探测失败要把搜索框擦干净,不能把半截关键词留在页面上
       if (!opts) setNative(inp0, '');
     }
-    if (!opts) { closePopup(); return { ok: false, reason: '下拉点不开、打字也不出选项,请手动选' }; }
+    if (!opts) { trace.push({ phase: 'failed-open', popups: visiblePopupDebug() }); closePopup(); return { ok: false, reason: '下拉点不开、打字也不出选项,请手动选' }; }
+    trace.push({ phase: 'options', count: opts.length, items: optionDebug(opts) });
     let target = pickOption(opts, key, v);
     if (!target) {
       /* 年份列表常虚拟滚动,目标不在已渲染的选项里。这类输入框接受打字过滤
@@ -2141,6 +2282,8 @@
       }
     }
     if (!target) {
+      trace.push({ phase: 'failed-match', targetShape: /^\d{4}[-/.]/.test(String(v)) ? 'date' : /^\d+\s*\/\s*\d+/.test(String(v)) ? 'ratio' : `text:${String(v).length}`,
+        items: optionDebug(fresh()) });
       if (inp0 && String(inp0.value || '').trim()) setNative(inp0, '');
       closePopup();
       return { ok: false, reason: `选项里没有「${v}」,请手动选` };
@@ -2148,7 +2291,8 @@
     realClick(target);
     // 轮询到值出现就立刻返回,不用固定等待 —— 后台标签页的定时器会被浏览器节流到 ~1s/次
     const got = await waitUntil(() => widgetValue(el) || null, 600);
-    if (!got) { closePopup(); return { ok: false, reason: '点选未生效,请手动选' }; }
+    if (!got) { trace.push({ phase: 'failed-commit', selected: elementDebug(target), popups: visiblePopupDebug() }); closePopup(); return { ok: false, reason: '点选未生效,请手动选' }; }
+    trace.push({ phase: 'committed', valueShape: `text:${String(got).length}` });
     return { ok: true, value: got };
   };
 
@@ -2173,6 +2317,21 @@
     const own = widgetValue(el);
     const cands = labelCands(el);
     const inner = clean(el.innerText || '');
+    // 一个表单项中的两个完整日期控件按结构分起止；内部代理输入不重复计数。
+    const dateRow = el.closest('.ant-form-item, .el-form-item, .ehr-ui-form-item');
+    if (dateRow && widgetKind(el) === '自定义日期') {
+      const selector = '.ant-calendar-picker,.ant-picker,.u-date-hitherto';
+      const all = Array.from(dateRow.querySelectorAll(selector));
+      const pair = all.filter(n => !all.some(other => other !== n && other.contains(n)));
+      const heading = cands.find(c => c.source === 'form-label')?.t || '';
+      if (pair.length === 2 && pair.includes(el) && /时间|日期|就读/.test(heading)) {
+        const end = pair.indexOf(el) === 1;
+        const ph = String(el.querySelector('input')?.placeholder || '');
+        const prefix = /项目/.test(heading) ? '项目' : /工作/.test(heading) ? '工作' : '';
+        const label = end && /获得学位证/.test(ph) ? '获得学位证时间' : prefix + (end ? '结束时间' : '开始时间');
+        cands.unshift({t:label,w:6,o:true,source:'date-pair'});
+      }
+    }
 
     /* Moka 年/月框的「年」字是组件内部的 addon —— labelCands 只往父级找,
      * 永远看不到它。补成候选;限两个字以内,免得把整串选项卷进来。 */
@@ -2185,7 +2344,7 @@
      * 给它最高权重会把真标签「出生日期」顶掉 —— 交给 phWeight 判轻重。 */
     const rawPh = String((el.querySelector('input') || {}).placeholder || '').trim();
     const ph = /^请(选择|输入|填写)/.test(rawPh) ? '' : clean(rawPh);
-    if (ph && ph !== own) cands.push({ t: ph, w: phWeight(rawPh), o: true });
+    if (ph && ph !== own) cands.push({ t: ph, w: phWeight(rawPh), o: true, ph: true });
 
     cands.sort((a, b) => b.w - a.w);
 
@@ -2209,7 +2368,7 @@
     for (const el of widgets) {
       const cands = widgetCands(el);
       const label = String((cands[0] && cands[0].t) || '(无标签)').slice(0, 40).replace(/\|/g, '/');
-      const hit = matchRules(cands, customs);
+      const hit = matchRules(cands, customs, sectionDomOf(el, sections));
       const key = hit ? (hit.custom ? '自定义问答' : (hit.dom ? `${hit.dom}.${hit.field}` : hit.field)) : '';
       const kind = widgetKind(el);
       /* 单选/多选组的 innerText 就是所有选项文字,无从判断是否已选中。
@@ -2226,8 +2385,7 @@
         sec: secName(sectionDomOf(el, sections)),
         note: labelWarn(label, el),
         snipEl: el,
-        filled: guessable && !!String(el.innerText || '')
-          .replace(/请选择|请输入|请填写|(必填)?项?未填写|暂无选项|\s/g, '').trim(),
+        filled: guessable && !!widgetValue(el),
       });
     }
     return rows;
@@ -2250,6 +2408,7 @@
     if (/\d/.test(label) && /^[\d\s.\/年月-]+$/.test(label)) why = '标签疑似是已填的值';
     else if (/未填写|请选择|请输入|暂无选项/.test(label)) why = '标签疑似是占位提示';
     else if (el && String(el.value || '').trim() && label === String(el.value).trim()) why = '标签就是当前值';
+    if (!why && /点击选择|博士.*硕士|硕士.*本科/.test(label)) why = '标签疑似包含选项或操作提示';
     if (!why) return '';
     const chain = [];
     let n = el && el.parentElement;
@@ -2258,6 +2417,35 @@
       if (c) chain.push(c);
     }
     return why + (chain.length ? `(${chain.join('<').slice(0, 40)})` : '');
+  };
+
+  const diagnosticAdvice = (row, P) => {
+    const label = clean(row.label || '');
+    const suggestions = [];
+    if (/大赛|竞赛/.test(label)) {
+      if (/名称/.test(label)) suggestions.push('comp.name');
+      if (/成绩|结果|等级|名次/.test(label)) suggestions.push('comp.result');
+      if (/时间|日期/.test(label)) suggestions.push('comp.date');
+    }
+    if (/游戏名称/.test(label)) suggestions.push('档案尚无游戏经历字段');
+    if (/游玩程度|游戏时长/.test(label)) suggestions.push('档案尚无游戏经历字段');
+    if (/language id|语言种类|语种/.test(label)) suggestions.push('lang.name');
+    if (/skill name|技能名称/.test(label)) suggestions.push('lang.name 或 prog.name，需结合所在重复组');
+    if (/工作时间/.test(label)) suggestions.push('work.startTime / work.endTime，需按同组位置区分');
+    if (/项目时间/.test(label)) suggestions.push('proj.startTime / proj.endTime，需按同组位置区分');
+    if (/家庭所在地/.test(label)) suggestions.push('档案缺少独立的家庭所在地字段');
+    const available = [];
+    if (suggestions.some((x) => x.startsWith('comp.'))) {
+      available.push(`competitions:${(P.competitions || []).length}段`);
+    }
+    if (suggestions.some((x) => x.startsWith('lang.'))) available.push(`languages:${(P.languages || []).length}段`);
+    if (suggestions.some((x) => x.includes('prog.'))) available.push(`progLangs:${(P.progLangs || []).length}段`);
+    return {
+      classification: row.rule ? (row.res === '跳过' ? '已识别但执行失败/跳过' : '已识别')
+        : row.filled ? '页面已有值且未识别' : '未识别，未进入填写流程',
+      suggestions,
+      profileAvailability: available,
+    };
   };
 
   /* 可疑字段的 DOM 骨架:往上取两层祖先,序列化成脱敏 HTML ——
@@ -2270,11 +2458,11 @@
       root = root.parentElement;
     }
     const walk = (n, depth) => {
-      if (depth > 5) return '…';
+      if (depth > 9) return '…';
       if (n.nodeType === 3) {
         const t = clean(n.data || '');
         if (!t) return '';
-        return (t.length <= 4 && !/\d/.test(t)) ? t : '[文]';
+        return '[文]';
       }
       if (n.nodeType !== 1) return '';
       const tag = n.tagName.toLowerCase();
@@ -2289,29 +2477,19 @@
       const kids = Array.from(n.childNodes).map((c) => walk(c, depth + 1)).join('');
       return `<${tag}${attrs.length ? ' ' + attrs.join(' ') : ''}>${kids}</${tag}>`;
     };
-    return walk(root, 0).slice(0, 420);
+    root = el.closest('.ant-form-item, .el-form-item, .ehr-ui-form-item') || root;
+    return walk(root, 0).slice(0, 5000);
   };
 
   const scan = (rawProfile) => {
     const P = normalize(rawProfile || {});
     const customs = P.custom || [];
     const rows = [];
-    /* 上次填充的逐字段台账。优先按【元素本身】取回,重复标签也不会串;
-     * 组件被 React 重渲染过的,元素换了新的,退回按「标签+出现次序」对齐。 */
+    /* 上次填充结果仅按元素身份取回；页面重建后的同名字段不冒领旧结果。 */
     const fo = (typeof window !== 'undefined' && window.__RQF_FIELDOUT) || null;
-    const log = (typeof window !== 'undefined' && window.__RQF_LAST
-      && window.__RQF_LAST.url === location.href && window.__RQF_LAST.fields) || [];
-    const queues = new Map();
-    for (const r of log) {
-      if (!r.label) continue;
-      if (!queues.has(r.label)) queues.set(r.label, []);
-      queues.get(r.label).push(r);
-    }
-    const outcomeOf = (el, label) => {
-      let r = null;
-      try { r = fo && fo.get(el); } catch { r = null; }
-      if (!r) { const q = queues.get(label); if (q && q.length) r = q.shift(); }
-      return r || null;
+    const outcomeOf = (el) => {
+      // DOM 已被替换时不猜测同名字段；宁可缺少历史结果，也不能把下拉结果给复选框。
+      try { return fo && fo.get(el) || null; } catch { return null; }
     };
     const widgets = outerWidgets();
     const sections = scanSections();
@@ -2324,7 +2502,7 @@
       if (type !== 'file' && widgets.some((w) => w.contains(el))) continue;
       const cands = labelCands(el);
       if (!cands.length && type !== 'file') continue;
-      const hit = matchRules(cands, customs);
+      const hit = matchRules(cands, customs, sectionDomOf(el, sections));
       const key = hit ? (hit.custom ? '自定义问答' : (hit.dom ? `${hit.dom}.${hit.field}` : hit.field)) : '';
       // 勾选框的 value 恒为 "on",必须看 checked;文件框要看 files
       const filled = (type === 'checkbox' || type === 'radio') ? el.checked
@@ -2357,13 +2535,28 @@
     const seen = new Set();
     let snips = 0;
     const sample = (r) => {
-      if (snips >= 12 || !r.snipEl) return;
+      if (snips >= 60 || !r.snipEl) return;
       const sn = domSnip(r.snipEl);
-      if (seen.has(sn)) return;
-      seen.add(sn);
+      const signature = r.rule + ':' + r.why + ':' + sn;
+      if (seen.has(signature)) return;
+      seen.add(signature);
       r.snip = sn;
       snips++;
     };
+    for (const r of rows) {
+      const el = r.snipEl;
+      r.evidence = {
+        candidates: (el ? (r.ctrl.startsWith('input:') || r.ctrl === 'textarea' || r.ctrl === 'select' ? labelCands(el) : widgetCands(el)) : []).slice(0, 8),
+        actions: actionTrace.get(el) || [],
+        connected: !!el?.isConnected,
+        section: r.sec, assigned: r.slot,
+        diagnosis: diagnosticAdvice(r, P),
+      };
+      if (r.rule.startsWith('proj.') && r.slot.startsWith('工作')) r.note = '规则与经历归属冲突';
+      if (r.ctrl === '自定义日期' && r.rule && !/time|date|birthday|ym/i.test(r.rule)) r.note = '日期控件命中了非日期规则';
+    }
+    for (const r of rows) if ((r.evidence.actions || []).length) sample(r);
+    for (const r of rows) if (r.note || (r.res === '跳过' && !/已有|档案中未填写/.test(r.why))) sample(r);
     for (const r of rows) if (r.note) sample(r);
     for (const r of rows) if (!r.rule && !r.note) sample(r);
     for (const r of rows) delete r.snipEl;   // DOM 引用无法跨 executeScript 序列化
@@ -2371,11 +2564,91 @@
     // 有版本号才能一眼看出这份清单是不是过期的
     return {
       url: location.href, title: document.title, version: VERSION, rows,
+      redactions: [...collect(document, []).flatMap(el => [el.value, ...Array.from(el.files || []).map(f => f.name)]),
+        ...Array.from(document.querySelectorAll('.ant-select-selection-selected-value,.ant-select-selection-item,[class*=display-value]')).map(el => el.textContent)]
+        .filter(v => typeof v === 'string' && v.trim().length >= 2),
       customWidgets: wRows.length,
       sections: sections.map((x) => ({ text: x.text.slice(0, 24), dom: secName(x.dom) })),
       lastFill: (typeof window !== 'undefined' && window.__RQF_LAST
         && window.__RQF_LAST.url === location.href) ? window.__RQF_LAST : null,
     };
+  };
+
+  /* 深度诊断只打开再关闭控件，不选择选项、不写值。它用于“尚未点过填充”时也能
+   * 带回弹层证据。相同标签、控件种类和主要 class 只探一次，避免重复区块把报告
+   * 和等待时间放大；最多探 14 个，足够覆盖教育/工作/项目时间与大赛控件。 */
+  const deepDiagnose = async (rawProfile) => {
+    const P = normalize(rawProfile || {});
+    // 先冻结静态字段清单。探测可能触发页面重绘、折叠或延迟卸载弹层，不能让这些
+    // 副作用把原本存在的工作/项目字段从最终报告里抹掉。
+    const initial = scan(P);
+    const customs = P.custom || [];
+    const sections = scanSections();
+    const widgets = outerWidgets();
+    const seen = new Set();
+    let probed = 0;
+    for (const el of widgets) {
+      if (probed >= 14 || widgetValue(el)) continue;
+      const kind = widgetKind(el);
+      if (kind !== '自定义日期' && kind !== '自定义下拉' && kind !== '自定义级联') continue;
+      const cands = widgetCands(el);
+      const hit = matchRules(cands, customs, sectionDomOf(el, sections));
+      const label = String((hit && hit.label) || (cands[0] && cands[0].t) || '(无标签)');
+      const cls = String(el.className || '').trim().split(/\s+/).slice(0, 2).join('.');
+      const signature = `${kind}:${label}:${cls}`;
+      if (seen.has(signature)) continue;
+      seen.add(signature); probed++;
+
+      const trace = [{ phase: 'probe-before', target: elementDebug(el), popups: visiblePopupDebug() }];
+      actionTrace.set(el, trace);
+      const candidates = [el.querySelector('input'), el, el.parentElement].filter(Boolean)
+        .filter((x, i, a) => a.indexOf(x) === i);
+      let opened = false;
+      for (let i = 0; i < candidates.length && !opened; i++) {
+        const target = candidates[i];
+        const beforeOptions = new Set(openOptions());
+        const beforePopups = new Set(activePopupElements());
+        trace.push({ phase: 'probe-trigger', index: i, target: elementDebug(target) });
+        realClick(target);
+        const openedDetail = await waitUntil(() => {
+          const popup = activePopupElements().filter((n) => !beforePopups.has(n));
+          const options = openOptions().filter((o) => !beforeOptions.has(o));
+          return (popup.length || options.length) ? { popup, options } : null;
+        }, i === 0 ? 800 : 400);
+        opened = !!openedDetail;
+        trace.push({ phase: 'probe-after-trigger', index: i, opened: !!opened,
+          popups: openedDetail ? openedDetail.popup.map((node) => ({ ...elementDebug(node),
+            options: node.querySelectorAll(OPTION_SEL).length,
+            structure: domSnip(node).slice(0, 2400) })) : [],
+          options: openedDetail ? optionDebug(openedDetail.options) : [] });
+      }
+      if (!opened) trace.push({ phase: 'probe-failed-open' });
+      closePopup();
+      await waitUntil(() => activePopupElements().length === 0 ? true : null, 500, 50);
+      const remaining = visiblePopupDebug();
+      trace.push({ phase: 'probe-closed', ok: remaining.length === 0, remaining });
+    }
+    const after = scan(P);
+    const queue = new Map();
+    for (const row of after.rows) {
+      const key = `${row.label}\u0000${row.ctrl}\u0000${row.sec || ''}`;
+      if (!queue.has(key)) queue.set(key, []);
+      queue.get(key).push(row);
+    }
+    const consumed = new Set();
+    const rows = initial.rows.map((row) => {
+      const key = `${row.label}\u0000${row.ctrl}\u0000${row.sec || ''}`;
+      const match = (queue.get(key) || []).shift();
+      if (!match) return row;
+      consumed.add(match);
+      return { ...row, res: row.res || match.res, why: row.why || match.why,
+        slot: row.slot || match.slot, note: row.note || match.note,
+        snip: match.snip || row.snip, evidence: match.evidence || row.evidence };
+    });
+    rows.push(...after.rows.filter((row) => !consumed.has(row)));
+    const result = { ...after, rows, redactions: [...new Set([...(initial.redactions || []), ...(after.redactions || [])])] };
+    result.deepProbe = { attempted: probed, uniqueSignatures: seen.size };
+    return result;
   };
 
   /* 诊断/测试用:某个「添加」按钮被认领给哪个经历域。
@@ -2386,5 +2659,5 @@
    * 是不是「自有标签」—— 光看最终命中的规则,分不清是候选没生成还是被过滤掉了。 */
   const debugCands = (el) => (el ? { cands: (el.tagName ? labelCands(el) : []), widget: widgetCands(el) } : null);
 
-  window.__RQF = { version: VERSION, fill, scan, addButtonDomain, debugCands };
+  window.__RQF = { version: VERSION, fill, scan, deepDiagnose, addButtonDomain, debugCands };
 })();

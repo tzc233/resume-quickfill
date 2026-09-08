@@ -127,7 +127,7 @@ async function doFill() {
   res.innerHTML = renderReport(agg);
 }
 
-/* 扫描字段清单:不写入任何值,导出本页所有可见字段及其命中的规则,便于排查漏填 */
+/* 深度诊断:不写入/选择值，但会逐个打开再关闭代表性空控件，以采集真实弹层。 */
 async function doScan() {
   const status = $('#status'), res = $('#result');
   res.innerHTML = '';
@@ -141,7 +141,7 @@ async function doScan() {
     status.textContent = window.rqfNoHostMessage();
     return;
   }
-  status.textContent = '正在扫描字段…';
+  status.textContent = '正在深度诊断（会依次打开并关闭空白控件，不会选择或写入）…';
 
   let results;
   try {
@@ -152,7 +152,7 @@ async function doScan() {
         const ext = (typeof browser !== 'undefined' && browser.storage) ? browser : chrome;
         try {
           const st = await ext.storage.local.get('profile');
-          return window.__RQF ? window.__RQF.scan(st.profile || {}) : null;
+          return window.__RQF ? await window.__RQF.deepDiagnose(st.profile || {}) : null;
         } catch { return null; }
       },
     });
@@ -163,7 +163,10 @@ async function doScan() {
   const lastSkips = [];
   let lastFilled = 0;
   let ver = '';
+  const privateValues = [];
+  let probed = 0;
   for (const r of results || []) if (r && r.result && r.result.rows) {
+    privateValues.push(...(r.result.redactions || []));
     rows.push(...r.result.rows);
     sections.push(...(r.result.sections || []));
     if (r.result.lastFill) {
@@ -171,6 +174,7 @@ async function doScan() {
       lastFilled += (r.result.lastFill.filled || []).length;
     }
     ver = r.result.version || ver;
+    probed += (r.result.deepProbe && r.result.deepProbe.attempted) || 0;
   }
   if (!rows.length) { status.textContent = '没有扫描到任何表单字段。'; return; }
 
@@ -187,12 +191,13 @@ async function doScan() {
   const lines = [
     `# 诊断报告 — ${tab.title || ''}`,
     tab.url,
-    `引擎版本 ${ver || '未知'}(与 README 不符说明扩展未刷新)`,
+    `引擎版本 ${ver || '未知'}(请与已安装扩展版本核对)`,
     `档案概况(仅段数):${listCounts} · 基本信息 ${basicN}/${CHECK_BASIC.length} 项`,
     sections.length
       ? `识别到的区块标题:${sections.map((x) => `${x.text}→${x.dom}`).join(' · ')}`
       : '未识别到任何区块标题(泛化标签将只能靠前后邻居猜归属)',
     `共 ${rows.length} 个字段:${miss.length} 个未命中规则,${warns} 个标签定位可疑`,
+    `深度探测:${probed} 个代表性空白控件（仅打开并关闭，未选择、未写值）`,
     '',
     /* 一行一个字段,结果直接写在这一行上。原来「填充结果」是另一张按标签分组的表,
      * 页面上有两个「学院名称」时根本对不上是哪一行没填成。 */
@@ -231,18 +236,52 @@ async function doScan() {
     }
   } else {
     lines.push('', '## 上次填充结果:本页还没点过「一键填充」', '',
-      '> 先点一次填充再复制报告,跳过原因往往比字段清单更能说明问题。');
+      '> 报告已执行不写值的深度探测；真实填写结果仍需点过「一键填充」后才会出现。');
+  }
+
+  const actionable = rows.filter((r) => (r.evidence && r.evidence.actions && r.evidence.actions.length)
+    || (!r.rule && !r.filled)
+    || (r.res === '跳过' && !/已有|档案中未填写/.test(r.why || '')));
+  if (actionable.length) {
+    lines.push('', '## 可执行诊断索引（所有失败与未识别字段）', '',
+      '> 这一节不会因 DOM 片段配额而遗漏。detailId 可与后面的详细结构对应。', '', '```json');
+    lines.push(JSON.stringify(actionable.map((r, i) => ({
+      detailId: `D${String(i + 1).padStart(3, '0')}`,
+      label: r.label,
+      control: r.ctrl,
+      rule: r.rule || null,
+      section: r.sec || null,
+      assigned: r.slot || null,
+      result: r.res || null,
+      reason: r.why || null,
+      diagnosis: r.evidence && r.evidence.diagnosis,
+      actions: r.evidence && r.evidence.actions,
+    })), null, 2), '```');
   }
 
   const snips = rows.filter((r) => r.snip);
   if (snips.length) {
-    lines.push('', '## 可疑/未识别字段的 DOM 骨架(已脱敏:值→[值],长文本→[文])', '');
+    lines.push('', '## 失败/可疑字段证据（结构文本已隐藏，分享前请检查）', '');
     for (const r of snips) {
-      lines.push(`- 「${r.label}」(${r.rule || '未命中'}):`, '', '```html', r.snip, '```', '');
+      lines.push(`- 「${r.label}」(${r.rule || '未命中'}):`, '', '```html', r.snip, '```', '```json', JSON.stringify(r.evidence || {}, null, 2), '```', '');
     }
   }
   try {
-    await navigator.clipboard.writeText(lines.join('\n'));
+    // 对整份导出做替换，表格、原因与候选证据也可能混入值。
+    const gather = value => {
+      if (typeof value === 'string' && value.trim().length >= 2) privateValues.push(value.trim());
+      else if (value && typeof value === 'object') Object.values(value).forEach(gather);
+    };
+    gather(pf);
+    const normalized = value => value.replace(/([a-z\d])([A-Z])/g, '$1 $2').toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+    let exported = lines.join('\n');
+    const secrets = [...new Set(privateValues.flatMap(v => [v, normalized(v)]))]
+      .filter(v => v.length >= 2).sort((a, b) => b.length - a.length);
+    for (const secret of secrets) exported = exported.split(secret).join('[值]');
+    exported = exported.replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[邮箱]')
+      .replace(/\b1[3-9]\d{9}\b/g, '[手机]');
+    await navigator.clipboard.writeText(exported);
     status.textContent = `✅ 诊断报告已复制(${rows.length} 个字段,${miss.length} 个未命中,${warns} 个标签可疑),直接粘贴即可`;
   } catch {
     status.textContent = `扫描到 ${rows.length} 个字段,但复制失败,请看下方列表`;

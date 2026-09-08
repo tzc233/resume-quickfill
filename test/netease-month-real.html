@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8"><title>网易实际中文月份面板回归</title>
+<style>input{width:240px;height:28px}.ant-calendar-picker{display:inline-block}.ant-calendar{width:300px}.ant-calendar-month-panel-cell{width:80px;height:30px}a{display:inline-block;min-width:20px;min-height:20px}[hidden]{display:none!important}</style>
+<body><script src="../content.js"></script><script>
+const names=['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+window.rqfRun=async()=>{
+const checks={},details=[];
+for(const test of [{name:'过去六年',value:'2020-09'},{name:'跨年未来',value:'2028-02'},{name:'当前选中月仍可提交',value:'2026-09'},{name:'禁用月份',value:'2026-04',disabled:4},{name:'组件回读错误',value:'2026-03',wrong:true},{name:'翻年无响应',value:'2020-09',stall:true}]){
+ document.body.innerHTML='<label>出生日期<span class="ant-calendar-picker"><input readonly></span></label><div class="ant-calendar-picker-container ant-calendar-picker-container-placement-bottomLeft" hidden><div class="ant-calendar ant-calendar-month ant-calendar-month-calendar" tabindex="0"><div class="ant-calendar-month-calendar-content"><div class="ant-calendar-month-header-wrap"><div class="ant-calendar-header"><div><a class="ant-calendar-prev-year-btn" role="button" title="上一年 (Control键加左方向键)"></a><a class="ant-calendar-prev-month-btn" role="button"></a><span class="ant-calendar-ym-select"><a class="ant-calendar-year-select" role="button">2026年</a><a class="ant-calendar-month-select" role="button">9月</a></span><a class="ant-calendar-next-month-btn"></a><a class="ant-calendar-next-year-btn"></a></div><div class="ant-calendar-month-panel"></div></div></div></div></div></div>';
+ const input=document.querySelector('input'),container=document.querySelector('.ant-calendar-picker-container'),panel=document.querySelector('.ant-calendar-month-panel');let year=2026,outerClicks=0,opened=0,commits=0;
+ document.querySelectorAll('.ant-calendar-header>div>a').forEach(a=>a.onclick=()=>outerClicks++);
+ const render=()=>{panel.innerHTML='<div><div class="ant-calendar-month-panel-header"><a class="ant-calendar-month-panel-prev-year-btn" role="button" title="上一年 (Control键加左方向键)"></a><a class="ant-calendar-month-panel-year-select" role="button" title="选择年份"><span class="ant-calendar-month-panel-year-select-content">'+year+'</span><span class="ant-calendar-month-panel-year-select-arrow">x</span></a><a class="ant-calendar-month-panel-next-year-btn" role="button" title="下一年 (Control键加右方向键)"></a></div><div class="ant-calendar-month-panel-body"><table class="ant-calendar-month-panel-table" cellspacing="0" role="grid"><tbody class="ant-calendar-month-panel-tbody">'+Array.from({length:4},(_,r)=>'<tr role="row">'+names.slice(r*3,r*3+3).map((n,j)=>'<td role="gridcell" title="'+n+'" class="ant-calendar-month-panel-cell '+(r*3+j+1===9?'ant-calendar-month-panel-selected-cell ant-calendar-month-panel-current-cell ':'')+(test.disabled===r*3+j+1?'ant-calendar-month-panel-cell-disabled':'')+'"><a class="ant-calendar-month-panel-month">'+n+'</a></td>').join('')+'</tr>').join('')+'</tbody></table></div></div>';
+ panel.querySelector('.ant-calendar-month-panel-prev-year-btn').onclick=()=>{if(!test.stall){year--;render()}};panel.querySelector('.ant-calendar-month-panel-next-year-btn').onclick=()=>{year++;render()};
+ panel.querySelectorAll('td').forEach((td,i)=>td.querySelector('a').onclick=()=>{if(td.className.includes('disabled'))return;commits++;input.value=test.wrong?'2001-01':year+'-'+String(i+1).padStart(2,'0');container.hidden=true});};
+ render();input.onclick=()=>{opened++;container.hidden=!container.hidden};
+ const result=await __RQF.fill({basic:{birthday:test.value}});
+ checks[test.name]=test.disabled||test.wrong||test.stall?result.filled.length===0:input.value===test.value&&result.filled.length===1;
+ checks[test.name+'不误点外层导航']=outerClicks===0;
+ checks[test.name+'只打开一次']=opened===1;
+ if(test.disabled)checks['禁用月份不提交']=commits===0;
+ details.push({name:test.name,value:input.value,filled:result.filled,skipped:result.skipped,year,opened});
+ const scan=__RQF.scan({basic:{birthday:test.value}});if(test.name==='过去六年')checks['月份视图结构化证据']=scan.rows.some(r=>r.evidence.actions.some(a=>a.calendar?.view==='month'));
+ if(!test.disabled&&!test.wrong&&!test.stall){const again=await __RQF.fill({basic:{birthday:test.value}});checks[test.name+'重复填写不重选']=again.filled.length===0&&opened===1;}
+}
+const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'netease-month-real.html',pass:!fails.length,total:Object.keys(checks).length,fails,details:fails.length?details:undefined};};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>

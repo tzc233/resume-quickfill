@@ -1,0 +1,46 @@
+<!doctype html><meta charset="utf-8"><title>深度诊断回归</title>
+<style>
+  .ant-calendar-picker,.ant-select{display:block;width:240px;min-height:28px;margin:10px}
+  .ant-calendar-picker input{width:220px;height:26px}.ant-calendar,.ant-select-dropdown{width:260px;min-height:60px}
+  .ant-calendar-month-panel-cell,.ant-select-dropdown-menu-item{width:70px;height:28px}
+  [hidden]{display:none!important}
+</style><body>
+<h2>工作经历</h2>
+<div class="ant-form-item"><div class="ant-form-item-label">工作时间</div>
+  <span class="ant-calendar-picker" id="date"><input readonly placeholder="点击选择"></span></div>
+<div class="ant-form-item"><div class="ant-form-item-label">大赛名称</div>
+  <div class="ant-select" id="contest"><input readonly></div></div>
+<div class="ant-form-item" id="vanishing"><div class="ant-form-item-label">大赛成绩</div>
+  <input placeholder="请输入大赛成绩"></div>
+<div class="ant-select-dropdown slide-up-leave slide-up-leave-active" id="stale" role="listbox">
+  <div class="ant-select-dropdown-menu-item" role="option">旧弹层干扰项</div></div>
+<div class="ant-calendar" id="calendar" hidden><div class="ant-calendar-month-panel">
+  <div class="ant-calendar-month-panel-year-select"><span class="ant-calendar-month-panel-year-select-content">2026</span></div>
+  <div class="ant-calendar-month-panel-cell" title="一月"><a>一月</a></div></div></div>
+<div class="ant-select-dropdown" id="menu" hidden role="listbox">
+  <div class="ant-select-dropdown-menu-item" role="option">学科竞赛</div>
+  <div class="ant-select-dropdown-menu-item" role="option">创新创业</div></div>
+<script src="../content.js"></script><script>
+window.rqfRun=async()=>{
+  let selections=0;
+  date.onclick=()=>{calendar.hidden=false;vanishing.remove()};contest.onclick=()=>menu.hidden=false;
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){calendar.hidden=true;menu.hidden=true}});
+  document.querySelectorAll('[role=option],.ant-calendar-month-panel-cell a').forEach(x=>x.onclick=()=>selections++);
+  const result=await __RQF.deepDiagnose({work:[{startTime:'2026-01'}],competitions:[{name:'合成竞赛'}]});
+  const dateRow=result.rows.find(r=>r.label==='工作时间');
+  const contestRow=result.rows.find(r=>r.label==='大赛名称');
+  const vanishedRow=result.rows.find(r=>r.label==='大赛成绩');
+  const checks={
+    '探测两个代表控件':result.deepProbe.attempted===2,
+    '日期弹层结构已记录':dateRow.evidence.actions.some(a=>a.phase==='probe-after-trigger'&&a.opened&&a.popups.length),
+    '大赛选项已记录':contestRow.evidence.actions.some(a=>a.phase==='probe-after-trigger'&&a.options.some(o=>o.text==='学科竞赛')),
+    '退场旧弹层未串入日期证据':dateRow.evidence.actions.some(a=>a.phase==='probe-after-trigger'&&a.opened&&a.popups.every(p=>!String(p.structure||'').includes('旧弹层干扰项'))),
+    '探测重渲染后仍保留原始字段':!!vanishedRow,
+    '大赛语义建议已记录':contestRow.evidence.diagnosis.suggestions.includes('comp.name'),
+    '探测没有选择值':selections===0&&!date.querySelector('input').value&&!contest.querySelector('input').value,
+    '探测后弹层关闭':calendar.hidden&&menu.hidden,
+  };
+  const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'deep-diagnostics.html',pass:!fails.length,total:Object.keys(checks).length,fails,debug:fails.length?{dateRow,deepProbe:result.deepProbe}:undefined};
+};if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'))
+  .catch(error=>parent.postMessage({__rqf:true,page:'deep-diagnostics.html',pass:false,total:1,fails:[String(error&&error.stack||error)]},'*'));
+</script>

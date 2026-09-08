@@ -732,7 +732,7 @@ const CHECKS = {
       常驻导航_零误点: window.NAV_CLICKS === 0,
 
       诊断_识别为自定义下拉: s.rows.some((r2) => r2.rule === 'gender' && r2.ctrl === '自定义下拉'),
-      诊断_空组件不误判已填: s.rows.some((r2) => r2.rule === 'gender' && r2.filled === false),
+      诊断_已点选组件能读出值: s.rows.some((r2) => r2.rule === 'gender' && r2.filled === true),
 
       // 收起态文字是「必填项未填写」的组合框:占位词不算值,必须真填
       学习形式_占位词不算已填: document.getElementById('m-form').textContent.trim() === '全日制',

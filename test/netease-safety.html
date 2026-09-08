@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><title>网易诊断连带问题回归</title><style>.ant-select{width:220px;min-height:28px;margin:8px}.ant-select-dropdown-menu-item{width:100px;height:28px}[hidden]{display:none!important}</style><body>
+<h2>教育经历</h2><label>学校名称<input value="合成大学"></label><div class="ant-form-item"><div class="ant-form-item-label">班级排名</div><div class="ant-select" id="rank"><div class="ant-select-selection__placeholder">点击选择</div></div></div>
+<h2>语言能力</h2><div class="ant-form-item"><div class="ant-form-item-label">掌握程度</div><div class="ant-select" id="language"><div class="ant-select-selection__placeholder">点击选择</div></div></div><button id="add">添加</button>
+<div id="menu" hidden><div class="ant-select-dropdown-menu-item">前5%</div><div class="ant-select-dropdown-menu-item">前10%</div><div class="ant-select-dropdown-menu-item">前20%</div></div>
+<script src="../content.js"></script><script>
+window.rqfRun=async()=>{let adds=0,languageClicks=0;add.onclick=()=>adds++;language.onclick=()=>languageClicks++;rank.onclick=()=>menu.hidden=false;
+menu.querySelectorAll('div').forEach(option=>option.onclick=()=>{rank.innerHTML='<span class="ant-select-selection-selected-value">'+option.textContent+'</span>';menu.hidden=true});
+const p={education:[{school:'合成大学',rank:'2/30(实验班)'}],progLangs:[{name:'Python',level:'熟练'},{name:'Java',level:'了解'}]};
+await __RQF.fill(p);await __RQF.fill(p);const scan=__RQF.scan(p);const checks={
+'空占位下拉可点选':rank.textContent==='前10%',
+'外语程度不套用编程熟练度':languageClicks===0,
+'重复填充不新增错误语言条目':adds===0,
+'诊断不报告错误编程匹配':!scan.rows.some(r=>r.rule==='prog.level')};const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'netease-safety.html',pass:!fails.length,total:4,fails};};if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>
