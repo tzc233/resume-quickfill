@@ -1,0 +1,142 @@
+<!doctype html><meta charset="utf-8">
+<title>讯飞 phoenix-select:没有 role/aria,弹层类名也没见过</title>
+<style>
+ .phoenix-select{display:inline-block;min-width:200px;min-height:28px;border:1px solid #ccc}
+ .phoenix-select input{width:180px;height:24px}
+ .zz-layer{position:absolute;background:#fff;border:1px solid #ddd;z-index:9}
+ .zz-layer div{height:24px;padding:2px 8px}
+</style>
+<div id="root"></div>
+
+<script>
+/* 结构照着 2.9.3 那份诊断报告(讯飞 iflytek.zhiye.com)的祖先链复刻:
+   控件到带「教育经历」标题的那一层之间正好 20 层包装 —— phoenix-select 比普通
+   输入框多垫 7 层(unmodeled-layer / inner / protect / content + select + ul + li),
+   旧的 depth<20 差一层够不着,于是同一个区块里普通文本框认得出 education、
+   隔壁的「学历」下拉却报「未识别字段」。
+
+   弹层部分是【合成】的:报告的深度探测只采到了日历,没采到下拉弹层,
+   它真实的类名我并不知道。这里故意用一组没有任何选择器认识的类名,
+   用来验证「不靠类名、只靠结构」这条路走不走得通。 */
+const WRAPPERS = ['sc-caiLqq', 'sc-cTAqQK', 'sc-AjmGg', 'sc-khQegj', 'sc-hUpaCq',
+  'ux-standard-form', 'form twoLineFormStyleLong', 'form-part', 'form-part-body',
+  'fields-row field-two clearfix', 'fields-col'];
+
+const buildSection = (heading, items) => {
+  const sec = document.createElement('div');
+  sec.className = 'sc-iAKWXU eSNZXI';
+  const title = document.createElement('div');
+  title.className = 'sc-sectionTitle';
+  title.textContent = heading;
+  sec.appendChild(title);
+  let cursor = sec;
+  for (const cls of WRAPPERS) {
+    const d = document.createElement('div'); d.className = cls;
+    cursor.appendChild(d); cursor = d;
+  }
+  for (const it of items) cursor.appendChild(it);
+  return sec;
+};
+
+const phoenixSelect = (id, label) => {
+  const item = document.createElement('div');
+  item.className = 'form-item form-item--phoenix';
+  item.innerHTML =
+    '<div class="form-item__title form-item__title--right">'
+    + `<label class="form-item__text">${label}</label></div>`
+    + '<div class="form-item__control"><div class="phoenix-unmodeled-layer block">'
+    + '<div class="phoenix-unmodeled-layer__inner"><div class="phoenix-unmodeled-layer__protect">'
+    + '<div class="phoenix-unmodeled-layer__content phoenix-unmodeled-layer__content--block">'
+    + `<div class="phoenix-select phoenix-select--editable phoenix-select--large" id="${id}">`
+    + '<span class="phoenix-select__calcEle"></span>'
+    + '<div class="phoenix-select__placeHolder phoenix-select__placeHolder--show">请选择</div>'
+    + '<ul class="phoenix-select__content"><li class="phoenix-select__inputWrapper">'
+    + '<input class="phoenix-select__input phoenix-select__input--unText"></li></ul>'
+    + '<div class="phoenix-select__switchArrow"></div>'
+    + '</div></div></div></div></div></div>';
+  return item;
+};
+
+const phoenixText = (id, label) => {
+  const item = document.createElement('div');
+  item.className = 'form-item form-item--phoenix';
+  item.innerHTML =
+    '<div class="form-item__title form-item__title--right">'
+    + `<label class="form-item__text">${label}</label></div>`
+    + '<div class="form-item__control"><div class="phoenix-input">'
+    + `<input class="phoenix-input__input" type="text" id="${id}" placeholder="请输入"></div></div>`;
+  return item;
+};
+
+const root = document.getElementById('root');
+// 教育区块:一个普通文本框(旧版认得出)+ 一个 phoenix 下拉(旧版够不着)
+root.appendChild(buildSection('教育经历', [phoenixText('school', '学校名称'), phoenixSelect('deg', '学历')]));
+// 区块外的下拉:档案里没有对应数据,一个选项都不该点
+root.appendChild(phoenixSelect('src', '如何了解到讯飞校招信息'));
+
+const OPTS = { deg: ['博士研究生', '硕士研究生', '本科', '大专'],
+               src: ['学校就业网', '公司官网', '朋友推荐', '宣讲会'] };
+window.clicked = [];
+for (const id of ['deg', 'src']) {
+  const box = document.getElementById(id);
+  box.querySelector('input').addEventListener('mousedown', () => {
+    if (document.querySelector('.zz-layer')) return;
+    setTimeout(() => {                       // 弹层在点击之后才挂上 DOM
+      const layer = document.createElement('div');
+      layer.className = 'zz-layer';
+      const r = box.getBoundingClientRect();
+      layer.style.left = (r.left + scrollX) + 'px';
+      layer.style.top = (r.bottom + scrollY) + 'px';
+      for (const t of OPTS[id]) {
+        const row = document.createElement('div'); row.textContent = t; layer.appendChild(row);
+      }
+      layer.addEventListener('mousedown', (e) => {
+        const row = e.target.closest('.zz-layer > div');
+        if (!row) return;
+        window.clicked.push(row.textContent);
+        box.querySelector('.phoenix-select__placeHolder')
+          .classList.remove('phoenix-select__placeHolder--show');
+        const wrap = document.createElement('span');
+        wrap.className = 'phoenix-select__tipWrapper phoenix-select__tipWrapper--visible';
+        const tip = document.createElement('span');
+        tip.className = 'phoenix-select__tipEle';    // 选中值落在 tipEle 里 —— 报告里的真实行为
+        tip.textContent = row.textContent;
+        wrap.appendChild(tip);
+        box.querySelector('.phoenix-select__content').appendChild(wrap);
+        layer.remove();
+      });
+      document.body.appendChild(layer);
+    }, 120);
+  });
+}
+</script>
+
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script>
+<script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+(async () => {
+  const P = { basic: {}, education: [{ school: '示例大学', degree: '硕士研究生' }] };
+  const before = __RQF_V2_PARTS.discover();
+  const degField = before.find((f) => /学历/.test(f.text));
+  const adapterOf = (f) => (__RQF_V2_PARTS.adapters.find((a) => a.supports(f)) || {}).id;
+  const pre = {
+    '没有 role 也被认成下拉': adapterOf(degField) === 'popup-combobox',
+    '包装层很深也认得出区块': degField.section && degField.section.domain === 'education',
+    '解析出 education.degree': (() => { const sp = __RQF_V2_PARTS.resolve(degField).spec;
+      return sp.domain === 'education' && sp.field === 'degree'; })(),
+  };
+  const r = await __RQF_V2.fill(P);
+  const tip = (id) => (document.getElementById(id)
+    .querySelector('.phoenix-select__tipEle') || {}).textContent || '';
+  const checks = Object.assign(pre, {
+    '不认识的弹层类名_靠结构找到选项': tip('deg') === '硕士研究生',
+    '回读确认写入': r.v2.filled.length >= 1,
+    '学校名称照常填': document.getElementById('school').value === '示例大学',
+    '档案里没有的值_不瞎选': tip('src') === '',
+    '只点了目标那一项': window.clicked.length === 1 && window.clicked[0] === '硕士研究生',
+    '弹层收掉了': !document.querySelector('.zz-layer'),
+  });
+  parent.postMessage({ __rqf: true, pass: Object.values(checks).every(Boolean), checks,
+    total: Object.keys(checks).length }, '*');
+})();
+</script>

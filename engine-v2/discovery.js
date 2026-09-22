@@ -19,7 +19,12 @@
   };
   const sectionOf = (el) => {
     let node = el;
-    for (let depth = 0; depth < 20 && node && node !== document.body; depth++, node = node.parentElement) {
+    /* 上溯层数要够深。讯飞的 phoenix-select 在控件和表单项之间垫了 7 层包装
+     * (unmodeled-layer / inner / protect / content + select + ul + li),
+     * 区块标题正好落在第 20 层外 —— 同一个教育区块里,普通文本框认得出 education,
+     * 隔壁的「学历」下拉就报「未识别字段」。循环本来就以 document.body 收口,
+     * 而且只接受能对上别名表的短标题,放深不会乱认。 */
+    for (let depth = 0; depth < 40 && node && node !== document.body; depth++, node = node.parentElement) {
       const heading = node.querySelector?.(':scope > h1,:scope > h2,:scope > h3,:scope > legend,:scope > .title,:scope > .titles,:scope > [class*="section-title"],:scope > [class*="module-title"]');
       const text = clean(heading && heading.textContent);
       const hit = V2.sectionAliases.find(([re]) => re.test(text));

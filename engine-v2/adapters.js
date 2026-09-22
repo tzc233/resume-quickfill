@@ -1,6 +1,10 @@
 (() => {
   const V2 = window.__RQF_V2_PARTS;
-  const ownerSelector = '.ant-select,.el-select,.aui-select';
+  /* 只用于「这个控件该由哪个适配器驱动」,不参与字段语义判断。
+   * 讯飞(zhiye.com)的 phoenix-select 没有 role=combobox、没有 aria-haspopup、
+   * 也没有 aria-controls —— 三条通用判据一条都不满足,而 nativeText 又显式排除了它,
+   * 结果 20 个控件两头都不收,整页 2.x 流水线填 0 项。 */
+  const ownerSelector = '.ant-select,.el-select,.aui-select,.phoenix-select';
   const emit = (el, value) => {
     const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
@@ -19,16 +23,59 @@
     if (!option) return false; f.el.value = option.value; f.el.dispatchEvent(new Event('change', { bubbles: true })); return f.el.value === option.value;
   } };
   const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 2 && r.height > 2 && getComputedStyle(el).visibility !== 'hidden'; };
+  /* 选项行的结构化兜底。类名选择器只认得几家组件库,遇到没见过的(讯飞 phoenix 就是)
+   * 一无所获。但「弹层里一组同父、同标签、同 class 的短文本兄弟节点」是所有下拉
+   * 共有的 DOM 规律,与组件库无关。
+   * 安全性来自调用方:下面只会点【文本完全等于目标值】的那一项 ——
+   * 即使这里认错了一组节点,也不会误点出一个错误的选择。 */
+  const structuralOptions = (added) => {
+    const byParent = new Map();
+    for (const el of added) {
+      if (!el.isConnected || !visible(el)) continue;
+      if (el.querySelector('input,textarea,select')) continue;   // 那是容器,不是选项
+      const text = (el.textContent || '').trim();
+      if (!text || text.length > 40) continue;
+      const parent = el.parentElement;
+      if (!parent) continue;
+      let groups = byParent.get(parent);
+      if (!groups) byParent.set(parent, groups = new Map());
+      const key = el.tagName + '|' + (typeof el.className === 'string' ? el.className : '');
+      const list = groups.get(key) || [];
+      list.push(el); groups.set(key, list);
+    }
+    let best = [];
+    for (const groups of byParent.values()) {
+      for (const list of groups.values()) {
+        // 至少两行,且文本不能全都一样(一样的多半是装饰而不是选项)
+        if (list.length < 2 || list.length <= best.length) continue;
+        if (new Set(list.map((o) => o.textContent.trim())).size < 2) continue;
+        best = list;
+      }
+    }
+    return best;
+  };
   const combo = { id: 'popup-combobox', supports: (f) => f.role === 'combobox' || f.el.getAttribute('aria-haspopup') === 'listbox' || !!f.el.closest(ownerSelector), async write(f, value, spec) {
     const trigger = f.el;
     const learned = value && typeof value === 'object' ? value : null;
     const aliases = learned ? [learned.text, learned.value].filter(Boolean) : ((spec.enum && spec.enum[value]) || [value]);
     const norm = (x) => String(x || '').trim().toLowerCase().replace(/\s+/g, '');
-    const currentOwner = f.el.closest(ownerSelector) || f.el;
-    const read = () => f.el.value || currentOwner.querySelector('.ant-select-selection-item,.ant-select-selection-placeholder,.el-select__selected-item')?.textContent || '';
-    if (aliases.some((a) => norm(read()) === norm(a))) return true;
+    // 读值交给 V2.readValue —— 它已经知道 phoenix 的值在 tipEle 里,不在 input 上
+    if (aliases.some((a) => norm(V2.readValue(f)) === norm(a))) return true;
     const optionSelector = '[role=option],[role=treeitem],.ant-select-item-option,.ant-select-dropdown-menu-item,.el-select-dropdown__item,.aui-select-dropdown__item,.aui-select-dropdown li';
     const before = new Set(Array.from(document.querySelectorAll(optionSelector)).filter(visible));
+    /* 结构化兜底需要知道「这一次点击之后新出现了什么」。弹层有两种出现方式:
+     * 新挂上 DOM,或者本来就在、靠 class/style 切换可见 —— 两种都要盯。 */
+    const added = new Set();
+    const note = (n) => { if (n && n.nodeType === 1) { added.add(n); for (const d of n.querySelectorAll('*')) added.add(d); } };
+    const mo = new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type === 'attributes') note(m.target);
+        else for (const n of m.addedNodes) note(n);
+      }
+    });
+    mo.observe(document.documentElement,
+      { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+    const done = (v) => { mo.disconnect(); return v; };
     trigger.focus(); trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); trigger.click();
     trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
     let options = [], target = null, searched = false, scrolls = 0;
@@ -39,7 +86,10 @@
       const scope = controlled && document.getElementById(controlled.split(/\s+/)[0]);
       options = Array.from((scope || document).querySelectorAll(optionSelector)).filter((o) => visible(o) && (scope || !before.has(o)) && o.getAttribute('aria-disabled') !== 'true');
       options = options.filter((o) => !o.matches('.is-disabled,[disabled]'));
-      const matches = options.filter((o) => aliases.some((a) => norm(o.textContent) === norm(a)));
+      if (!options.length) options = structuralOptions(added);   // 没见过的组件库走结构判断
+      let matches = options.filter((o) => aliases.some((a) => norm(o.textContent) === norm(a)));
+      // 嵌套时只留最内层:结构化兜底会同时收下外层 li 和内层 span,两者文本相同
+      matches = matches.filter((m) => !matches.some((o) => o !== m && m.contains(o)));
       if (matches.length === 1) target = matches[0];
       if (matches.length > 1) { f.failure = '多个同名候选，无法唯一选择'; break; }
       if (!target && n === 8 && trigger.tagName === 'INPUT' && !trigger.readOnly) {
@@ -54,19 +104,18 @@
         }
       }
     }
-    if (!target) { if (searched) emit(trigger, originalSearch); f.failure ||= options.length ? '搜索/滚动后未找到唯一匹配选项' : '未发现可关联的选项弹层'; trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); trigger.blur(); return false; }
+    if (!target) { if (searched) emit(trigger, originalSearch); f.failure ||= options.length ? '搜索/滚动后未找到唯一匹配选项' : '未发现可关联的选项弹层'; trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); trigger.blur(); return done(false); }
     target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); target.click();
     await new Promise((r) => setTimeout(r, 700));
     if (!f.el.isConnected) {
       const fresh = V2.discover().filter((x) => x.text === f.text && x.section?.domain === f.section?.domain);
-      if (fresh.length !== 1) { f.failure = '选择后组件替换，无法唯一复查'; return false; }
+      if (fresh.length !== 1) { f.failure = '选择后组件替换，无法唯一复查'; return done(false); }
       f.el = fresh[0].el;
     }
-    const owner = f.el.closest(ownerSelector) || f.el;
-    const finalValue = f.el.value || owner.querySelector('.ant-select-selection-item,.ant-select-selection-placeholder,.el-select__selected-item')?.textContent || '';
+    const finalValue = V2.readValue(f);
     const ok = aliases.some((a) => norm(finalValue) === norm(a)) && (!searched || !visible(target) || target.getAttribute('aria-selected') === 'true');
     if (!ok) f.failure = '选择后显示值未保留';
-    return ok;
+    return done(ok);
   } };
   const editable = { id: 'contenteditable', supports: (f) => f.el.isContentEditable, async write(f, value) {
     f.el.textContent = String(value); f.el.dispatchEvent(new Event('input', { bubbles: true })); f.el.dispatchEvent(new Event('change', { bubbles: true }));
