@@ -63,6 +63,7 @@
       <h2>证件信息</h2>
       <p class="hint">⚠️ 证件号码属敏感信息,保存后以<strong>明文</strong>存在浏览器本地存储中。国内表单几乎必填,但要不要存由你决定——不填的话每次手动输入即可,其余字段照常自动填充。</p>
       <div class="grid">
+        <label>证件类型<select data-path="basic.idType"><option value="">自动判断</option><option>身份证</option><option>护照</option><option>港澳居民来往内地通行证</option><option>台湾居民来往大陆通行证</option></select></label>
         <label>证件号码(身份证)<input data-path="basic.idNumber" autocomplete="off"></label>
       </div>
     </section>

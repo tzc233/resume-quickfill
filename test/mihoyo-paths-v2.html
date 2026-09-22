@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8">
+<label>公司名称<input id="practices_0_companyName"></label><label>职位名称<input id="practices_0_jobTitle"></label>
+<label>公司名称<input id="practices_1_companyName"></label><label>工作职责<textarea id="practices_1_summary"></textarea></label>
+<label>职务<input id="projects_0_projectDuty"></label><label>学院名称<input id="educations_1_collegeName"></label>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+(async()=>{await __RQF_V2.fill({basic:{},work:[{company:'甲公司',title:'甲职位'},{company:'乙公司',desc:'乙职责'}],projects:[{role:'项目负责人'}],education:[{college:'甲学院'},{college:'乙学院'}]});const expected=['甲公司','甲职位','乙公司','乙职责','项目负责人','乙学院'];const values=[...document.querySelectorAll('input,textarea')].map(x=>x.value);parent.postMessage({__rqf:true,pass:values.every((v,i)=>v===expected[i]),total:6,values},'*')})();
+</script>

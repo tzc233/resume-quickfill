@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>本地选择学习</title>
+<style>select{display:block;width:200px;height:30px}</style>
+<label for="nature">公司性质</label><select id="nature"><option value="">请选择</option><option value="private">民营</option><option value="state">国企</option></select>
+<script>const memory={};window.chrome={storage:{local:{async get(k){return {[k]:memory[k]}},async set(v){Object.assign(memory,v)}}}};</script>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/learning.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+window.rqfRun=async()=>{const field=__RQF_V2_PARTS.discover()[0];await __RQF_V2_PARTS.rememberSelection(field,null,{text:'民营',value:'private',adapter:'native-select'});const result=await __RQF_V2.fill({basic:{}});const info=await __RQF_V2_PARTS.learningInfo();const checks={
+  '无档案字段也能复用':nature.value==='private',
+  '结果标记来自学习':result.v2.filled.some(x=>x.learned&&x.value==='民营'),
+  '本地记录可诊断':info.current>=1,
+};const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'learning-v2.html',version:result.version,pass:!fails.length,total:Object.keys(checks).length,fails}};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>

@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8">
+<style>input,[contenteditable]{width:180px;min-height:24px} [hidden]{display:none!important} #scroll{height:30px;overflow:auto} #spacer{height:180px}</style>
+<input id="opaque" autocomplete="name">
+<div aria-label="电子邮件" contenteditable="true"></div>
+<input role="combobox" aria-label="性别" aria-controls="searchmenu" id="search">
+<div id="searchmenu" hidden><div role="option">请输入搜索条件</div></div>
+<input role="combobox" readonly aria-label="民族" aria-controls="scroll" id="scrollinput">
+<div id="scroll" hidden><div id="spacer"><div role="option">其他</div></div></div>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+const menu=document.getElementById('searchmenu'), scroller=document.getElementById('scroll');
+search.onclick=()=>menu.hidden=false;
+search.oninput=()=>{if(search.value==='女')setTimeout(()=>menu.innerHTML='<div role="option">女</div>',100)};
+menu.onclick=e=>{search.value=e.target.textContent;menu.hidden=true};
+scrollinput.onclick=()=>scroller.hidden=false;
+scroller.onscroll=()=>{spacer.innerHTML='<div role="option">汉族</div>'};
+scroller.onclick=e=>{scrollinput.value=e.target.textContent;scroller.hidden=true;opaque.value=''};
+(async()=>{const r=await __RQF_V2.fill({basic:{fullName:'测试',email:'test@example.test',gender:'女',ethnicity:'汉族'}});const checks={search:search.value==='女',scroll:scrollinput.value==='汉族',editable:document.querySelector('[contenteditable]').textContent==='test@example.test',finalAudit:!r.v2.filled.some(x=>x.value==='测试')&&r.v2.skipped.some(x=>x.reason.includes('整页复查'))};parent.postMessage({__rqf:true,pass:Object.values(checks).every(Boolean),checks},'*')})();
+</script>

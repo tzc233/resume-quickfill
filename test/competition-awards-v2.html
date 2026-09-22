@@ -1,0 +1,7 @@
+<!doctype html><meta charset="utf-8"><script src="../content.js"></script>
+<script>
+const results=['Honorable Mention','Honourable Mention','Meritorious Winner','Outstanding Winner','Finalist','H','HM','M','F','O','Successful Participant','Unsuccessful Participant','未获奖','仅参赛',''];
+const merged=__RQF.mergeAwardEntries([],results.map((result,i)=>({name:'MCM 美赛 '+i,result,startTime:'2023-01'})));
+const checks={recognized:merged.length===10,noInventedDate:merged.every(x=>x.date===''),unknownAbbreviation:__RQF.mergeAwardEntries([],[{name:'普通赛事',result:'M'}]).length===0,dedupe:__RQF.mergeAwardEntries([{name:'MCM',result:'Honorable Mention'}],[{name:'MCM',result:'Honorable Mention'}]).length===1};
+parent.postMessage({__rqf:true,pass:Object.values(checks).every(Boolean),checks},'*');
+</script>

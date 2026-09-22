@@ -19,6 +19,7 @@ for f in manifest.json content.js api.js backup.js \
          profile-template.json README.md; do
   cp "$SRC/$f" "$STAGE/$NAME/$f"
 done
+cp -R "$SRC/engine-v2" "$STAGE/$NAME/engine-v2"
 
 # 给收件人的一页纸说明,免得翻 README
 cat > "$STAGE/安装说明.txt" <<'TXT'

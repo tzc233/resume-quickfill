@@ -14,6 +14,7 @@
       "lastNameEn": "Zhang",
       "gender": "",
       "birthday": "",
+      "idType": "身份证",
       "idNumber": "",
       "politicalStatus": "",
       "ethnicity": "",
@@ -113,6 +114,7 @@
     "competitions": [
       {
         "name": "某某竞赛",
+        "awardDate": "",
         "type": "国家级",
         "result": "二等奖",
         "startTime": "",

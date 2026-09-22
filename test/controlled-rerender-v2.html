@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><title>受控表单重渲染回归</title>
+<style>.ant-select{display:block;width:220px;height:32px}.ant-select-dropdown{width:220px}.ant-select-item{height:28px}[hidden]{display:none!important}</style>
+<div id="name-row"><label for="candidate-name">姓名</label><input id="candidate-name"></div>
+<div class="ant-form-item"><label>性别</label><div class="ant-select"><input role="combobox" readonly><span class="ant-select-selection-placeholder">请选择</span></div></div>
+<div class="ant-select-dropdown" id="gender-menu" hidden><div class="ant-select-item ant-select-item-option" role="option">女</div><div class="ant-select-item ant-select-item-option" role="option">男</div></div>
+<script>
+const select=document.querySelector('.ant-select'), menu=document.getElementById('gender-menu');
+select.onmousedown=()=>menu.hidden=false;
+menu.querySelectorAll('[role=option]').forEach(option=>option.onmousedown=()=>{
+  select.querySelector('span').textContent=option.textContent;menu.hidden=true;
+  setTimeout(()=>{document.getElementById('name-row').innerHTML='<label for="candidate-name">姓名</label><input id="candidate-name">'},250);
+});
+</script>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+window.rqfRun=async()=>{const result=await __RQF_V2.fill({basic:{fullName:'测试用户',gender:'女'}});await new Promise(r=>setTimeout(r,1100));const checks={
+  '下拉触发重渲染':select.textContent.includes('女'),
+  '新节点恢复文本':document.getElementById('candidate-name').value==='测试用户',
+  '最终报告版本':result.version==='2.9.3',
+};const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'controlled-rerender-v2.html',version:result.version,pass:!fails.length,total:Object.keys(checks).length,fails}};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>

@@ -1,0 +1,53 @@
+<!doctype html><meta charset="utf-8"><main id="form"></main>
+<style>input{width:180px;height:25px}.phoenix-calendar{width:400px;height:250px}a{display:inline-block;min-width:30px;height:25px}.phoenix-select__tipEle{display:block}</style>
+<script>
+const row=(label)=>`<div class="form-item form-item--phoenix"><div class="form-item__title"><label class="form-item__text">${label}</label></div><div class="form-item__control"><div class="phoenix-select"><input><span class="phoenix-select__tipEle"></span></div></div></div>`;
+const record=()=>`<div class="ux-standard-form">${row('开始时间')}${row('结束时间')}<div class="form-item"><label>学校名称</label><input></div></div>`;
+form.innerHTML=`<div><div>教育经历</div>${'<div>'.repeat(10)}${record()}${record()}${'</div>'.repeat(10)}</div><div><div>实习经历</div>${'<div>'.repeat(10)}<div class="ux-standard-form">${row('开始时间')}${row('结束时间')}</div>${'</div>'.repeat(10)}</div>${row('出生日期')}`;
+let selectedCount=0;
+document.querySelectorAll('.phoenix-select input').forEach(input=>input.onclick=()=>{
+ document.querySelectorAll('.phoenix-calendar').forEach(x=>x.remove());
+ const root=document.createElement('div'); const dayMode=input.closest('.form-item').textContent.includes('出生日期');
+ root.className='phoenix-calendar'+(dayMode?'':' phoenix-calendar-month-calendar');document.body.append(root);
+ let year=2026,month=9,mode=dayMode?'day':'month',decade=2020;
+ const select=(day)=>{const value=`${year}-${String(month).padStart(2,'0')}`+(dayMode?`-${String(day).padStart(2,'0')}`:'');input.value=value;input.parentElement.querySelector('span').textContent=value;selectedCount++;root.remove()};
+ const render=()=>{
+  if(mode==='year'){
+   root.innerHTML=`<a class="phoenix-calendar-year-panel-prev-decade-btn">prev</a><a class="phoenix-calendar-year-panel-next-decade-btn">next</a>`+Array.from({length:12},(_,i)=>`<a class="phoenix-calendar-year-panel-year">${decade-1+i}</a>`).join('');
+   root.querySelector('[class$="prev-decade-btn"]').onclick=()=>{decade-=10;render()};root.querySelector('[class$="next-decade-btn"]').onclick=()=>{decade+=10;render()};
+   root.querySelectorAll('.phoenix-calendar-year-panel-year').forEach(a=>a.onclick=()=>{year=+a.textContent;mode='month';render()});
+  }else if(mode==='month'){
+   root.innerHTML=`<div class="phoenix-calendar-month-panel"><a class="phoenix-calendar-month-panel-year-select"><span class="phoenix-calendar-month-panel-year-select-content">${year}</span></a>${Array.from({length:12},(_,i)=>`<a class="phoenix-calendar-month-panel-month">${i+1}月</a>`).join('')}</div>`;
+   root.querySelector('[class$="year-select"]').onclick=()=>{mode='year';render()};
+   root.querySelectorAll('[class$="panel-month"]').forEach(a=>a.onclick=()=>{month=parseInt(a.textContent);if(dayMode){mode='day';render()}else select()});
+  }else{
+   root.innerHTML='<a class="phoenix-calendar-month-select">月份</a><span class="phoenix-calendar-last-month-cell"><a class="phoenix-calendar-date">15</a></span>'+Array.from({length:28},(_,i)=>`<a class="phoenix-calendar-date" aria-disabled="${i===15}">${i+1}</a>`).join('');
+   root.querySelector('[class$="month-select"]').onclick=()=>{mode='month';render()};root.querySelectorAll('.phoenix-calendar-date').forEach(a=>a.onclick=()=>select(+a.textContent));
+  }
+ };render();
+});
+document.body.addEventListener('mousedown',e=>{if(e.target===document.body)document.querySelectorAll('.phoenix-calendar').forEach(x=>x.remove())});
+</script>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+(async()=>{
+ const V=__RQF_V2_PARTS, checks={};
+ const fields=V.discover(),hits=V.resolveAll(fields);
+ checks.binding=hits.filter((h,i)=>fields[i].text==='开始时间').map(h=>h?.spec.key).join(',')==='education.0.startTime,education.1.startTime,work.0.startTime';
+ const profile={basic:{birthday:'2001-02-15'},education:[{startTime:'2018-09',endTime:'2022-06'},{startTime:'2024-09',endTime:'2027-06'}],work:[{startTime:'2025-04',endTime:'2026-03'}]};
+ const result=await __RQF_V2.fill(profile);
+ const expected=['2018-09','2022-06','2024-09','2027-06','2025-04','2026-03','2001-02-15'];
+ checks.dates=[...document.querySelectorAll('.phoenix-select input')].every((el,i)=>el.value===expected[i]);
+ checks.receipts=result.v2.filled.length===7;
+ const birth=V.discover().find(f=>f.text==='出生日期'),adapter=V.adapters.find(a=>a.supports(birth));
+ birth.el.value='';birth.el.parentElement.querySelector('span').textContent='';
+ checks.noInventedDay=!(await adapter.write(birth,'2001-02'));
+ document.body.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));
+ checks.disabledDay=!(await adapter.write(birth,'2001-02-16'));
+ document.body.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));
+ const before=selectedCount,probes=await V.probeDateStructures();
+ checks.diagnostic=probes.length===7&&probes.every(p=>p.structures.length===1)&&selectedCount===before;
+ checks.ancestry=V.inventory().controls.some(c=>c.ancestors.some(a=>a.headings.includes('教育经历')));
+ parent.postMessage({__rqf:true,pass:Object.values(checks).every(Boolean),total:Object.keys(checks).length,checks,result},'*');
+})();
+</script>

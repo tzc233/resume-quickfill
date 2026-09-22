@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8">
+<label for="candidate">姓名</label><input id="candidate">
+<label for="mail">邮箱</label><input id="mail">
+<script>
+let replaced=false;
+candidate.addEventListener('input',()=>{if(!replaced){replaced=true;setTimeout(()=>{candidate.outerHTML='<input id="candidate">'},100)}});
+mail.addEventListener('input',()=>setTimeout(()=>{mail.value=''},100));
+</script>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+async function run(){const r=await __RQF_V2.fill({basic:{fullName:'测试',email:'test@example.test'}});const checks={
+replacement:document.getElementById('candidate').value==='测试',
+rejected:!r.v2.filled.some(x=>x.label.includes('邮箱'))&&r.v2.skipped.some(x=>x.label.includes('邮箱'))};
+parent.postMessage({__rqf:true,pass:Object.values(checks).every(Boolean),checks},'*')}
+run();
+</script>

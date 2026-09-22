@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><title>2.0 核心流水线</title>
+<label for="name">姓名</label><input id="name">
+<label for="email">电子邮件</label><input id="email" type="email">
+<label for="gender">性别</label><select id="gender"><option value="">请选择</option><option value="F">女</option><option value="M">男</option></select>
+<label for="advisor">导师姓名</label><input id="advisor">
+<label for="resume">简历附件</label><input id="resume" type="file">
+<input name="education[0].school" placeholder="学校名称">
+<input name="internship[0].company" placeholder="公司名称">
+<textarea name="award[0].desc" placeholder="描述"></textarea>
+<script src="../engine-v2/schema.js"></script>
+<script src="../engine-v2/discovery.js"></script>
+<script src="../engine-v2/adapters.js"></script>
+<script src="../engine-v2/runtime.js"></script>
+<script>
+window.rqfRun=async()=>{
+  const result=await __RQF_V2.fill({basic:{fullName:'测试用户',email:'user@example.test',gender:'女'},education:[{school:'测试大学'}],work:[{company:'测试公司'}],awards:[{desc:'测试奖项描述'}]});
+  const checks={
+    '2.6版本':result.version==='2.9.3',
+    '文本适配器':document.getElementById('name').value==='测试用户'&&document.getElementById('email').value==='user@example.test',
+    '原生下拉适配器':document.getElementById('gender').value==='F',
+    '排除他人姓名':document.getElementById('advisor').value==='',
+    '不处理附件':document.getElementById('resume').files.length===0,
+    '机器路径绑定':document.querySelector('[name="education[0].school"]').value==='测试大学'&&document.querySelector('[name="internship[0].company"]').value==='测试公司'&&document.querySelector('[name="award[0].desc"]').value==='测试奖项描述',
+    '结构化执行信息':result.v2.handled===6&&result.filled.every(x=>x.engine==='v2')&&window.__RQF_V2_LAST.filled.length===6,
+  };
+  const fails=Object.keys(checks).filter(k=>!checks[k]);
+  return {page:'v2-core.html',version:result.version,pass:!fails.length,total:Object.keys(checks).length,fails};
+};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>

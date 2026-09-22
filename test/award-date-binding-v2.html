@@ -1,0 +1,10 @@
+<!doctype html><meta charset="utf-8"><main id="form"></main>
+<style>.ant-picker{display:block;width:200px;height:30px}.ant-picker-dropdown{width:250px;height:80px}.ant-picker-cell{display:inline-block;width:40px;height:30px}[hidden]{display:none!important}</style>
+<script>
+for(let i=0;i<5;i++)form.insertAdjacentHTML('beforeend',`<div><label>获奖时间</label><div class="ant-picker"><input readonly id="awards_${i}_getDate" placeholder="获奖时间"></div><label>奖项名称<input id="awards_${i}_name"></label></div>`);
+document.querySelectorAll('.ant-picker input').forEach((input,i)=>{input.onclick=()=>{document.querySelectorAll('.ant-picker-dropdown').forEach(x=>x.remove());const panel=document.createElement('div');panel.className='ant-picker-dropdown';panel.innerHTML=`<div class="ant-picker-panel"><div class="ant-picker-cell" title="2024-0${i+1}-01">1</div></div>`;panel.querySelector('.ant-picker-cell').onclick=()=>{input.value=`2024-0${i+1}-01`;panel.remove()};document.body.append(panel)}});
+</script>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script>
+<script>
+(async()=>{const awards=Array.from({length:5},(_,i)=>({name:'奖项'+i,date:`2024-0${i+1}-01`}));await __RQF.fill({basic:{},awards});const values=[...document.querySelectorAll('.ant-picker input')].map(x=>x.value);parent.postMessage({__rqf:true,pass:values.every((v,i)=>v===awards[i].date),total:5,values},'*')})();
+</script>

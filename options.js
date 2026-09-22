@@ -98,6 +98,7 @@ const LIST_SPEC = {
       { k: 'name', l: '竞赛名称' },
       { k: 'type', l: '竞赛类型 / 级别', ph: '国家级 / 国际级' },
       { k: 'result', l: '竞赛成绩', ph: '二等奖' },
+      { k: 'awardDate', l: '获奖时间（用于获奖栏目）', type: 'month' },
       { k: 'startTime', l: '开始时间', type: 'month' },
       { k: 'endTime', l: '结束时间', type: 'month' },
       { k: 'desc', l: '竞赛描述', type: 'textarea', full: true },

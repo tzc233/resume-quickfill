@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8">
+<style>input{width:180px;height:24px}.aui-select-dropdown__item{height:25px}[hidden]{display:none!important}</style>
+<div class="aui-form-item"><label class="aui-form-item__label">性别</label><div class="aui-select"><span class="aui-input-display-only"><input readonly placeholder="请选择"></span></div></div>
+<div class="aui-select-dropdown" hidden><ul><li class="aui-select-dropdown__item">男</li><li class="aui-select-dropdown__item">女</li></ul></div>
+<div class="aui-form-item"><label class="aui-form-item__label">证件</label><div class="aui-select"><input readonly></div><input id="number"></div>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+const trigger=document.querySelector('input'),menu=document.querySelector('.aui-select-dropdown');
+trigger.onclick=()=>setTimeout(()=>menu.hidden=false,100);
+menu.onclick=e=>{if(e.target.matches('li')){trigger.value=e.target.textContent;menu.hidden=true}};
+(async()=>{const r=await __RQF_V2.fill({basic:{gender:'女'}});const fields=__RQF_V2_PARTS.discover();const report=await __RQF_V2.deepDiagnose({basic:{}});const checks={selected:trigger.value==='女',verified:r.v2.filled.length===1,separateType:__RQF_V2_PARTS.resolve(fields[1]).spec.key==='basic.idType',separateNumber:__RQF_V2_PARTS.resolve(fields[2]).spec.key==='basic.idNumber',audit:report.v2Inventory.fieldAudit.length===3};parent.postMessage({__rqf:true,pass:Object.values(checks).every(Boolean),checks},'*')})();
+</script>

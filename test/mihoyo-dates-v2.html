@@ -1,0 +1,9 @@
+<!doctype html><meta charset="utf-8">
+<div><label>学院名称<input id="educations_1_collegeName"></label></div>
+<div><label>开始时间<input type="month" id="s0"></label><label>结束时间<input type="month" id="e0"></label><label>起止时间<input type="radio"></label><label>公司名称<input id="practices_0_companyName"></label></div>
+<div><label>开始时间<input type="month" id="s1"></label><label>结束时间<input type="month" id="e1"></label><label>起止时间<input type="radio"></label><label>公司名称<input id="practices_1_companyName"></label></div>
+<div><label>开始时间<input type="month" id="sp"></label><label>结束时间<input type="month" id="ep"></label><label>项目名称<input id="projects_0_projectName"></label></div>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script>
+<script>
+(async()=>{await __RQF.fill({basic:{},education:[{}, {college:'学院',endTime:'2028-06'}],work:[{company:'甲',startTime:'2023-01',endTime:'2023-05'},{company:'乙',startTime:'2024-02',endTime:'2024-09'}],projects:[{name:'项目',startTime:'2022-03',endTime:'2022-07'}]});const expected=['2023-01','2023-05','2024-02','2024-09','2022-03','2022-07'];const values=[...document.querySelectorAll('[type=month]')].map(x=>x.value);parent.postMessage({__rqf:true,pass:values.every((v,i)=>v===expected[i]),total:6,values},'*')})();
+</script>

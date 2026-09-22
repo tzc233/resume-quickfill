@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8">
+<section><h2>项目经历</h2><label>项目名称<input id="project"></label><label>主要职责与业绩<textarea id="duty"></textarea></label></section>
+<section><h2>奖学金</h2><label>奖学金名称<input id="award"></label><label>奖项等级<input id="grade"></label></section>
+<div class="aui-form-item"><div class="aui-form-item__label">学历</div><input readonly placeholder="请选择" value="SECRET"></div>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script>
+<script>
+(async()=>{
+await __RQF.fill({basic:{},projects:[{name:'测试项目',desc:'项目职责'}],work:[{company:'公司',desc:'工作职责'}],awards:[{name:'测试奖学金',result:'一等奖'}]});
+const inventory=__RQF_V2_PARTS.inventory();
+const checks={project:duty.value==='项目职责',award:award.value==='测试奖学金',grade:grade.value==='一等奖',label:inventory.controls.some(x=>x.label.includes('学历')),privacy:inventory.controls.every(x=>!x.structure.includes('SECRET'))};
+parent.postMessage({__rqf:true,pass:Object.values(checks).every(Boolean),checks},'*');
+})();
+</script>

@@ -37,6 +37,7 @@
     { k: 'fullName',  re: /姓名|中文名|^name$|full ?name|your ?name|candidate ?name|legal ?name/i,
       // 「导师姓名」曾被填成本人姓名 —— 凡是他人的姓名字段一律排除
       ex: /公司|学校|院校|银行|紧急|联系人姓名|家属|亲属|推荐人|监护人|导师|指导教师|项目名称|论文名称|奖项名称|竞赛名称|软件名称|专利名称|user ?name|company|school|university|bank|emergency|referr|advisor|supervisor/i },
+    { k: 'idType',    re: /证件类型|证件类别|^证件$|document type|id type/i },
     { k: 'idNumber',  re: /证件号码|身份证号|身份证件|证件号|id\s*(no|number|card)\b/i },
     { k: 'email',     re: /邮箱|电子邮件|e ?mail/i, ex: /验证码|verif|otp|\bcode\b/i },
     { k: 'phone',     re: /手机|电话|联系号码|联系方式|phone|mobile|\bcell\b/i,
@@ -117,7 +118,7 @@
     { k: 'work.startTime', re: /^工作开始时间$/ },
     { k: 'work.endTime', re: /^工作结束时间$/ },
     { k: 'edu.startTime', re: /入学时间|入校时间|入学年月|入学日期|开始就读|enrollment/i },
-    { k: 'edu.endTime',   re: /毕业时间|毕业年月|graduation (date|time)|graduate/i },
+    { k: 'edu.endTime',   re: /毕业时间|毕业日期|毕业年月|graduation (date|time)|graduate/i },
 
     /* ---- 工作 / 实习经历(锚点:公司) ---- */
     /* 「公司性质/类型/规模/行业」不是公司名。而公司名是【锚点】字段 ——
@@ -168,15 +169,15 @@
     { k: 'comp.name', a: 1, re: /竞赛名称|比赛名称|赛事名称/i },
     { k: 'comp.type', re: /竞赛类型|比赛类型|赛事类型/i },
     { k: 'comp.result', re: /竞赛成绩|比赛成绩|竞赛结果|赛事成绩|获奖等级/i },
-    { k: 'comp.desc', re: /竞赛描述|比赛描述|赛事描述/i },
+    { k: 'comp.desc', re: /竞赛描述|比赛描述|赛事描述|获奖项目概述/i },
     { k: 'comp.timeRange', r: 1, re: /参赛时间|比赛时间|竞赛时间|赛事时间/i },
 
     /* ---- 荣誉奖项(锚点:奖项名称) ---- */
     // 百度用「奖项说明」作为每条荣誉的唯一输入框;不认它就会掉进整段文本兜底,
     // 导致六个独立奖项框被同一段汇总文字灌满
-    { k: 'award.name', a: 1, re: /奖项名称|荣誉名称|奖项说明|获奖说明|荣誉说明/i },
+    { k: 'award.name', a: 1, re: /奖项名称|奖学金名称|荣誉名称|奖项说明|获奖说明|荣誉说明/i },
     { k: 'award.type', re: /奖项类型|荣誉类型/i },
-    { k: 'award.result', re: /奖项成绩|获奖等级/i },
+    { k: 'award.result', re: /奖项成绩|奖项等级|获奖等级/i },
     { k: 'award.desc', re: /奖项描述|荣誉描述/i },
     { k: 'award.date', re: /获奖时间|获奖日期/i },
 
@@ -262,12 +263,12 @@
     [/竞赛.{0,2}获奖|竞赛.{0,2}奖学金|获奖.{0,2}竞赛/, 'honor'],
     [/赛事|竞赛|比赛/, 'comp'],
     [/项目经验|项目经历|科研项目/, 'proj'],
-    [/获奖经历|获奖情况|荣誉奖项|荣誉与奖项|荣誉奖励|奖励情况/, 'award'],
+    [/获奖经历|获奖情况|荣誉奖项|荣誉与奖项|荣誉奖励|奖励情况|奖学金/, 'award'],
     [/论文|期刊|学术成果|发表情况/, 'paper'],
 
     // prog 必须排在 lang 之前:「编程语言能力」同时含「语言能力」
     [/编程语言/, 'prog'],
-    [/语言能力|外语能力|语言水平|英语水平|外语水平/, 'lang'],
+    [/语言能力|语言情况|外语能力|语言水平|英语水平|外语水平/, 'lang'],
     [/自我描述|自我评价|个人描述|个人陈述/, 'self'],
     [/专利/, 'patent'],
     [/软件著作/, 'soft'],
@@ -525,6 +526,23 @@
    * 所以档案一律按结构化存储,遇到未拆结构的表单时再拼成文本。 */
   const join = (arr, fn) => (arr || []).map(fn).filter(Boolean).join('\n');
   const period = (x) => [x.startTime, x.endTime].filter(Boolean).join('–');
+  const mergeAwardEntries = (awards, competitions) => {
+    const eligible = asList(competitions).filter(c => {
+      const result = String(c.result || '').trim();
+      return result && !/未获奖|未得奖|无奖|仅参赛|参与|未晋级|未入围|未获名次|无名次|^无$|^none$|^n\/a$/i.test(result)
+        && (/奖|冠军|亚军|季军|金牌|银牌|铜牌|一等奖|二等奖|三等奖|\bwinner\b|\bmedal\b|\bprize\b|\bhonou?rable\s+mention\b|\bmeritorious\b|\boutstanding\b|\bfinalist\b/i.test(result)
+          || (/美赛|美国大学生数学建模|\bMCM\b|\bICM\b/i.test(String(c.name || ''))
+            && /^(?:O|F|M|H|HM)(?:\s*奖)?$/i.test(result)));
+    }).map(c => ({name:c.name, type:c.type || '', result:c.result, desc:c.desc || '', date:c.awardDate || c.date || ''}));
+    const out = asList(awards).map(a => ({...a}));
+    const norm = v => String(v || '').trim().toLowerCase().replace(/\s+/g, '');
+    for (const entry of eligible) {
+      const duplicate = out.find(a => norm(a.name) === norm(entry.name) && norm(a.result) === norm(entry.result)
+        && (!a.date || !entry.date || norm(a.date) === norm(entry.date)));
+      if (!duplicate) out.push(entry);
+    }
+    return out;
+  };
 
   const normalize = (P) => {
     const out = { ...P };
@@ -654,7 +672,7 @@
       fullName: b.fullName, namePinyin: pinyin,
       lastName: cjk ? sp.last : (b.lastNameEn || sp.last),
       firstName: cjk ? sp.first : (b.firstNameEn || sp.first),
-      email: b.email, phone: b.phone, wechat: b.wechat, idNumber: b.idNumber,
+      email: b.email, phone: b.phone, wechat: b.wechat, idType: b.idType || (b.idNumber ? '身份证' : ''), idNumber: b.idNumber,
       gender: b.gender, birthday: b.birthday, politicalStatus: b.politicalStatus,
       ethnicity: b.ethnicity, hometown: b.hometown, hobbies: b.hobbies,
       nationality: b.nationality, birthCountry: b.birthCountry,
@@ -1220,7 +1238,7 @@
 
     /* 第一趟:先算出每个字段的匹配结果 —— 通配字段(「起止时间」)需要看前后文才能定归属。
      * 抽成函数是因为「自动展开区块」每点一次 + 号都要重新扫一遍页面。 */
-    const sections = scanSections();
+    let sections = scanSections();
     /* 页面同时存在「实习经历」和「工作经历」两个区块时,按性质分流;
      * 只有其中一种时,那一种收下全部(见 normalize 里的默认值)。 */
     const secDoms = new Set(sections.map((x) => x.dom));
@@ -1246,6 +1264,9 @@
         if (type === 'file') { if (collectFiles) fileEls.push(el); continue; }
         if (type === 'checkbox') continue; // 协议勾选等一律留给用户
         if (!visible(el)) continue;
+        // Phoenix's text input is a search trigger, including its date fields.
+        // V2 owns these controls and must select through their popup.
+        if (window.__RQF_V2_PARTS && el.closest('.phoenix-select')) continue;
         // 被自定义组件包住的原生输入框交给组件本身处理,避免往搜索框里打字
         if (ws.some((w) => w.contains(el))) continue;
         const cands = labelCands(el);
@@ -1330,7 +1351,35 @@
     ui.step('正在识别页面字段…', 0.03);
     await paint();   // 让第一帧先画出来,否则同步扫描期间用户看不到任何反馈
 
+    /* 上传可能启动简历解析并重建整张表单，所以附件先行。解析期间按 DOM 变化
+     * 等待页面安静下来，再重新建立区块与字段清单。 */
+    let fileHandledEarly = false;
+    if (resumeFile && resumeFile.dataBase64) {
+      collectItems(true);
+      const t = pickFileTarget(fileEls);
+      if (t && t.el.files && t.el.files.length) {
+        report.skipped.push({ label: t.label, reason: `已上传「${t.el.files[0].name}」,未覆盖` });
+        fileHandledEarly = true;
+      } else if (t && fillFile(t.el, resumeFile)) {
+        report.fileFilled = true; report.fileLabel = t.label; mark(t.el); fileHandledEarly = true;
+        ui.step('正在等待简历解析完成…', 0.08);
+        await waitForDomSettle();
+        sections = scanSections();
+      }
+      fileEls.length = 0;
+    }
+
     let items = collectItems(true);
+    const awardSections = sections.filter(s => s.dom === 'award');
+    const awardsPresent = awardSections.length || items.some(i => i.hit?.dom === 'award');
+    const competitionsPresent = sections.some(s => s.dom === 'comp' || s.dom === 'honor')
+      || items.some(i => i.hit?.dom === 'comp' || i.hit?.dom === 'honor');
+    const scholarshipOnly = awardSections.length && awardSections.every(s => /奖学金/.test(s.text || ''));
+    if (awardsPresent && !competitionsPresent && !scholarshipOnly) {
+      P.awards = mergeAwardEntries(P.awards, P.competitions);
+      P.awardsText = join(P.awards, a => [a.date, a.name, a.type, a.result].filter(Boolean).join(' '));
+      report.awardRouting = 'merged';
+    }
     // 档案段数多于页面区块数时,先把「+ 添加」点出来
     items = await expandBlocks(P, items, collectItems, report, sections);
 
@@ -1428,6 +1477,7 @@
        * 也该报「档案里没有第 N 段实习」,而不是拿全职经历去顶。 */
       const PAIR = { work: 'intern', intern: 'work' };
       if (PAIR[sec] === dom) return sec;
+      if (dom === 'work' && sec === 'proj' && field === 'desc') return sec;
       const related = new Set(['award', 'comp', 'honor']);
       if (!related.has(dom) || !related.has(sec)) return dom;
       const sample = (P[LIST_OF[sec]] || [])[0];
@@ -1477,6 +1527,23 @@
       cur = null;
     };
 
+    const explicitPaths = new Map((window.__RQF_V2_PARTS?.discover?.() || []).filter(f => f.pathHint).map(f => [f.el, f.pathHint]));
+    for (const item of items) {
+      if (item.tag !== 'WIDGET') continue;
+      const paths = [...new Set([...explicitPaths].filter(([node]) => item.el.contains(node)).map(([,path]) => path))];
+      if (paths.length === 1) explicitPaths.set(item.el, paths[0]);
+    }
+    const dateBindings = new Map();
+    for (const item of items) {
+      if (item.type === 'radio' || !item.hit || !/^(startTime|endTime)$/.test(item.hit.field)) continue;
+      let box = item.el.parentElement;
+      for (let depth = 0; box && box !== document.body && depth < 10; depth++, box = box.parentElement) {
+        const identities = [...new Set([...explicitPaths].filter(([node]) => box.contains(node))
+          .map(([, path]) => path.match(/^(education|work|projects)\.(\d+)\./)?.[0]).filter(Boolean))];
+        if (identities.length > 1) break;
+        if (identities.length === 1) { dateBindings.set(item.el, identities[0] + item.hit.field); break; }
+      }
+    }
     for (let idx = 0; idx < items.length; idx++) {
       const { el, tag, type, cands } = items[idx];
       closeCur();
@@ -1499,7 +1566,15 @@
        * 兄弟文本恰好退化成「本块其它所有标签」的拼接,里面随便一个词
        * (比如「获奖时间」)就能让整块六个字段全部命中同一条规则、全填成日期。 */
       const ruleOnBlob = rh && rh.label && rh.label.length > 8;
-      const hit = (g && (!rh || rh.dom === '*' || ruleOnBlob)) ? g : (rh || g);
+      let hit = (g && (!rh || rh.dom === '*' || ruleOnBlob)) ? g : (rh || g);
+      if (type === 'radio' && hit?.range) {
+        report.skipped.push({label: hit.label, reason: '起止日期旁的单选项不参与经历计数'}); continue;
+      }
+      const explicit = (explicitPaths.get(el) || dateBindings.get(el))?.match(/^(education|work|projects|awards|languages)\.(\d+)\.(\w+)$/);
+      if (explicit) {
+        const domains = {education:'edu',work:'work',projects:'proj',awards:'award',languages:'lang'};
+        hit = {dom:domains[explicit[1]], field:explicit[3], label:hit?.label || cands[0]?.t || explicit[3], explicitIndex:Number(explicit[2])};
+      }
       if (!hit) {
         if (cands.length && cands[0].w >= 3 && (tag === 'TEXTAREA' || tag === 'SELECT' || TEXTLIKE.has(type) || type === 'radio')) {
           report.unmatched.push({ label: cands[0].t.slice(0, 30) });
@@ -1528,7 +1603,7 @@
           if (!hit.occupied) report.skipped.push({ label: hit.label, reason: '这组年/月不在任何经历区块内,无法确定归属,请手动填' });
           continue;
         }
-        const dom = hit.dom === '*' ? (ambiguousDom(idx, hit) || ctx.domain)
+        const dom = Number.isInteger(hit.explicitIndex) ? hit.dom : hit.dom === '*' ? (ambiguousDom(idx, hit) || ctx.domain)
           : retarget(hit.dom, hit.field, items[idx].sec);
         if (!dom) continue; // 通篇没有任何经历区块字段,无从判断归属
         // 「自我描述」是区块标题但不是经历列表 —— 它下面的描述位就是自我介绍
@@ -1539,7 +1614,7 @@
         const list = P[LIST_OF[dom]] || [];
         let field = hit.field;
         // 「本科院校」这类带学历限定的标签直接按学历定位,不参与区块计数
-        let i = dom === 'edu' ? scopedEduIdx(list, hit.label) : -1;
+        let i = Number.isInteger(hit.explicitIndex) ? hit.explicitIndex : dom === 'edu' ? scopedEduIdx(list, hit.label) : -1;
         // 进入一个「已按内容认回段号」的块:先把段号切过去,块内字段照常走原逻辑
         const pin = items[idx].pin;
         if (i < 0 && pin && pin.dom === dom && ctx.pinned !== pin) {
@@ -1699,16 +1774,33 @@
       if (el.maxLength && el.maxLength > 0 && out.length > el.maxLength) out = out.slice(0, el.maxLength);
       setNative(el, out);
       mark(el);
-      textWrites.push({ el, label: hit.label, out: String(out), rec: cur });
+      textWrites.push({ el, id: el.id || '', name: el.name || '', label: hit.label, out: String(out), rec: cur });
     }
     closeCur();   // 最后一个字段没有「下一轮」来替它结账
 
     /* 回读校验。稍等一拍再读:受控组件的吐回发生在它自己的渲染周期里 */
     if (textWrites.length) {
       ui.step('正在校验写入…', 0.94);
-      await sleep(120);
+      // 下拉/日期更新可能在数百毫秒后重绘整段表单，原来的 120ms 会过早报成功。
+      await sleep(650);
+      const liveNode = (w) => {
+        if (w.el && w.el.isConnected) return w.el;
+        if (w.id) { const byId = document.getElementById(w.id); if (byId) return byId; }
+        if (w.name) {
+          try { return document.querySelector(`[name="${CSS.escape(w.name)}"]`) || w.el; } catch { return w.el; }
+        }
+        return w.el;
+      };
+      // 只重写已经变空的字段；页面主动格式化成非空值时仍交给后面的校验提示。
+      let retried = false;
       for (const w of textWrites) {
-        const now = String(w.el.value || '').trim();
+        const el = liveNode(w);
+        if (el && !String(el.value || '').trim()) { setNative(el, w.out); w.el = el; retried = true; }
+      }
+      if (retried) await sleep(350);
+      for (const w of textWrites) {
+        w.el = liveNode(w);
+        const now = String((w.el && w.el.value) || '').trim();
         /* 文本框的成败要等这一趟回读才知道,循环里那次结账只能记成「未处理」——
          * 记录本身还留着,这里补写回去。 */
         const put = (st, why) => { if (w.rec) { w.rec.st = st; w.rec.why = why || ''; } };
@@ -1727,7 +1819,7 @@
       }
     }
 
-    if (fileEls.length) {
+    if (fileEls.length && !fileHandledEarly) {
       ui.step('正在注入简历附件…', 0.95);
       if (resumeFile && resumeFile.dataBase64) {
         const t = pickFileTarget(fileEls);
@@ -1839,6 +1931,19 @@
       await sleep(step);
     }
   };
+
+  const waitForDomSettle = (minimum = 1200, maximum = 8000, quiet = 700) => new Promise((resolve) => {
+    const started = performance.now(); let changed = started;
+    const observer = new MutationObserver(() => { changed = performance.now(); });
+    observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+    const poll = () => {
+      const now = performance.now();
+      if ((now - started >= minimum && now - changed >= quiet) || now - started >= maximum) {
+        observer.disconnect(); resolve();
+      } else setTimeout(poll, 100);
+    };
+    setTimeout(poll, 100);
+  });
 
   const realClick = (el) => {
     const r = el.getBoundingClientRect();
@@ -2659,5 +2764,5 @@
    * 是不是「自有标签」—— 光看最终命中的规则,分不清是候选没生成还是被过滤掉了。 */
   const debugCands = (el) => (el ? { cands: (el.tagName ? labelCands(el) : []), widget: widgetCands(el) } : null);
 
-  window.__RQF = { version: VERSION, fill, scan, deepDiagnose, addButtonDomain, debugCands };
+  window.__RQF = { version: VERSION, fill, scan, deepDiagnose, addButtonDomain, debugCands, mergeAwardEntries };
 })();

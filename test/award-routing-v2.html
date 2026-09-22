@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><main id="form"></main>
+<script src="../content.js"></script>
+<script>
+(async()=>{
+const profile={basic:{},awards:[{name:'荣誉甲',result:'一等奖',date:'2024-01'}],competitions:[{name:'赛事乙',result:'银奖',startTime:'2023-01',endTime:'2023-06',desc:'赛事说明'},{name:'未获奖赛事',result:'未获奖'},{name:'荣誉甲',result:'一等奖',date:'2024-01'}]};
+const row=()=>'<div><label>奖项名称<input></label><label>奖项等级<input></label><label>获奖时间<input></label></div>';
+form.innerHTML='<section><h2>获奖经历</h2>'+row()+row()+'</section>';
+const r=await __RQF.fill(profile);let v=[...form.querySelectorAll('input')].map(x=>x.value);
+const checks={merge:r.awardRouting==='merged',entries:v[0]==='荣誉甲'&&v[3]==='赛事乙',noInventedDate:v[5]==='',dedupe:__RQF.mergeAwardEntries(profile.awards,profile.competitions).length===2};
+form.innerHTML='<section><h2>获奖经历</h2>'+row()+'</section><section><h2>竞赛经历</h2><label>竞赛名称<input></label><label>竞赛成绩<input></label></section>';
+const split=await __RQF.fill(profile);checks.separate=split.awardRouting!=='merged';
+form.innerHTML='<section><h2>奖学金</h2>'+row()+'</section>';
+checks.scholarship=(await __RQF.fill(profile)).awardRouting!=='merged';
+checks.immutable=profile.awards.length===1&&profile.competitions.length===3;
+parent.postMessage({__rqf:true,pass:Object.values(checks).every(Boolean),checks},'*');
+})();
+</script>

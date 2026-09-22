@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8"><title>通用区块规则</title>
+<style>section,input,[role=combobox]{display:block;width:240px;min-height:24px}</style>
+<section><h2>教育经历</h2>
+  <div><label>学校名称<input id="school0"></label><label>专业名称<input id="major0"></label></div>
+  <div><label>学校名称<input id="school1"></label><label>专业名称<input id="major1"></label></div>
+</section>
+<section><h2>项目经历</h2><label>项目角色<input name="project_0_role"></label></section>
+<label>框架路径<input name="recruitEducationList_1_school"></label>
+<div role="combobox" aria-label="期望城市"><input aria-label="期望城市"></div>
+<span id="random-caption">电子邮件</span><input id="random-control" aria-labelledby="random-caption">
+<label>手机<input id="opaque-control"></label>
+<input aria-label="user profile filename">
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+window.rqfRun=async()=>{const fields=__RQF_V2_PARTS.discover(), resolved=__RQF_V2_PARTS.resolveAll(fields);const keys=resolved.map(x=>x&&x.spec.key);const checks={
+  '重复区块自动编号':keys.includes('education.0.school')&&keys.includes('education.0.major')&&keys.includes('education.1.school')&&keys.includes('education.1.major'),
+  '下划线路径解析':keys.includes('projects.0.role')&&keys.filter(x=>x==='education.1.school').length>=2,
+  '组合框宿主去重':fields.filter(x=>x.text.includes('期望城市')).length===1,
+  '标准无障碍标签':keys[7]==='basic.email',
+  '包裹标签不依赖字段id':keys[8]==='basic.phone',
+  '英文词边界避免误识别':keys[9]===null,
+};const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'generic-rules-v2.html',version:__RQF_V2.version,pass:!fails.length,total:Object.keys(checks).length,fails,keys}};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>

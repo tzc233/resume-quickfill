@@ -77,7 +77,10 @@ async function doFill() {
   status.textContent = '正在识别并填充表单…(进度见页面右上角)';
 
   const run = async (allFrames) => {
-    await rqfApi.scripting.executeScript({ target: { tabId: tab.id, allFrames }, files: ['content.js'] });
+    await rqfApi.scripting.executeScript({ target: { tabId: tab.id, allFrames }, files: [
+      'content.js', 'engine-v2/schema.js', 'engine-v2/discovery.js',
+      'engine-v2/adapters.js', 'engine-v2/learning.js', 'engine-v2/runtime.js',
+    ] });
     return rqfApi.scripting.executeScript({
       target: { tabId: tab.id, allFrames },
       // 注意:func 体在页面的内容脚本环境执行,拿不到弹窗里的适配层,须就地解析命名空间
@@ -86,8 +89,8 @@ async function doFill() {
         try {
           const st = await ext.storage.local.get(['profile', 'resumeFile']);
           if (!st.profile) return { error: 'NO_PROFILE' };
-          if (!window.__RQF) return { error: 'NO_ENGINE' };
-          return window.__RQF.fill(st.profile, st.resumeFile || null);
+          if (!window.__RQF_V2) return { error: 'NO_ENGINE' };
+          return window.__RQF_V2.fill(st.profile, st.resumeFile || null);
         } catch (e) { return { error: String((e && e.message) || e) }; }
       },
     });
@@ -141,18 +144,21 @@ async function doScan() {
     status.textContent = window.rqfNoHostMessage();
     return;
   }
-  status.textContent = '正在深度诊断（会依次打开并关闭空白控件，不会选择或写入）…';
+  status.textContent = '正在深度诊断（会临时展开空经历区块并开关控件，不会填写或保存）…';
 
   let results;
   try {
-    await rqfApi.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['content.js'] });
+    await rqfApi.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: [
+      'content.js', 'engine-v2/schema.js', 'engine-v2/discovery.js',
+      'engine-v2/adapters.js', 'engine-v2/learning.js', 'engine-v2/runtime.js',
+    ] });
     results = await rqfApi.scripting.executeScript({
       target: { tabId: tab.id, allFrames: true },
       func: async () => {
         const ext = (typeof browser !== 'undefined' && browser.storage) ? browser : chrome;
         try {
           const st = await ext.storage.local.get('profile');
-          return window.__RQF ? await window.__RQF.deepDiagnose(st.profile || {}) : null;
+          return window.__RQF_V2 ? await window.__RQF_V2.deepDiagnose(st.profile || {}) : null;
         } catch { return null; }
       },
     });
@@ -165,6 +171,9 @@ async function doScan() {
   let ver = '';
   const privateValues = [];
   let probed = 0;
+  let v2Inventory = null;
+  let v2Last = null;
+  let v2Learning = null;
   for (const r of results || []) if (r && r.result && r.result.rows) {
     privateValues.push(...(r.result.redactions || []));
     rows.push(...r.result.rows);
@@ -175,6 +184,9 @@ async function doScan() {
     }
     ver = r.result.version || ver;
     probed += (r.result.deepProbe && r.result.deepProbe.attempted) || 0;
+    if (r.result.v2Inventory && (!v2Inventory || r.result.v2Inventory.total > v2Inventory.total)) v2Inventory = r.result.v2Inventory;
+    if (r.result.v2Last) v2Last = r.result.v2Last;
+    if (r.result.v2Learning) v2Learning = r.result.v2Learning;
   }
   if (!rows.length) { status.textContent = '没有扫描到任何表单字段。'; return; }
 
@@ -198,6 +210,8 @@ async function doScan() {
       : '未识别到任何区块标题(泛化标签将只能靠前后邻居猜归属)',
     `共 ${rows.length} 个字段:${miss.length} 个未命中规则,${warns} 个标签定位可疑`,
     `深度探测:${probed} 个代表性空白控件（仅打开并关闭，未选择、未写值）`,
+    v2Inventory ? `2.x 页面能力图:探测前 ${v2Inventory.beforeTotal} 个、展开后 ${v2Inventory.total} 个控件（可见 ${v2Inventory.visible} / 隐藏 ${v2Inventory.hidden}），${v2Inventory.ariaLinked} 个 ARIA 弹层关联；临时展开 ${v2Inventory.expandedForDiagnosis.length} 个空区块` : '',
+    v2Learning ? `2.x 本地选择记忆:当前站点/组件家族 ${v2Learning.current} 条,全部 ${v2Learning.total} 条` : '',
     '',
     /* 一行一个字段,结果直接写在这一行上。原来「填充结果」是另一张按标签分组的表,
      * 页面上有两个「学院名称」时根本对不上是哪一行没填成。 */
@@ -213,6 +227,10 @@ async function doScan() {
         + `| ${r.slot || ''} | ${res} | ${why} |`;
     }),
   ];
+  if (v2Inventory) lines.push('', '## 2.x 页面能力图（含字段层级与日期弹层结构）', '', '```json',
+    JSON.stringify(v2Inventory, null, 2), '```');
+  if (v2Last) lines.push('', `## 2.x 新流水线最终结果：稳定填入 ${v2Last.filled.length} 项，失败 ${v2Last.skipped.length} 项`, '',
+    '```json', JSON.stringify(v2Last, null, 2), '```');
   /* 上次填充的跳过原因 —— 排查时最该看的一列。同一个原因归并计数,
    * 「12 个字段都是『已有选择,未覆盖』」这种系统性问题一眼就看出来。 */
   if (lastSkips.length || lastFilled) {
@@ -278,7 +296,12 @@ async function doScan() {
     let exported = lines.join('\n');
     const secrets = [...new Set(privateValues.flatMap(v => [v, normalized(v)]))]
       .filter(v => v.length >= 2).sort((a, b) => b.length - a.length);
-    for (const secret of secrets) exported = exported.split(secret).join('[值]');
+    for (const secret of secrets) {
+      if (/^[a-z0-9]{1,3}$/i.test(secret)) {
+        const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        exported = exported.replace(new RegExp(`(?<![A-Za-z0-9_])${escaped}(?![A-Za-z0-9_])`, 'g'), '[值]');
+      } else exported = exported.split(secret).join('[值]');
+    }
     exported = exported.replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[邮箱]')
       .replace(/\b1[3-9]\d{9}\b/g, '[手机]');
     await navigator.clipboard.writeText(exported);
@@ -389,6 +412,20 @@ async function exportBackup() {
   }
 }
 
+async function clearLearningHere() {
+  const status = $('#status');
+  let tab;
+  try { [tab] = await rqfApi.tabs.query({ active: true, currentWindow: true }); } catch { }
+  if (!tab || !/^https?:/i.test(tab.url || '')) { status.textContent = '当前页面不支持此操作。'; return; }
+  try {
+    await rqfApi.scripting.executeScript({ target: { tabId: tab.id, allFrames: false }, files: [
+      'engine-v2/schema.js', 'engine-v2/discovery.js', 'engine-v2/learning.js',
+    ] });
+    await rqfApi.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.__RQF_V2_PARTS?.clearLearningHere?.() });
+    status.textContent = '✅ 已清除当前网站的选择记忆';
+  } catch (e) { status.textContent = '清除失败:' + ((e && e.message) || e); }
+}
+
 async function init() {
   let profile = null;
   try { ({ profile } = await rqfApi.storage.local.get('profile')); } catch { }
@@ -397,6 +434,7 @@ async function init() {
   $('#btn-fill').addEventListener('click', doFill);
   $('#btn-scan').addEventListener('click', doScan);
   $('#btn-check').addEventListener('click', doCheck);
+  $('#btn-clear-learning').addEventListener('click', clearLearningHere);
   $('#btn-opts').addEventListener('click', () => rqfApi.runtime.openOptionsPage());
   if (window.rqfRenderBackup) await window.rqfRenderBackup($('#backup-bar'), exportBackup);
 }

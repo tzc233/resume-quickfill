@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8"><title>携程组合框结构回归</title>
+<style>.ant-select{display:block;width:260px;height:34px}.ant-select-dropdown{width:280px}.ant-select-item{height:28px}[hidden]{display:none!important}</style>
+<div class="ant-col ant-col-12"><div>证件</div><div class="ant-form-item"><div class="ant-select ant-select-single">
+  <div class="ant-select-selector"><span class="ant-select-selection-search"><input type="search" id="basicInfo_idType" role="combobox" readonly aria-expanded="false"></span><span class="ant-select-selection-placeholder">证件</span></div>
+</div></div></div>
+<div class="ant-select-dropdown" id="popup" hidden><div role="listbox">
+  <div class="ant-select-item ant-select-item-option"><div class="ant-select-item-option-content">身份证</div></div>
+  <div class="ant-select-item ant-select-item-option"><div class="ant-select-item-option-content">护照</div></div>
+</div></div>
+<div class="moduleBlock" id="awards"><div>获奖经历</div><button type="button">添加获奖经历</button></div>
+<script>
+const combo=document.querySelector('.ant-select'), input=document.getElementById('basicInfo_idType'), popup=document.getElementById('popup');
+combo.onmousedown=()=>{popup.hidden=false;input.setAttribute('aria-expanded','true')};
+popup.querySelectorAll('.ant-select-item').forEach(o=>o.onmousedown=()=>{combo.querySelector('.ant-select-selection-placeholder').textContent=o.textContent.trim();popup.hidden=true;input.setAttribute('aria-expanded','false')});
+document.querySelector('#awards button').onclick=()=>{const input=document.createElement('input');input.placeholder='获奖名称';awards.prepend(input)};
+</script>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+window.rqfRun=async()=>{const result=await __RQF_V2.fill({basic:{idNumber:'TEST-ID'}});const diagnosis=await __RQF_V2.deepDiagnose({});const checks={
+  '识别携程id语义':__RQF_V2_PARTS.resolve(__RQF_V2_PARTS.discover()[0]).spec.key==='basic.idType',
+  '弹层组合框选中':combo.textContent.includes('身份证')&&popup.hidden,
+  '使用新适配器':result.filled.some(x=>x.adapter==='popup-combobox'),
+  '诊断展开空区块':diagnosis.v2Inventory.expandedForDiagnosis.includes('添加获奖经历')&&diagnosis.v2Inventory.total>diagnosis.v2Inventory.beforeTotal,
+};const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'ctrip-v2.html',version:result.version,pass:!fails.length,total:Object.keys(checks).length,fails}};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>
