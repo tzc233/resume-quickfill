@@ -71,13 +71,20 @@ const phoenixText = (id, label) => {
 const root = document.getElementById('root');
 // 教育区块:一个普通文本框(旧版认得出)+ 一个 phoenix 下拉(旧版够不着)
 root.appendChild(buildSection('教育经历', [phoenixText('school', '学校名称'), phoenixSelect('deg', '学历')]));
-// 区块外的下拉:档案里没有对应数据,一个选项都不该点
+// 区块外的下拉
+root.appendChild(phoenixSelect('city', '其他意向城市1'));   // 档案「深圳」,页面「深圳市」
+root.appendChild(phoenixSelect('amb', '其他意向城市2'));    // 三个选项都沾边 → 宁可留空
+// 档案里没有对应数据,一个选项都不该点
 root.appendChild(phoenixSelect('src', '如何了解到讯飞校招信息'));
 
-const OPTS = { deg: ['博士研究生', '硕士研究生', '本科', '大专'],
-               src: ['学校就业网', '公司官网', '朋友推荐', '宣讲会'] };
+const OPTS = {
+  deg: ['博士研究生', '硕士研究生', '本科', '大专'],   // 档案「硕士」→ 唯一包含「硕士研究生」
+  city: ['深圳市', '广州市', '上海市'],                // 档案「深圳」→ 唯一包含「深圳市」
+  amb: ['上海', '上海市', '上海浦东'],                 // 三个都沾边 → 不唯一,必须留空
+  src: ['学校就业网', '公司官网', '朋友推荐', '宣讲会'],
+};
 window.clicked = [];
-for (const id of ['deg', 'src']) {
+for (const id of ['deg', 'city', 'amb', 'src']) {
   const box = document.getElementById(id);
   box.querySelector('input').addEventListener('mousedown', () => {
     if (document.querySelector('.zz-layer')) return;
@@ -106,6 +113,16 @@ for (const id of ['deg', 'src']) {
         layer.remove();
       });
       document.body.appendChild(layer);
+      // 真实组件会响应 Esc 和点击外部收起,夹具也照做,否则「收掉弹层」这条验不出来
+      const close = (e) => {
+        if (e.type === 'keydown' && e.key !== 'Escape') return;
+        if (e.type === 'mousedown' && layer.contains(e.target)) return;
+        layer.remove();
+        document.removeEventListener('keydown', close, true);
+        document.removeEventListener('mousedown', close, true);
+      };
+      document.addEventListener('keydown', close, true);
+      document.addEventListener('mousedown', close, true);
     }, 120);
   });
 }
@@ -115,7 +132,10 @@ for (const id of ['deg', 'src']) {
 <script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
 <script>
 (async () => {
-  const P = { basic: {}, education: [{ school: '示例大学', degree: '硕士研究生' }] };
+  /* 档案写「硕士」,页面选项是「硕士研究生」—— 讯飞 5 个下拉全卡在这一步:
+     选项找得到,文字对不上。放宽到「唯一包含」才填得上。 */
+  const P = { basic: { expectedCity: '深圳' },
+    education: [{ school: '示例大学', degree: '硕士', rank: '2/30(实验班)' }] };
   const before = __RQF_V2_PARTS.discover();
   const degField = before.find((f) => /学历/.test(f.text));
   const adapterOf = (f) => (__RQF_V2_PARTS.adapters.find((a) => a.supports(f)) || {}).id;
@@ -133,7 +153,12 @@ for (const id of ['deg', 'src']) {
     '回读确认写入': r.v2.filled.length >= 1,
     '学校名称照常填': document.getElementById('school').value === '示例大学',
     '档案里没有的值_不瞎选': tip('src') === '',
-    '只点了目标那一项': window.clicked.length === 1 && window.clicked[0] === '硕士研究生',
+    '深圳_匹配到深圳市': tip('city') === '深圳市',
+    '多个都沾边_宁可留空': tip('amb') === '',
+    '失败原因带上看到的选项': (r.v2.skipped || []).some((x) =>
+      /看到的选项/.test(x.reason || '') && /上海/.test(x.reason || '')),
+    '只点了该点的两项': window.clicked.length === 2
+      && window.clicked.includes('硕士研究生') && window.clicked.includes('深圳市'),
     '弹层收掉了': !document.querySelector('.zz-layer'),
   });
   parent.postMessage({ __rqf: true, pass: Object.values(checks).every(Boolean), checks,

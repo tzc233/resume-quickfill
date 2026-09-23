@@ -88,6 +88,21 @@
       options = options.filter((o) => !o.matches('.is-disabled,[disabled]'));
       if (!options.length) options = structuralOptions(added);   // 没见过的组件库走结构判断
       let matches = options.filter((o) => aliases.some((a) => norm(o.textContent) === norm(a)));
+      /* 精确匹配不到时受控放宽一档:允许「唯一包含」。
+       * 档案写「深圳」页面给「深圳市」、档案写「硕士」页面给「硕士研究生」——
+       * 讯飞这一版 5 个下拉全卡在这里(选项找到了,文字对不上)。
+       * 但必须【唯一】:多于一个就宁可留空,不猜。 */
+      if (!matches.length) {
+        const loose = options.filter((o) => {
+          const t = norm(o.textContent);
+          return t.length >= 2 && aliases.some((a) => {
+            const x = norm(a);
+            return x.length >= 2 && (t.includes(x) || x.includes(t));
+          });
+        });
+        if (loose.length === 1) matches = loose;
+        else if (loose.length > 1) f.looseCandidates = loose.length;
+      }
       // 嵌套时只留最内层:结构化兜底会同时收下外层 li 和内层 span,两者文本相同
       matches = matches.filter((m) => !matches.some((o) => o !== m && m.contains(o)));
       if (matches.length === 1) target = matches[0];
@@ -104,7 +119,21 @@
         }
       }
     }
-    if (!target) { if (searched) emit(trigger, originalSearch); f.failure ||= options.length ? '搜索/滚动后未找到唯一匹配选项' : '未发现可关联的选项弹层'; trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); trigger.blur(); return done(false); }
+    if (!target) {
+      if (searched) emit(trigger, originalSearch);
+      /* 把实际看到的选项写进失败原因。只说「未找到唯一匹配」没法排查 ——
+       * 到底是弹层没开、还是开了但文字对不上,两种修法完全不同;
+       * 而且不知道页面给的是「硕士」还是「硕士研究生」,别名就只能猜。 */
+      const seen = options.map((o) => String(o.textContent || '').trim().slice(0, 16))
+        .filter(Boolean).slice(0, 12);
+      f.failure ||= options.length
+        ? `想选「${aliases[0]}」,但${options.length} 个选项都对不上`
+          + (f.looseCandidates ? `(放宽后有 ${f.looseCandidates} 个都沾边,不唯一,未猜)` : '')
+          + `;看到的选项:${seen.join('、')}${options.length > seen.length ? ' …' : ''}`
+        : '未发现可关联的选项弹层';
+      trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      trigger.blur(); return done(false);
+    }
     target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); target.click();
     await new Promise((r) => setTimeout(r, 700));
     if (!f.el.isConnected) {
