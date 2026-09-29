@@ -16,7 +16,7 @@ menu.querySelectorAll('[role=option]').forEach(option=>option.onmousedown=()=>{
 window.rqfRun=async()=>{const result=await __RQF_V2.fill({basic:{fullName:'测试用户',gender:'女'}});await new Promise(r=>setTimeout(r,1100));const checks={
   '下拉触发重渲染':select.textContent.includes('女'),
   '新节点恢复文本':document.getElementById('candidate-name').value==='测试用户',
-  '最终报告版本':result.version==='2.9.3',
+  '最终报告版本':result.version===__RQF_V2_PARTS.VERSION,
 };const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'controlled-rerender-v2.html',version:result.version,pass:!fails.length,total:Object.keys(checks).length,fails}};
 if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
 </script>

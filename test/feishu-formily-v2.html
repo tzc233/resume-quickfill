@@ -1,0 +1,108 @@
+<!doctype html><meta charset="utf-8">
+<title>飞书招聘 ud-formily:标签不在 label/aria,容器类名也对不上白名单</title>
+<style>
+ .ud__input,.ud__select{display:inline-block;min-width:220px;min-height:30px;border:1px solid #ccc}
+ .ud__native-input{width:200px;height:24px;border:0}
+ .zz-pop{position:absolute;background:#fff;border:1px solid #ddd;z-index:9}
+ .zz-pop div{height:24px;padding:2px 8px}
+</style>
+<div id="root"></div>
+<script>
+/* 结构照 2.10.0 那份诊断报告(小鹏 · 飞书招聘 xiaopeng.jobs.feishu.cn)复刻。
+   两个关键点:
+   ① 标签在 .ud-formily-item-label 里,既不是 label[for]、也没有 aria-*,
+      而容器叫 ud-formily-item —— 不含 field、也不是 form-item,
+      任何类名白名单都对不上。v2 因此在那一页 40 个控件里一个标签都没读到。
+   ② 下拉真正挂事件的是 .ud__select,而不是里面那个 readonly 的 role=combobox 输入框;
+      报告的 trace 显示引擎只试到 .ud__select__selector__search 就放弃了。 */
+const item = (label, inner) => {
+  const d = document.createElement('div');
+  d.className = 'ud-formily-item ud-formily-item-layout-vertical';
+  d.innerHTML = `<div class="ud-formily-item-label"><label class="ud-formily-item-label-text">${label}</label></div>`
+    + `<div class="ud-formily-item-control"><div class="ud-formily-item-control-content">`
+    + `<div class="ud-formily-item-control-content-component">${inner}</div></div></div>`;
+  return d;
+};
+/* 真实页面的输入框没有 id / name / placeholder / aria —— 标签只存在于
+   .ud-formily-item-label 里。这里也不给 id,否则 labelText 会拿 id 当标签,
+   兜底路径就验不到了(第一版夹具就栽在这)。断言改用 data-t。 */
+const textBox = (t) => `<div class="ud__input ud__input--size-lg"><label class="ud__input-input-wrap">`
+  + `<div class="ud__input-input__placeholder__wrapper"><input class="ud__native-input" data-t="${t}"></div></label></div>`;
+const selectBox = (t) => `<div class="ud__select select__45922b" data-t="${t}">`
+  + `<div class="ud__select__selector ud__select__selector-lg ud__select__selector-readOnly">`
+  + `<div class="ud__select__selector__content">`
+  + `<div class="ud__select__selector__placeholder"></div>`
+  + `<div class="ud__select__selector__search">`
+  + `<input class="ud__select__selector__search__input ud__native-input" type="search" role="combobox" readonly>`
+  + `</div></div></div></div>`;
+
+const sec = document.createElement('div');
+sec.className = 'applyFormModuleWrapper__d8a302';
+sec.innerHTML = '<div class="applyFormModuleWrapper-title">教育经历</div>';
+const right = document.createElement('div');
+right.className = 'applyFormModuleWrapper-right';
+right.appendChild(item('学校名称', textBox('school')));
+right.appendChild(item('专业', textBox('major')));
+right.appendChild(item('学历', selectBox('deg')));
+sec.appendChild(right);
+document.getElementById('root').appendChild(sec);
+
+// 事件只挂在 .ud__select 上 —— 点里面的 readonly input 不会有任何反应
+const box = document.querySelector('[data-t=deg]');
+window.clicked = [];
+box.addEventListener('mousedown', () => {
+  if (document.querySelector('.zz-pop')) return;
+  setTimeout(() => {
+    const pop = document.createElement('div');
+    pop.className = 'zz-pop';
+    const r = box.getBoundingClientRect();
+    pop.style.left = (r.left + scrollX) + 'px'; pop.style.top = (r.bottom + scrollY) + 'px';
+    for (const t of ['博士', '硕士', '本科', '大专']) {
+      const row = document.createElement('div'); row.textContent = t; pop.appendChild(row);
+    }
+    pop.addEventListener('mousedown', (e) => {
+      const row = e.target.closest('.zz-pop > div'); if (!row) return;
+      window.clicked.push(row.textContent);
+      box.querySelector('.ud__select__selector__placeholder').textContent = row.textContent;
+      pop.remove();
+    });
+    const close = (e) => {
+      if (e.type === 'keydown' && e.key !== 'Escape') return;
+      if (e.type === 'mousedown' && pop.contains(e.target)) return;
+      pop.remove();
+      document.removeEventListener('keydown', close, true);
+      document.removeEventListener('mousedown', close, true);
+    };
+    document.addEventListener('keydown', close, true);
+    document.addEventListener('mousedown', close, true);
+    document.body.appendChild(pop);
+  }, 100);
+});
+</script>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script>
+<script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+(async () => {
+  const P = { basic: {}, education: [{ school: '示例大学', major: '计算机科学与技术', degree: '硕士' }] };
+  const fields = __RQF_V2_PARTS.discover();
+  const byLabel = (re) => fields.find((f) => re.test(f.text || ''));
+  const keyOf = (f) => { const sp = __RQF_V2_PARTS.resolve(f).spec || {};
+    return sp.key || (sp.domain ? sp.domain + '.' + sp.field : null); };
+  const pre = {
+    '标签不在 label_aria 也能读到': !!byLabel(/学校名称/) && !!byLabel(/学历/),
+    '不含 field 的容器也解析出键': keyOf(byLabel(/学校名称/)) === 'education.school',
+    '区块认得出': (byLabel(/学校名称/).section || {}).domain === 'education',
+  };
+  const r = await __RQF_V2.fill(P);
+  const checks = Object.assign(pre, {
+    '文本框填上': document.querySelector('[data-t=school]').value === '示例大学'
+      && document.querySelector('[data-t=major]').value === '计算机科学与技术',
+    '事件挂在外层_也能点开并选中':
+      document.querySelector('[data-t=deg] .ud__select__selector__placeholder').textContent === '硕士',
+    '只点了目标那一项': window.clicked.length === 1 && window.clicked[0] === '硕士',
+    '弹层收掉了': !document.querySelector('.zz-pop'),
+  });
+  parent.postMessage({ __rqf: true, pass: Object.values(checks).every(Boolean), checks,
+    total: Object.keys(checks).length }, '*');
+})();
+</script>

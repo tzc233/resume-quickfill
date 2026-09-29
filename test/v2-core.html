@@ -15,7 +15,7 @@
 window.rqfRun=async()=>{
   const result=await __RQF_V2.fill({basic:{fullName:'测试用户',email:'user@example.test',gender:'女'},education:[{school:'测试大学'}],work:[{company:'测试公司'}],awards:[{desc:'测试奖项描述'}]});
   const checks={
-    '2.6版本':result.version==='2.9.3',
+    '2.6版本':result.version===__RQF_V2_PARTS.VERSION,
     '文本适配器':document.getElementById('name').value==='测试用户'&&document.getElementById('email').value==='user@example.test',
     '原生下拉适配器':document.getElementById('gender').value==='F',
     '排除他人姓名':document.getElementById('advisor').value==='',

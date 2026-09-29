@@ -185,7 +185,11 @@ async function doScan() {
     ver = r.result.version || ver;
     probed += (r.result.deepProbe && r.result.deepProbe.attempted) || 0;
     if (r.result.v2Inventory && (!v2Inventory || r.result.v2Inventory.total > v2Inventory.total)) v2Inventory = r.result.v2Inventory;
-    if (r.result.v2Last) v2Last = r.result.v2Last;
+    /* 页面里有空 iframe 时,v2 会在每个帧各产出一份结果。原来「最后一个有就用谁」,
+     * 小鹏那份报告因此把 about:blank 帧的「填入 0 项」当成了结论,
+     * 而真正的表单帧填了多少反而看不见。改成取动作最多的那一帧。 */
+    const busy = (x) => x ? (x.filled || []).length + (x.skipped || []).length : -1;
+    if (r.result.v2Last && busy(r.result.v2Last) > busy(v2Last)) v2Last = r.result.v2Last;
     if (r.result.v2Learning) v2Learning = r.result.v2Learning;
   }
   if (!rows.length) { status.textContent = '没有扫描到任何表单字段。'; return; }

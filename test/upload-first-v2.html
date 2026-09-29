@@ -11,7 +11,7 @@ document.getElementById('resume').addEventListener('change',()=>setTimeout(()=>{
 window.rqfRun=async()=>{const result=await __RQF_V2.fill({basic:{fullName:'测试用户'}},{name:'resume.pdf',type:'application/pdf',dataBase64:'eA=='});const checks={
   '附件先注入':document.getElementById('resume').files.length===1,
   '解析重绘后再填':document.getElementById('name').value==='测试用户',
-  '版本':result.version==='2.9.3',
+  '版本':result.version===__RQF_V2_PARTS.VERSION,
 };const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'upload-first-v2.html',version:result.version,pass:!fails.length,total:Object.keys(checks).length,fails}};
 if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
 </script>

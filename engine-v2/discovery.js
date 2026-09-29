@@ -1,6 +1,47 @@
 (() => {
   const V2 = window.__RQF_V2_PARTS;
   const clean = (s) => String(s || '').replace(/([a-z\d])([A-Z])/g, '$1 $2').toLowerCase().replace(/[*：:()（）_\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  /* 上溯取「容器文字减去通往控件的那一支」—— 剩下的就是标签。
+   * 这条是兜底,但不可或缺:飞书招聘(小鹏等)的标签既不在 label[for]、
+   * 也不在 aria-*,容器叫 ud-formily-item,任何类名白名单都对不上 ——
+   * v2 因此在那一页 40 个控件里一个标签都没读到,整条流水线填 0 项,
+   * 而带上溯逻辑的 1.x 在同一页填上了 13 项。
+   * 多控件容器要停:再往上拿到的是隔壁字段标签拼起来的一坨。 */
+  const ancestorLabel = (el) => {
+    let node = el;
+    for (let depth = 0; depth < 8 && node.parentElement; depth++) {
+      const up = node.parentElement;
+      if (up === document.body) break;
+      // 多控件容器要停:再往上拿到的是隔壁字段标签拼起来的一坨
+      if (up.querySelectorAll('input,textarea,select,[role=combobox]').length > 1) break;
+      /* 先找真正的标签节点(飞书是 .ud-formily-item-label)。必须排除
+       * 包含控件的那一支 —— 否则会把控件自己的包装层当标签。 */
+      for (const cand of up.querySelectorAll('label,[class*="label"],[class*="title"]')) {
+        if (cand.contains(el)) continue;
+        const t = clean(cand.textContent);
+        if (t && t.length <= 40) return t;
+      }
+      node = up;
+    }
+    /* 还是没有,才退回「容器文字减去通往控件的那一支」。 */
+    node = el;
+    for (let depth = 0; depth < 8 && node.parentElement; depth++) {
+      const up = node.parentElement;
+      if (up === document.body) break;
+      if (up.querySelectorAll('input,textarea,select,[role=combobox]').length > 1) break;
+      const whole = clean(up.textContent);
+      const inner = clean(node.textContent);
+      let rest = whole;
+      if (inner) {
+        const at = whole.indexOf(inner);
+        rest = clean(at < 0 ? whole : whole.slice(0, at) + ' ' + whole.slice(at + inner.length));
+      }
+      if (rest && rest.length <= 40) return rest;
+      node = up;
+    }
+    return '';
+  };
+
   const labelText = (el) => {
     const id = el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
     const box = el.closest('.ant-form-item,.aui-form-item,.form-item,.field,[class*="formItem"],[class*="field"]');
@@ -10,7 +51,8 @@
     const wrapperLabel = wrapped?.cloneNode(true);
     wrapperLabel?.querySelectorAll('input,select,textarea,[role=combobox]').forEach((node) => node.remove());
     return clean([id && id.textContent, labelledBy, wrapperLabel?.textContent, el.getAttribute('aria-label'), el.placeholder, el.id, el.name,
-      box && box.querySelector('label,.ant-form-item-label,.aui-form-item__label,[class*="label"]')?.textContent].filter(Boolean).join(' '));
+      box && box.querySelector('label,.ant-form-item-label,.aui-form-item__label,[class*="label"]')?.textContent]
+      .filter(Boolean).join(' ')) || ancestorLabel(el);
   };
   const metadata = (el) => {
     const children = el.querySelectorAll ? el.querySelectorAll('input,textarea,select') : [];

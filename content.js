@@ -2340,12 +2340,18 @@
     const fresh = () => openOptions().filter((o) => !before.has(o));
 
     const inp0 = el.querySelector('input');
-    const targets = [el, inp0, el.parentElement,
-      el.parentElement && el.parentElement.parentElement].filter(Boolean);
+    /* 多备一层:现代组件库嵌套很深,飞书的 .ud__select 在搜索框之上第三层,
+     * 只备到祖父就够不着真正挂事件的那一层。 */
+    const gp = el.parentElement && el.parentElement.parentElement;
+    const targets = [el, inp0, el.parentElement, gp, gp && gp.parentElement].filter(Boolean);
     /* 已经摸清这一页该点哪一层之后,就只试那一层加一个兜底 —— 探路成本只付一次。
      * 组件确实打不开时(禁用的下拉),否则每个都要白等四轮。 */
+    /* 提示只改变【顺序】,不再裁掉其余层。原来命中提示时只试两层 ——
+     * 一旦这一页的提示是错的(小鹏那页就是),每个下拉都只试两层就放弃,
+     * 真正该点的 .ud__select 从头到尾没被碰过。省时间的初衷靠缩短
+     * 非首选项的等待来达成,而不是不试。 */
     const order = openHint.idx >= 0 && targets[openHint.idx]
-      ? [openHint.idx, ...[...targets.keys()].filter((i) => i !== openHint.idx).slice(0, 1)]
+      ? [openHint.idx, ...[...targets.keys()].filter((i) => i !== openHint.idx)]
       : [...targets.keys()];
     let opts = null;
     for (const i of order) {
