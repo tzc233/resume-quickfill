@@ -17,18 +17,19 @@
     for (let depth = 0; depth < 12 && node.parentElement; depth++) {
       const up = node.parentElement;
       if (up === document.body) break;
-      /* 多字段容器要停,否则拿到的是隔壁字段标签拼起来的一坨。
-       * 但只能数【本分支之外】的控件 —— 组合控件自己内部就有好几个 input
-       * (飞书的 ud__select 里既有展示用输入框又有搜索框),按总数算会在
-       * 还没爬到标签那一层就提前收手。 */
-      if (outsideControls(up, node)) break;
-      /* 先找真正的标签节点(飞书是 .ud-formily-item-label)。必须排除
-       * 包含控件的那一支 —— 否则会把控件自己的包装层当标签。 */
-      for (const cand of up.querySelectorAll('label,[class*="label"],[class*="title"]')) {
-        if (cand.contains(el)) continue;
-        const t = clean(cand.textContent);
-        if (t && t.length <= 40) return t;
-      }
+      /* 找真正的标签节点(飞书是 .ud-formily-item-label),排除包含控件的那一支。
+       * 判据是「这一层只有一个标签文本」:只有一个就是本字段的,多于一个说明
+       * 已经爬到多字段容器,停手。
+       * 不再用「本分支外还有控件就停」—— 起止日期是【同一个表单项里的两个】
+       * 输入框,那条一触即发,标签还没爬到就收手,日期于是完全没有标签、
+       * 连规则都匹配不上,「日期没选上」就是这么来的。 */
+      const marks = [...new Set(Array.from(
+        up.querySelectorAll('label,[class*="label"],[class*="title"]'))
+        .filter((c) => !c.contains(el))
+        .map((c) => clean(c.textContent))
+        .filter((t) => t && t.length <= 40))];
+      if (marks.length === 1) return marks[0];
+      if (marks.length > 1) break;
       node = up;
     }
     /* 还是没有,才退回「容器文字减去通往控件的那一支」。 */
@@ -79,11 +80,15 @@
       const text = clean(heading && heading.textContent);
       const hit = V2.sectionAliases.find(([re]) => re.test(text));
       if (hit) return { domain: hit[1], text, node };
-      // Some ATS render headings as anonymous divs, many wrappers above the form.
-      // Only exact short section names count; never infer from a whole form's text.
-      const titles = Array.from(node.children).filter((child) => !child.contains(el) &&
-        !child.querySelector('input,textarea,select') &&
-        /^(教育经历|教育背景|实习经历|工作经历|项目经历|项目经验|在校实践|获奖情况|获奖经历|论文\/专著|论文成果)$/.test(clean(child.textContent)));
+      /* 有些 ATS 把区块标题渲染成没有语义标签的 div。原来这里是一张写死的
+       * 区块名白名单 —— 飞书的「语言能力」不在表里,于是 8 个语言下拉全部
+       * section 为空、域规则绑不上、key 也就是 null,获奖同理。
+       * 改成三条一起卡:文字短、能对上别名表、且该层只有这一个。 */
+      const titles = Array.from(node.children).filter((child) => {
+        if (child.contains(el) || child.querySelector('input,textarea,select')) return false;
+        const t = clean(child.textContent);
+        return t && t.length <= 10 && V2.sectionAliases.some(([re]) => re.test(t));
+      });
       if (titles.length === 1) {
         const text = clean(titles[0].textContent);
         const hit = V2.sectionAliases.find(([re]) => re.test(text));

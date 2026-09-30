@@ -2379,7 +2379,17 @@
       // 探测失败要把搜索框擦干净,不能把半截关键词留在页面上
       if (!opts) setNative(inp0, '');
     }
-    if (!opts) { trace.push({ phase: 'failed-open', popups: visiblePopupDebug() }); closePopup(); return { ok: false, reason: '下拉点不开、打字也不出选项,请手动选' }; }
+    if (!opts) {
+      trace.push({ phase: 'failed-open', popups: visiblePopupDebug() });
+      closePopup();
+      /* 别再一口咬定「点不开」。飞书那份 trace 里第 4 次尝试的目标 class 上
+       * 已经带着 selector-open —— 组件是开着的,只是弹层里的选项我们看不见。
+       * 这两种情况修法完全相反,提示必须分开,否则排查方向从一开始就是错的。 */
+      const opened = targets.some((t) => t && /(^|[-_])open([-_]|$)/i.test(String(t.className || '')));
+      return { ok: false, reason: opened
+        ? '组件已展开但读不到选项(弹层结构未知),请手动选'
+        : '下拉点不开、打字也不出选项,请手动选' };
+    }
     trace.push({ phase: 'options', count: opts.length, items: optionDebug(opts) });
     let target = pickOption(opts, key, v);
     if (!target) {

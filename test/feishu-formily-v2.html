@@ -51,8 +51,31 @@ const comboText = (t) => `<div class="ud__select select__45922b"><div>`
 right.appendChild(item('学校名称', comboText('school')));
 right.appendChild(item('专业', textBox('major')));
 right.appendChild(item('学历', selectBox('deg')));
+/* 起止日期:两个输入框在【同一个表单项】里,共用一个标签「在校时间」。
+   上一版「本分支外还有控件就停」在这里一触即发,标签还没爬到就收手,
+   日期于是完全没有标签、连规则都匹配不上。 */
+const dateRange = () =>
+  '<div class="throne-biz-date-range-picker-wrapper">'
+  + '<div class="throne-biz-date-range-picker-input"><div class="ud__input">'
+  + '<label class="ud__input-input-wrap"><div class="ud__input-input__placeholder__wrapper">'
+  + '<input class="ud__native-input" data-t="edu-start"></div></label></div></div>'
+  + '<div class="throne-biz-date-range-picker-input"><div class="ud__input">'
+  + '<label class="ud__input-input-wrap"><div class="ud__input-input__placeholder__wrapper">'
+  + '<input class="ud__native-input" data-t="edu-end"></div></label></div></div></div>';
+right.appendChild(item('在校时间', dateRange()));
 sec.appendChild(right);
 document.getElementById('root').appendChild(sec);
+
+/* 「语言能力」区块:区块标题原来走一张写死的白名单,这个名字不在表里,
+   于是整块的 section 为空、域规则绑不上、key 也是 null。 */
+const lang = document.createElement('div');
+lang.className = 'applyFormModuleWrapper__d8a302';
+lang.innerHTML = '<div class="applyFormModuleWrapper-title">语言能力</div>';
+const langRight = document.createElement('div');
+langRight.className = 'applyFormModuleWrapper-right';
+langRight.appendChild(item('语言', textBox('lang-name')));
+lang.appendChild(langRight);
+document.getElementById('root').appendChild(lang);
 
 // 事件只挂在 .ud__select 上 —— 点里面的 readonly input 不会有任何反应
 const box = document.querySelector('[data-t=deg]');
@@ -115,6 +138,12 @@ box.addEventListener('mousedown', () => {
       && document.querySelector('[data-t=major]').value === '计算机科学与技术',
     '事件挂在外层_也能点开并选中':
       document.querySelector('[data-t=deg] .zz-chosen')?.textContent === '硕士',
+    '同一表单项两个日期_都读到共用标签':
+      __RQF_V2_PARTS.discover().filter((f) => /在校时间/.test(f.text || '')).length === 2,
+    '语言能力区块_不在白名单也认得出': (() => {
+      const f = __RQF_V2_PARTS.discover().find((x) => /^语言/.test(x.text || ''));
+      return !!f && (f.section || {}).domain === 'languages';
+    })(),
     '只点了目标那一项': window.clicked.length === 1 && window.clicked[0] === '硕士',
     '弹层收掉了': !document.querySelector('.zz-pop'),
   });
