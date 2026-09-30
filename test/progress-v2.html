@@ -1,0 +1,68 @@
+<!doctype html><meta charset="utf-8">
+<title>进度条要活到两条流水线都干完</title>
+<style>.ud__select{display:inline-block;min-width:200px;min-height:28px;border:1px solid #ccc}
+ .zz-pop{position:absolute;background:#fff;border:1px solid #ddd;z-index:9}.zz-pop div{height:24px;padding:2px 8px}</style>
+<div id="root"></div>
+<script>
+/* 2.x 是在 1.x 跑完【之后】接着干活的。1.x 原来跑完就 ui.finish(),
+   而 finish 会起一个 5 秒后销毁的定时器 —— 2.x 那一段(每个下拉 700ms 等待、
+   逐层试触发)轻松超过 5 秒。结果:进度条自己撤了,页面还在被点,
+   用户判断不出什么时候能动手。这一页就是盯这件事。 */
+const item = (label, inner) => {
+  const d = document.createElement('div');
+  d.className = 'ud-formily-item';
+  d.innerHTML = `<div class="ud-formily-item-label"><label>${label}</label></div>`
+    + `<div class="ud-formily-item-control"><div class="ud-formily-item-control-content">`
+    + `<div class="ud-formily-item-control-content-component">${inner}</div></div></div>`;
+  return d;
+};
+const sec = document.createElement('div');
+sec.className = 'applyFormModuleWrapper__d8a302';
+sec.innerHTML = '<div class="t">教育经历</div>';
+const right = document.createElement('div');
+right.className = 'applyFormModuleWrapper-right';
+right.appendChild(item('学校名称',
+  '<div class="ud__input"><label class="ud__input-input-wrap"><div class="w">'
+  + '<input class="ud__native-input" data-t="school"></div></label></div>'));
+// 三个下拉,足够让 2.x 那一段跑过 5 秒
+for (const id of ['d1', 'd2', 'd3']) {
+  right.appendChild(item('学历',
+    `<div class="ud__select" data-t="${id}"><div class="ud__select__selector">`
+    + `<div class="ud__select__selector__content">`
+    + `<div class="ud__select__selector__placeholder"></div>`
+    + `<div class="ud__select__selector__search">`
+    + `<input class="ud__select__selector__search__input" type="search" role="combobox" readonly>`
+    + `</div></div></div></div>`));
+}
+sec.appendChild(right);
+document.getElementById('root').appendChild(sec);
+// 故意不挂任何打开逻辑 —— 每个下拉都要走满「逐层试触发 + 等待」才放弃
+</script>
+<!-- 进度条属于 1.x 引擎,这一页必须把它也加载进来 -->
+<script src="../content.js"></script>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script>
+<script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+(async () => {
+  const UI = () => document.getElementById('__rqf_progress__');
+  const P = { basic: {}, education: [{ school: '示例大学', degree: '硕士' }] };
+  let aliveDuringV2 = null, t0 = performance.now();
+  const p = __RQF_V2.fill(P);
+  /* 1.x 先跑完;等它收尾的 5 秒定时器本该到点的时刻再看一眼 ——
+     进度条必须还在,因为 2.x 还没干完。 */
+  const poll = setInterval(() => {
+    if (performance.now() - t0 > 5600 && aliveDuringV2 === null) aliveDuringV2 = !!UI();
+  }, 200);
+  const r = await p;
+  clearInterval(poll);
+  const box = UI();
+  const checks = {
+    '两条流水线跑完前_进度条还在': aliveDuringV2 === true,
+    '收尾文案是最终结果': !!box && /已填|未填充/.test(box.textContent || ''),
+    '收尾后不再显示处理中': !box || !/正在/.test(box.textContent || ''),
+    '结果照常返回': !!r && Array.isArray(r.filled),
+  };
+  parent.postMessage({ __rqf: true, pass: Object.values(checks).every(Boolean), checks,
+    total: Object.keys(checks).length }, '*');
+})();
+</script>

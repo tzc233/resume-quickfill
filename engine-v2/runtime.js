@@ -3,16 +3,37 @@
   window.__RQF_V2 = {
     version: V2.VERSION,
     async fill(profile, resumeFile) {
+      try {
+        return await this._fill(profile, resumeFile);
+      } catch (e) {
+        /* 进度条现在归 2.x 收尾 —— 一旦这里抛错而没人收,页面上会永远挂着
+         * 一条「正在处理组合控件…」,比没有进度条更让人以为卡死。 */
+        const ui = (window.__RQF && window.__RQF.ui) || { finish() {} };
+        ui.finish(`⚠️ 填充出错:${String((e && e.message) || e).slice(0, 40)}`);
+        throw e;
+      }
+    },
+    async _fill(profile, resumeFile) {
       const handled = new Set(), filled = [], skipped = [];
       const receipts = [];
       // 下拉和日期会触发表单整体重渲染。先让兼容层完成这些高扰动操作，
       // 再由 2.x 写普通文本，避免 React 用旧状态把刚写入的内容清空。
-      const legacy = window.__RQF ? await window.__RQF.fill(profile, resumeFile) : { filled: [], skipped: [], unmatched: [] };
+      const ui = (window.__RQF && window.__RQF.ui) || { step() {}, finish() {} };
+      /* keepProgress:1.x 跑完不收尾。它的 finish 会起一个 5 秒后销毁的定时器,
+       * 而下面这一段(每个下拉 700ms 等待、逐层试触发)轻松超过 5 秒 ——
+       * 进度条自己撤掉、页面却还在被点,用户判断不出什么时候能动手。 */
+      const legacy = window.__RQF
+        ? await window.__RQF.fill(profile, resumeFile, { keepProgress: true })
+        : { filled: [], skipped: [], unmatched: [] };
       if (legacy.awardRouting === 'merged') profile = {...profile, awards: window.__RQF.mergeAwardEntries(profile.awards, profile.competitions)};
       await new Promise((resolve) => setTimeout(resolve, 180));
       const fields = V2.discover(), resolutions = V2.resolveAll(fields);
       for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex++) {
         let field = fields[fieldIndex];
+        if (fieldIndex % 4 === 0) {
+          ui.step(`正在处理组合控件 ${fieldIndex + 1}/${fields.length}…`,
+            0.93 + 0.06 * (fieldIndex / Math.max(1, fields.length)));
+        }
         const relocate = () => {
           if (field.el.isConnected) return field;
           const fresh = V2.discover();
@@ -63,6 +84,12 @@
       const dedupe = (rows) => [...new Map(rows.map((x) => [`${x.label}\0${x.value || x.reason || ''}`, x])).values()];
       const result = { ...legacy, version: V2.VERSION, filled: dedupe([...filled, ...(legacy.filled || [])]), skipped: dedupe([...skipped, ...(legacy.skipped || [])]), v2: { handled: handled.size, filled, skipped } };
       window.__RQF_V2_LAST = { url: location.href, filled: filled.map((x) => ({ label: x.label, adapter: x.adapter })), skipped };
+      // 真正的收尾在这里 —— 两条流水线都干完了,进度条才撤
+      const nf = result.filled.length + (legacy.fileFilled ? 1 : 0);
+      const ns = result.skipped.length;
+      ui.finish(nf
+        ? `✅ 已填 ${nf} 项${ns ? ` · 跳过 ${ns} 项` : ''},请自行核对后提交`
+        : '未填充任何字段 —— 点插件图标看原因');
       return result;
     },
     async deepDiagnose(profile) {

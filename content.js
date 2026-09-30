@@ -1196,7 +1196,7 @@
 
   /* ---------- 主流程 ----------
    * 异步:自定义下拉需要点开、等选项层渲染、再点中,无法同步完成。 */
-  const runFill = async (rawProfile, resumeFile) => {
+  const runFill = async (rawProfile, resumeFile, opts) => {
     const P = normalize(rawProfile);
     const report = { url: location.href, filled: [], skipped: [], unmatched: [], fileFilled: false, fileLabel: '' };
     /* 文本写入先记账,循环结束后统一回读校验:Moka 这类站点的「年/月」框
@@ -1756,7 +1756,10 @@
       if (tag !== 'TEXTAREA' && !TEXTLIKE.has(type)) continue;
 
       if (el.value && el.value.trim()) {
-        if (el.value.trim() === v) report.filled.push({ label: hit.label, value: v });
+        /* 值本来就对 —— 这里是【没有写】,直接跳过的。原来把它记进 filled,
+         * 于是「已填 13 项」里大半其实一个字都没改,数字看着在干活。
+         * 记成单独一类:既不算填写成果,也不是失败。 */
+        if (el.value.trim() === v) report.skipped.push({ label: hit.label, reason: '已是正确值,未改动' });
         else report.skipped.push({ label: hit.label, reason: '已有内容,未覆盖' });
         continue;
       }
@@ -1857,17 +1860,23 @@
 
     const nf = report.filled.length + (report.fileFilled ? 1 : 0);
     const ns = report.skipped.length;
-    ui.finish(nf
+    /* 2.x 是在 1.x 跑完之后接着干活的。这里要是直接收尾,finish 会起一个
+     * 5 秒后销毁的定时器 —— 而 2.x 那一段(每个下拉 700ms 等待、还要逐层试触发)
+     * 轻松超过 5 秒。结果就是进度条自己撤了、页面还在被点,
+     * 用户根本判断不出什么时候能动手。交给调用方收尾。 */
+    report.progressText = nf
       ? `✅ 已填 ${nf} 项${ns ? ` · 跳过 ${ns} 项` : ''},请自行核对后提交`
-      : '未填充任何字段 —— 点插件图标看原因');
+      : '未填充任何字段 —— 点插件图标看原因';
+    if (opts && opts.keepProgress) ui.step('正在处理组合控件…', 0.97);
+    else ui.finish(report.progressText);
     return report;
   };
 
   /* 出错时也要把进度条收掉:否则页面上会永远挂着一条「正在填充…」,
    * 那比没有进度条更让人以为卡死了。 */
-  const fill = async (rawProfile, resumeFile) => {
+  const fill = async (rawProfile, resumeFile, opts) => {
     try {
-      return await runFill(rawProfile, resumeFile);
+      return await runFill(rawProfile, resumeFile, opts);
     } catch (e) {
       ui.finish(`⚠️ 填充出错:${String((e && e.message) || e).slice(0, 40)}`);
       throw e;
@@ -2780,5 +2789,5 @@
    * 是不是「自有标签」—— 光看最终命中的规则,分不清是候选没生成还是被过滤掉了。 */
   const debugCands = (el) => (el ? { cands: (el.tagName ? labelCands(el) : []), widget: widgetCands(el) } : null);
 
-  window.__RQF = { version: VERSION, fill, scan, deepDiagnose, addButtonDomain, debugCands, mergeAwardEntries };
+  window.__RQF = { version: VERSION, fill, scan, deepDiagnose, addButtonDomain, debugCands, mergeAwardEntries, ui };
 })();
