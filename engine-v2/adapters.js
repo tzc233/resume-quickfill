@@ -5,6 +5,11 @@
    * 也没有 aria-controls —— 三条通用判据一条都不满足,而 nativeText 又显式排除了它,
    * 结果 20 个控件两头都不收,整页 2.x 流水线填 0 项。 */
   const ownerSelector = '.ant-select,.el-select,.aui-select,.phoenix-select';
+  /* 只用于「回读时往上找到组件根」,不参与认领。
+   * 不能把 .ud__select 放进 ownerSelector —— 飞书的「学校名称」是自动补全,
+   * 外面也套着 ud__select,但里面是个该直接打字的普通输入框;
+   * 一旦按下拉认领,就会去点一个根本不存在的弹层。 */
+  const rootSelector = ownerSelector + ',.ud__select';
   const emit = (el, value) => {
     const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
@@ -142,8 +147,17 @@
       f.el = fresh[0].el;
     }
     const finalValue = V2.readValue(f);
-    const ok = aliases.some((a) => norm(finalValue) === norm(a)) && (!searched || !visible(target) || target.getAttribute('aria-selected') === 'true');
-    if (!ok) f.failure = '选择后显示值未保留';
+    let hit = aliases.some((a) => norm(finalValue) === norm(a));
+    /* 读不出值时兜底看组件根的可见文字。每家组件库放选中值的节点类名都不一样
+     * (飞书的 ud__select 就不在任何已知列表里),但选中之后那段文字一定
+     * 显示在组件内。只有目标值真的出现才算数,所以不会把失败误判成成功。 */
+    if (!hit && !finalValue) {
+      const owner = f.el.closest(rootSelector) || f.el;
+      const shown = norm(owner.innerText || '');
+      hit = shown && aliases.some((a) => norm(a).length >= 2 && shown.includes(norm(a)));
+    }
+    const ok = hit && (!searched || !visible(target) || target.getAttribute('aria-selected') === 'true');
+    if (!ok) f.failure = finalValue ? `选择后显示值是「${String(finalValue).slice(0, 16)}」,与目标不符` : '选择后组件里读不到目标值';
     return done(ok);
   } };
   const editable = { id: 'contenteditable', supports: (f) => f.el.isContentEditable, async write(f, value) {

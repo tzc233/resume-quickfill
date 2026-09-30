@@ -7,13 +7,21 @@
    * v2 因此在那一页 40 个控件里一个标签都没读到,整条流水线填 0 项,
    * 而带上溯逻辑的 1.x 在同一页填上了 13 项。
    * 多控件容器要停:再往上拿到的是隔壁字段标签拼起来的一坨。 */
+  /* up 里有没有「不属于当前控件这一支」的其它控件 —— 有就说明它是多字段容器 */
+  const outsideControls = (up, node) => Array.from(
+    up.querySelectorAll('input,textarea,select,[role=combobox]')
+  ).some((c) => !node.contains(c));
+
   const ancestorLabel = (el) => {
     let node = el;
-    for (let depth = 0; depth < 8 && node.parentElement; depth++) {
+    for (let depth = 0; depth < 12 && node.parentElement; depth++) {
       const up = node.parentElement;
       if (up === document.body) break;
-      // 多控件容器要停:再往上拿到的是隔壁字段标签拼起来的一坨
-      if (up.querySelectorAll('input,textarea,select,[role=combobox]').length > 1) break;
+      /* 多字段容器要停,否则拿到的是隔壁字段标签拼起来的一坨。
+       * 但只能数【本分支之外】的控件 —— 组合控件自己内部就有好几个 input
+       * (飞书的 ud__select 里既有展示用输入框又有搜索框),按总数算会在
+       * 还没爬到标签那一层就提前收手。 */
+      if (outsideControls(up, node)) break;
       /* 先找真正的标签节点(飞书是 .ud-formily-item-label)。必须排除
        * 包含控件的那一支 —— 否则会把控件自己的包装层当标签。 */
       for (const cand of up.querySelectorAll('label,[class*="label"],[class*="title"]')) {
@@ -25,10 +33,10 @@
     }
     /* 还是没有,才退回「容器文字减去通往控件的那一支」。 */
     node = el;
-    for (let depth = 0; depth < 8 && node.parentElement; depth++) {
+    for (let depth = 0; depth < 12 && node.parentElement; depth++) {
       const up = node.parentElement;
       if (up === document.body) break;
-      if (up.querySelectorAll('input,textarea,select,[role=combobox]').length > 1) break;
+      if (outsideControls(up, node)) break;
       const whole = clean(up.textContent);
       const inner = clean(node.textContent);
       let rest = whole;

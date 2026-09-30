@@ -41,7 +41,14 @@ sec.className = 'applyFormModuleWrapper__d8a302';
 sec.innerHTML = '<div class="applyFormModuleWrapper-title">教育经历</div>';
 const right = document.createElement('div');
 right.className = 'applyFormModuleWrapper-right';
-right.appendChild(item('学校名称', textBox('school')));
+/* 学校名称是「下拉型」控件:ud__select 里再包一个 ud__input,
+   比普通输入框多出两层包装,标签所在的 ud-formily-item 因此落在第 9 层。
+   原来上溯只爬 8 层,正好差一层够不着 —— 这一栏的标签就成了空。 */
+const comboText = (t) => `<div class="ud__select select__45922b"><div>`
+  + `<div class="ud__input ud__input--size-lg"><label class="ud__input-input-wrap">`
+  + `<div class="ud__input-input__placeholder__wrapper">`
+  + `<input class="ud__native-input" data-t="${t}"></div></label></div></div></div>`;
+right.appendChild(item('学校名称', comboText('school')));
 right.appendChild(item('专业', textBox('major')));
 right.appendChild(item('学历', selectBox('deg')));
 sec.appendChild(right);
@@ -63,7 +70,15 @@ box.addEventListener('mousedown', () => {
     pop.addEventListener('mousedown', (e) => {
       const row = e.target.closest('.zz-pop > div'); if (!row) return;
       window.clicked.push(row.textContent);
-      box.querySelector('.ud__select__selector__placeholder').textContent = row.textContent;
+      /* 选中值放进一个任何选择器都不认识的节点 —— 验证「读不出值就看组件根的
+         可见文字」这条兜底。真实飞书把值放在哪个类名里,我并不知道。 */
+      box.querySelector('.ud__select__selector__placeholder').textContent = '';
+      let v = box.querySelector('.zz-chosen');
+      if (!v) {
+        v = document.createElement('span'); v.className = 'zz-chosen';
+        box.querySelector('.ud__select__selector__content').appendChild(v);
+      }
+      v.textContent = row.textContent;
       pop.remove();
     });
     const close = (e) => {
@@ -91,6 +106,7 @@ box.addEventListener('mousedown', () => {
   const pre = {
     '标签不在 label_aria 也能读到': !!byLabel(/学校名称/) && !!byLabel(/学历/),
     '不含 field 的容器也解析出键': keyOf(byLabel(/学校名称/)) === 'education.school',
+    '下拉型控件_多两层包装也读到标签': !!byLabel(/学校名称/),
     '区块认得出': (byLabel(/学校名称/).section || {}).domain === 'education',
   };
   const r = await __RQF_V2.fill(P);
@@ -98,7 +114,7 @@ box.addEventListener('mousedown', () => {
     '文本框填上': document.querySelector('[data-t=school]').value === '示例大学'
       && document.querySelector('[data-t=major]').value === '计算机科学与技术',
     '事件挂在外层_也能点开并选中':
-      document.querySelector('[data-t=deg] .ud__select__selector__placeholder').textContent === '硕士',
+      document.querySelector('[data-t=deg] .zz-chosen')?.textContent === '硕士',
     '只点了目标那一项': window.clicked.length === 1 && window.clicked[0] === '硕士',
     '弹层收掉了': !document.querySelector('.zz-pop'),
   });
