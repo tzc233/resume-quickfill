@@ -215,7 +215,9 @@ async function doScan() {
     `共 ${rows.length} 个字段:${miss.length} 个未命中规则,${warns} 个标签定位可疑`,
     `深度探测:${probed} 个代表性空白控件（仅打开并关闭，未选择、未写值）`,
     v2Inventory ? `2.x 页面能力图:探测前 ${v2Inventory.beforeTotal} 个、展开后 ${v2Inventory.total} 个控件（可见 ${v2Inventory.visible} / 隐藏 ${v2Inventory.hidden}），${v2Inventory.ariaLinked} 个 ARIA 弹层关联；临时展开 ${v2Inventory.expandedForDiagnosis.length} 个空区块` : '',
-    v2Learning ? `2.x 本地选择记忆:当前站点/组件家族 ${v2Learning.current} 条,全部 ${v2Learning.total} 条` : '',
+    v2Learning ? `2.x 本地填写记忆:当前站点 ${v2Learning.current} 条`
+      + `(下拉 ${v2Learning.currentSelect ?? v2Learning.current} / 填空 ${v2Learning.currentText ?? 0})`
+      + `,全部 ${v2Learning.total} 条` : '',
     '',
     /* 一行一个字段,结果直接写在这一行上。原来「填充结果」是另一张按标签分组的表,
      * 页面上有两个「学院名称」时根本对不上是哪一行没填成。 */
@@ -426,7 +428,7 @@ async function clearLearningHere() {
       'engine-v2/schema.js', 'engine-v2/discovery.js', 'engine-v2/learning.js',
     ] });
     await rqfApi.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.__RQF_V2_PARTS?.clearLearningHere?.() });
-    status.textContent = '✅ 已清除当前网站的选择记忆';
+    status.textContent = '✅ 已清除当前网站的填写记忆(下拉 + 填空)';
   } catch (e) { status.textContent = '清除失败:' + ((e && e.message) || e); }
 }
 

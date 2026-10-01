@@ -249,7 +249,11 @@ const CHECKS = {
     奖项1: v('a1') === '示例一等奖学金',
     奖项2_不同于奖项1: v('a2') === '示例二等奖学金',
     奖项3: v('a3') === '示例优秀学生',
-    奖项456_超出档案应留空: v('a4') === '' && v('a5') === '' && v('a6') === '',
+    /* 页面只有「获奖情况」一个区块、没有竞赛区块 —— 竞赛没有别处可去,
+       按 mergeAwardEntries 并进奖项流,所以第 4 栏是那条竞赛。
+       关键性质不变:档案之外的第 5、6 栏必须留空。 */
+    奖项4_竞赛并入奖项流: v('a4') === '示例数学建模竞赛',
+    奖项56_超出档案应留空: v('a5') === '' && v('a6') === '',
     作品描述_不该被项目描述污染: v('port-desc') === '',
     简历已注入: document.getElementById('b-resume').files.length === 1,
     照片_不该填: document.getElementById('b-photo').files.length === 0,
@@ -496,8 +500,9 @@ const CHECKS = {
       实习_从零展开两段: document.querySelectorAll('[data-blk=intern] .fieldItem___1hMDk').length === 8,
       项目_从零展开一段: document.querySelectorAll('[data-blk=proj] .fieldItem___1hMDk').length === 3,
       /* 荣誉块里一个能当锚点的字段都没有(只有奖项类型/获奖情况)。
-         原来数不出段数就一律算 1,点出第二块后判定「没反应」而收手。 */
-      奖项_无锚点也能展开三段: document.querySelectorAll('[data-blk=award] .fieldItem___1hMDk').length === 6,
+         原来数不出段数就一律算 1,点出第二块后判定「没反应」而收手。
+         段数是 3 条奖项 + 1 条并入的竞赛(页面没有竞赛区块)= 4 块 × 2 栏。 */
+      奖项_无锚点也能展开四段: document.querySelectorAll('[data-blk=award] .fieldItem___1hMDk').length === 8,
 
       // 展开后要真的填进去
       基本_姓名: v('e-name') === '李思远',
@@ -524,9 +529,11 @@ const CHECKS = {
 
       实习_公司: [...document.querySelectorAll('[data-blk=intern] input')]
         .filter((i) => /-co-/.test(i.id)).map((i) => i.value).join('|') === '甲公司|乙公司',
-      奖项_三段获奖情况各不相同: (() => {
+      /* 「获奖情况」在重复的奖项块里出现多次 —— 它是每条奖项自己的描述位,
+         而不是整页汇总。原来四块灌的是同一段汇总文字,这里要求各不相同。 */
+      奖项_每块获奖情况各不相同: (() => {
         const xs = [...document.querySelectorAll('[data-blk=award] textarea')].map((i) => i.value);
-        return xs.length === 3 && xs.every(Boolean);
+        return xs.length === 4 && xs.every(Boolean) && new Set(xs).size === 4;
       })(),
     };
   },

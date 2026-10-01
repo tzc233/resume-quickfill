@@ -48,8 +48,15 @@
         const hit = resolutions[fieldIndex];
         const isSelection = field.tag === 'select' || field.role === 'combobox' || !!field.el.closest('.ant-select,.el-select,.aui-select');
         const learned = isSelection && V2.learnedFor ? await V2.learnedFor(field, hit) : null;
-        if (!hit && !learned) continue;
-        const value = learned || V2.valueFor(profile, hit.spec); if (value == null || value === '') continue;
+        /* 填空也复用上次手填的内容 —— 但只在【规则没认出这个字段】时,
+         * 档案永远优先:下拉的记忆是「这个站点的选项该点哪一个」,填空的记忆
+         * 只是「档案里没有的那些问题上次答了什么」,不该盖掉档案。 */
+        const learnedText = !isSelection && !hit && V2.learnedTextFor
+          ? await V2.learnedTextFor(field, fields) : null;
+        if (!hit && !learned && !learnedText) continue;
+        const fromProfile = hit ? V2.valueFor(profile, hit.spec) : null;
+        const value = learned || (fromProfile == null || fromProfile === '' ? learnedText : fromProfile);
+        if (value == null || value === '') continue;
         const adapter = V2.adapters.find((a) => a.supports(field)); if (!adapter) continue;
         let ok = false;
         try { ok = await adapter.write(field, value, hit?.spec || {}); }
@@ -68,7 +75,7 @@
           }
         }
         const shown = learned ? learned.text : String(value);
-        if (ok) { handled.add(field.el); const row = { label: field.text, value: shown, engine: 'v2', adapter: adapter.id, learned: !!learned }; filled.push(row); receipts.push({field, row, expected: V2.readValue(field)}); }
+        if (ok) { handled.add(field.el); const row = { label: field.text, value: shown, engine: 'v2', adapter: adapter.id, learned: !!(learned || learnedText) }; filled.push(row); receipts.push({field, row, expected: V2.readValue(field)}); }
         else skipped.push({ label: field.text, reason: field.failure || `${adapter.id} 写入后校验失败`, engine: 'v2' });
       }
       await new Promise((resolve) => setTimeout(resolve, 700));

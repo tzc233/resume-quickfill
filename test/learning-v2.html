@@ -1,13 +1,48 @@
-<!doctype html><meta charset="utf-8"><title>本地选择学习</title>
-<style>select{display:block;width:200px;height:30px}</style>
+<!doctype html><meta charset="utf-8"><title>本地填写记忆</title>
+<style>select,input,textarea{display:block;width:200px;height:30px}</style>
 <label for="nature">公司性质</label><select id="nature"><option value="">请选择</option><option value="private">民营</option><option value="state">国企</option></select>
+<!-- 档案里压根没有这些问题:上次手填过,这次该照着填回去 -->
+<label for="age">年龄</label><input id="age" placeholder="请填写年龄">
+<label for="code">短信验证码</label><input id="code" placeholder="请填写验证码">
+<label for="person">姓名</label><input id="person" placeholder="请填写姓名">
+<!-- 同一个标签重复出现(重复的经历块):一个值不能灌进每一块 -->
+<label for="lab1">所在实验室</label><input id="lab1">
+<label for="lab2">所在实验室</label><input id="lab2">
 <script>const memory={};window.chrome={storage:{local:{async get(k){return {[k]:memory[k]}},async set(v){Object.assign(memory,v)}}}};</script>
 <script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/learning.js"></script><script src="../engine-v2/runtime.js"></script>
 <script>
-window.rqfRun=async()=>{const field=__RQF_V2_PARTS.discover()[0];await __RQF_V2_PARTS.rememberSelection(field,null,{text:'民营',value:'private',adapter:'native-select'});const result=await __RQF_V2.fill({basic:{}});const info=await __RQF_V2_PARTS.learningInfo();const checks={
-  '无档案字段也能复用':nature.value==='private',
-  '结果标记来自学习':result.v2.filled.some(x=>x.learned&&x.value==='民营'),
-  '本地记录可诊断':info.current>=1,
-};const fails=Object.keys(checks).filter(k=>!checks[k]);return {page:'learning-v2.html',version:result.version,pass:!fails.length,total:Object.keys(checks).length,fails}};
+window.rqfRun=async()=>{
+  const P=__RQF_V2_PARTS;
+  const fieldOf=(el)=>{const fs=P.discover();return {fs,f:fs.find(x=>x.el===el)}};
+  await P.rememberSelection(P.discover()[0],null,{text:'民营',value:'private',adapter:'native-select'});
+  // 手填的痕迹:直接走对外的记忆接口,等价于用户在这页打完字后离开输入框
+  {const {fs,f}=fieldOf(age); await P.rememberText(f,fs,'25');}
+  {const {fs,f}=fieldOf(code); await P.rememberText(f,fs,'8341');}
+  {const {fs,f}=fieldOf(person); await P.rememberText(f,fs,'张三');}
+  {const {fs,f}=fieldOf(lab2); await P.rememberText(f,fs,'第二个实验室');}
+
+  const result=await __RQF_V2.fill({basic:{fullName:'李思远'}});
+  const after={age:age.value,code:code.value,person:person.value,lab1:lab1.value,lab2:lab2.value,nature:nature.value};
+  /* 引擎自己写入时派发的是合成事件(isTrusted=false)—— 绝不能被当成
+     「用户手填」记下来,否则一次填错会被记忆固化下来。 */
+  age.value='99';age.dispatchEvent(new Event('change',{bubbles:true}));
+  await new Promise(r=>setTimeout(r,200));
+  const remembered=await P.learnedTextFor(fieldOf(age).f,P.discover());
+  const info=await P.learningInfo();
+  const checks={
+    '无档案字段也能复用':after.nature==='private',
+    '结果标记来自学习':result.v2.filled.some(x=>x.learned&&x.value==='民营'),
+    '填空也能复用上次手填':after.age==='25',
+    '填空结果也标记为学习':result.v2.filled.some(x=>x.learned&&x.value==='25'),
+    '验证码不记不填':after.code==='',
+    '档案认得的字段仍走档案':after.person==='李思远',
+    // 两个同名实验室:记的是第 2 个,第 1 个必须留空
+    '重复标签按序号对位':after.lab2==='第二个实验室'&&after.lab1==='',
+    '合成事件不被当成手填':remembered==='25',
+    '本地记录可诊断':info.current>=1&&info.currentText>=1&&info.currentSelect>=1,
+  };
+  const fails=Object.keys(checks).filter(k=>!checks[k]);
+  return {page:'learning-v2.html',version:result.version,pass:!fails.length,total:Object.keys(checks).length,fails};
+};
 if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
 </script>

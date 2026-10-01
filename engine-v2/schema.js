@@ -1,6 +1,6 @@
 (() => {
   const V2 = window.__RQF_V2_PARTS = window.__RQF_V2_PARTS || {};
-  V2.VERSION = '2.14.0';
+  V2.VERSION = '2.15.0';
   V2.schema = [
     { key: 'basic.fullName', terms: ['姓名', '中文名', 'full name', 'candidate name'], exclude: ['导师', '联系人', '推荐人'] },
     { key: 'basic.phone', terms: ['手机', '手机号', '联系电话', 'mobile', 'phone'], exclude: ['紧急', '验证码'] },
@@ -33,6 +33,11 @@
     { domain: 'projects', field: 'desc', terms: ['项目描述', '项目内容', 'description'] },
     { domain: 'awards', field: 'name', anchor: true, terms: ['获奖名称', '奖项名称', '荣誉名称', 'award title'] },
     { domain: 'awards', field: 'date', terms: ['获奖时间', '获奖日期', 'award date'] },
+    /* 奖项的三个维度各归各位 —— 「获奖类型 / 获奖等级」原来一条规则都不收,
+     * 在 2.x 里报「未识别字段」。「获奖情况」故意不收:它只出现一次时是整页
+     * 汇总栏,出现多次时才是每条奖项的描述,这个判断在 1.x 那条流水线上做。 */
+    { domain: 'awards', field: 'type', terms: ['获奖类型', '奖项类型', '获奖类别', '荣誉类型'] },
+    { domain: 'awards', field: 'result', terms: ['获奖等级', '奖项等级', '荣誉等级'] },
     { domain: 'awards', field: 'desc', terms: ['获奖描述', '奖项描述', 'description'] },
     { domain: 'languages', field: 'name', anchor: true, terms: ['语言', '语种', 'language'] },
     { domain: 'languages', field: 'level', terms: ['精通程度', '熟练程度', 'proficiency', 'language level'] },

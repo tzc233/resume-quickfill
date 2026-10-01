@@ -1,0 +1,67 @@
+<!doctype html><meta charset="utf-8">
+<!-- 荣耀校招(career.honor.com)的奖项栏:每条奖项六栏,时间排在名称【之前】,
+     而整页一个区块标题都读不出来 —— 两件事叠在一起,曾让 8 个奖项块全部填错:
+       · 「获奖名称 / 获奖类型 / 获奖情况」三条规则都不收 → 掉进整段汇总兜底,
+         三栏被灌进同一段「日期 名称 类型 等级」的汇总文字;
+       · 时间栏排在锚点之前、又没有区块标题当闸门 → 段号推不动,
+         8 个块的时间全部取第 1 条奖项。 -->
+<main id="form"></main>
+<script src="../content.js"></script>
+<script>
+(async () => {
+  const profile = { basic: {},
+    awards: [
+      { name: '示例一等奖学金', type: '校级奖学金', result: '一等', date: '2022-10', desc: '综合成绩排名前列。' },
+      { name: '示例二等奖学金', type: '校级奖学金', result: '二等', date: '2021-10' },
+      { name: '示例优秀学生', type: '校级荣誉', result: '优秀学生' },
+    ],
+    competitions: [{ name: '示例数学建模竞赛', type: '国家级', result: '省级二等奖',
+      startTime: '2022-09', desc: '建模与算法实现。' }],
+  };
+  // 六栏顺序照抄真实页面:类型、时间在前,名称(锚点)在中间
+  // 级别和等级在真实页面上是下拉,选项表照抄
+  const opts = (xs) => '<option value=""></option>'
+    + xs.map((x) => '<option value="' + x + '">' + x + '</option>').join('');
+  const LEVELS = ['国家级', '省部级', '省市级', '校级', '院级'];
+  const GRADES = ['特等', '一等', '二等', '三等', '其他'];
+  const ctrl = (n, i) => (i === 3 ? '<select data-f="' + n + '-3">' + opts(LEVELS) + '</select>'
+    : i === 4 ? '<select data-f="' + n + '-4">' + opts(GRADES) + '</select>'
+      : '<input data-f="' + n + '-' + i + '">');
+  const block = (n) => '<div class="blk" data-b="' + n + '">'
+    + ['获奖类型', '获奖时间', '获奖名称', '获奖级别', '获奖等级', '获奖情况']
+      .map((t, i) => '<label>' + t + ctrl(n, i) + '</label>').join('')
+    + '</div>';
+  form.innerHTML = [0, 1, 2, 3, 4].map(block).join('');
+
+  const scan = __RQF.scan(profile);
+  await __RQF.fill(profile);
+  const cell = (b, i) => document.querySelector('[data-f="' + b + '-' + i + '"]').value;
+  const row = (b) => [0, 1, 2, 3, 4, 5].map((i) => cell(b, i));
+  const descs = [0, 1, 2, 3].map((b) => cell(b, 5));
+
+  const checks = {
+    // 这一页必须继续覆盖「读不出区块标题」这条路径,否则测的就不是原来的坑了
+    页面确实没有区块标题: scan.sections.length === 0,
+
+    名称栏不是整段汇总: cell(0, 2) === '示例一等奖学金' && !cell(0, 2).includes('二等'),
+    第一条六栏同属一条: row(0).join('|')
+      === ['校级奖学金', '2022-10', '示例一等奖学金', '校级', '一等', '综合成绩排名前列。'].join('|'),
+    // 时间排在锚点之前也要跟着推进段号,不能全取第 1 条
+    第二条时间是自己的: cell(1, 1) === '2021-10' && cell(1, 2) === '示例二等奖学金',
+    第二条级别等级同属一条: cell(1, 3) === '校级' && cell(1, 4) === '二等',
+    第三条档案没日期就留空: cell(2, 2) === '示例优秀学生' && cell(2, 1) === '',
+    // 「优秀学生」在等级下拉里没有对应项 —— 留空,不许退而求其次点一个
+    第三条等级无匹配项就留空: cell(2, 4) === '',
+    // 页面只有奖项栏、没有竞赛区块 —— 竞赛并进奖项流,级别/等级也跟着带过来
+    // 等级下拉里只有「一等/二等/…」,从「省级二等奖」里取出等级词
+    第四条是并入的竞赛: cell(3, 2) === '示例数学建模竞赛'
+      && cell(3, 3) === '国家级' && cell(3, 4) === '二等',
+    并入的竞赛不编日期: cell(3, 1) === '',
+    获奖情况各块不同: new Set(descs).size === 4 && descs.every(Boolean),
+    档案之外的第五块留空: row(4).every((x) => x === ''),
+  };
+  const fails = Object.keys(checks).filter((k) => !checks[k]);
+  parent.postMessage({ __rqf: true, page: 'honor-awards.html', version: __RQF.version,
+    pass: !fails.length, total: Object.keys(checks).length, fails, snapshot: [row(0), row(1), row(2), row(3)] }, '*');
+})();
+</script>

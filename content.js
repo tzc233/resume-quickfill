@@ -156,9 +156,14 @@
      * 注意「类别 / 级别 / 等级」是三个不同维度:类别=竞赛还是奖学金,
      * 级别=国家级还是校级,等级=一等还是二等。 */
     { k: 'honor.name', a: 1, re: /竞赛.{0,2}奖学金名称|竞赛.{0,2}获奖名称/i },
-    { k: 'honor.category', re: /竞赛.{0,2}奖学金类别|获奖类别/i },
-    { k: 'honor.level', re: /竞赛.{0,2}奖学金级别|获奖级别/i },
-    { k: 'honor.grade', re: /竞赛.{0,2}奖学金等级|获奖等级/i },
+    /* 只认带「竞赛/奖学金」前缀的写法。不带前缀的「获奖类别/级别/等级」挪到
+     * award.* —— 荣耀那种页面一个区块标题都读不出来,honor 域取的是「竞赛在前、
+     * 荣誉在后」的合并流,而同一块里的获奖名称取自 awards,两份排序对不上,
+     * 名称是奖学金、级别却是竞赛的,凑出一条根本不存在的经历。
+     * 真在合并区块里(OPPO),retarget 会按区块标题把 award.* 改判回 honor.*。 */
+    { k: 'honor.category', re: /竞赛.{0,2}奖学金类别/i },
+    { k: 'honor.level', re: /竞赛.{0,2}奖学金级别/i },
+    { k: 'honor.grade', re: /竞赛.{0,2}奖学金等级/i },
     { k: 'honor.date', re: /竞赛.{0,2}获奖时间/i },
     // 这一栏排在名称之前,不当锚点的话第二段取不到自己的值;
     // 锚点按字段名去重,与 honor.name 两个锚点可以共存
@@ -168,17 +173,21 @@
     // 大疆用「赛事」而非「竞赛」——不收这个词,整个赛事区块都会落到通配规则上
     { k: 'comp.name', a: 1, re: /竞赛名称|比赛名称|赛事名称/i },
     { k: 'comp.type', re: /竞赛类型|比赛类型|赛事类型/i },
-    { k: 'comp.result', re: /竞赛成绩|比赛成绩|竞赛结果|赛事成绩|获奖等级/i },
+    { k: 'comp.result', re: /竞赛成绩|比赛成绩|竞赛结果|赛事成绩/i },
     { k: 'comp.desc', re: /竞赛描述|比赛描述|赛事描述|获奖项目概述/i },
     { k: 'comp.timeRange', r: 1, re: /参赛时间|比赛时间|竞赛时间|赛事时间/i },
 
     /* ---- 荣誉奖项(锚点:奖项名称) ---- */
     // 百度用「奖项说明」作为每条荣誉的唯一输入框;不认它就会掉进整段文本兜底,
     // 导致六个独立奖项框被同一段汇总文字灌满
-    { k: 'award.name', a: 1, re: /奖项名称|奖学金名称|荣誉名称|奖项说明|获奖说明|荣誉说明/i },
-    { k: 'award.type', re: /奖项类型|荣誉类型/i },
-    { k: 'award.result', re: /奖项成绩|奖项等级|获奖等级/i },
-    { k: 'award.desc', re: /奖项描述|荣誉描述/i },
+    /* 「获奖名称」原来一条规则都不收 —— 它掉进最后的整段兜底 awards,
+     * 于是荣耀那页 8 个奖项块的名称栏全被灌进同一段汇总文字。
+     * 「获奖类型 / 获奖级别 / 获奖等级」同理:一条奖项的三个维度必须各归各位。 */
+    { k: 'award.name', a: 1, re: /奖项名称|奖学金名称|荣誉名称|获奖名称|奖项说明|获奖说明|荣誉说明/i },
+    { k: 'award.type', re: /奖项类型|荣誉类型|获奖类型|获奖类别|奖项类别/i },
+    { k: 'award.level', re: /获奖级别|奖项级别|荣誉级别|奖学金级别/i },
+    { k: 'award.result', re: /奖项成绩|奖项等级|获奖等级|荣誉等级/i },
+    { k: 'award.desc', re: /奖项描述|荣誉描述|获奖描述/i },
     { k: 'award.date', re: /获奖时间|获奖日期/i },
 
     /* ---- 专利(锚点:专利名称)----
@@ -303,6 +312,9 @@
     'edu.degreeAward': (e) => degWord(String(e.degree || ''), 'award'),
     'edu.gpaCombined': (e) => [e.gpaScore, e.gpaTotal].filter(Boolean).join('/'),
     'prog.nameLevel': (e) => [e.name, e.level].filter(Boolean).join(' '),
+    /* 每条奖项都有自己的描述位、档案里却只给第一条写了描述时,用这一条奖项
+     * 自己的字段拼一句 —— 总比把整页汇总重复灌进每一块好,也不是瞎填。 */
+    'award.desc': (e) => [e.name, e.type, e.result, e.date].filter(Boolean).join(' '),
   };
   /* 取到值之后、写进控件之前的用词换算 —— 与 COMPUTED 不同,这个在有值时也要跑 */
   const TRANSFORM = {
@@ -314,6 +326,10 @@
     award: 'awards', lang: 'languages', prog: 'progLangs', patent: 'patents', soft: 'softwares',
     honor: 'honors',
   };
+  /* 一条经历只配一个日期的域(获奖、竞赛、论文、专利、著作权)。
+   * 这些域的标签(获奖时间 / 奖项名称 / 论文名称)不会和基本信息区撞名,
+   * 所以「同一字段第二次出现就是下一条」这条判据在这里不需要区块标题当闸门。 */
+  const SINGLE_DATE_DOM = new Set(['award', 'comp', 'honor', 'paper', 'patent', 'soft']);
   // 表单只提供其中一栏时的互相兜底
   const FIELD_FALLBACK = { 'proj.duty': 'role', 'proj.role': 'duty' };
   const DOM_CN = {
@@ -533,7 +549,12 @@
         && (/奖|冠军|亚军|季军|金牌|银牌|铜牌|一等奖|二等奖|三等奖|\bwinner\b|\bmedal\b|\bprize\b|\bhonou?rable\s+mention\b|\bmeritorious\b|\boutstanding\b|\bfinalist\b/i.test(result)
           || (/美赛|美国大学生数学建模|\bMCM\b|\bICM\b/i.test(String(c.name || ''))
             && /^(?:O|F|M|H|HM)(?:\s*奖)?$/i.test(result)));
-    }).map(c => ({name:c.name, type:c.type || '', result:c.result, desc:c.desc || '', date:c.awardDate || c.date || ''}));
+    /* 并进来的竞赛也要带上「类别/级别/等级」—— 奖项块里那三栏否则会因为
+     * 「档案中未填写」而留空,而竞赛条目本来是有这些信息的。
+     * 仍然逐字段挑,不整条展开:起止时间不能混进只配一个日期的奖项流。 */
+    }).map(c => ({name:c.name, type:c.type || '', result:c.result, desc:c.desc || '',
+      date:c.awardDate || c.date || '', category:c.category || '',
+      level:c.level || '', grade:c.grade || c.result || ''}));
     const out = asList(awards).map(a => ({...a}));
     const norm = v => String(v || '').trim().toLowerCase().replace(/\s+/g, '');
     for (const entry of eligible) {
@@ -598,19 +619,22 @@
       return hit ? hit[1] : '';
     };
 
-    out.honors = [
-      ...out.competitions.map((c) => ({
-        kind: '竞赛', category: pickCategory(c, '竞赛'), name: c.name,
-        date: c.date || c.startTime, level: pickLevel(c), grade: c.result, desc: c.desc,
-      })),
-      ...out.awards.map((a) => {
-        const kind = /奖学金/.test(String(a.name) + String(a.type)) ? '奖学金' : '荣誉';
-        return {
-          kind, category: pickCategory(a, kind), name: a.name,
-          date: a.date, level: pickLevel(a), grade: a.result, desc: a.desc,
-        };
-      }),
-    ];
+    /* 「类别 / 级别 / 等级」这三个维度对竞赛、奖学金、荣誉是同一套说法,
+     * 三个列表都补齐 —— 页面把它们混在一个区块里时,retarget 才能在三者之间
+     * 自由改判(它的判据正是「目标列表确实有这个字段」)。 */
+    const kindOf = (e) => (/奖学金/.test(String(e.name) + String(e.type)) ? '奖学金' : '荣誉');
+    const withDims = (list, fixedKind) => list.map((e) => {
+      const kind = fixedKind || kindOf(e);
+      return { ...e, kind, category: pickCategory(e, kind), level: pickLevel(e), grade: e.result };
+    });
+    out.competitions = withDims(out.competitions, '竞赛');
+    out.awards = withDims(out.awards);
+    /* 合并流的键集保持原样(尤其不能带 startTime)—— 下游按「有 date 没有
+     * startTime」判定这个域是一条只配一个日期的经历,那条判定管着年/月分段。 */
+    out.honors = [...out.competitions, ...out.awards].map((e) => ({
+      kind: e.kind, category: e.category, name: e.name, date: e.date || e.startTime,
+      level: e.level, grade: e.grade, result: e.result, type: e.type, desc: e.desc,
+    }));
     out.languages = asList(P.languages);
     out.progLangs = asList(P.progLangs);
     out.patents = asList(P.patents);
@@ -1369,7 +1393,19 @@
       fileEls.length = 0;
     }
 
-    let items = collectItems(true);
+    /* 「获奖情况」这类整段汇总标签,在重复的奖项块里出现多次时,它其实是每条
+     * 奖项自己的描述位 —— 把同一段汇总灌进每一块是确定的错(荣耀那页 8 个块
+     * 全被灌成同一段文字)。只出现一次的才是真汇总栏(Moka 的「其他信息」)。 */
+    const SUMMARY_REROUTE = { awards: ['award', 'desc'] };
+    const rerouteSummaries = (list) => {
+      for (const [key, [dom, field]] of Object.entries(SUMMARY_REROUTE)) {
+        const same = list.filter((it) => it.hit && !it.hit.dom && it.hit.field === key);
+        if (same.length < 2) continue;
+        for (const it of same) it.hit = { ...it.hit, dom, field };
+      }
+      return list;
+    };
+    let items = rerouteSummaries(collectItems(true));
     const awardSections = sections.filter(s => s.dom === 'award');
     const awardsPresent = awardSections.length || items.some(i => i.hit?.dom === 'award');
     const competitionsPresent = sections.some(s => s.dom === 'comp' || s.dom === 'honor')
@@ -1381,7 +1417,7 @@
       report.awardRouting = 'merged';
     }
     // 档案段数多于页面区块数时,先把「+ 添加」点出来
-    items = await expandBlocks(P, items, collectItems, report, sections);
+    items = rerouteSummaries(await expandBlocks(P, items, collectItems, report, sections));
 
     /* 页面上已经有内容的经历块 —— 你自己填的,或网站解析简历填进去的 ——
      * 按锚点的现有值认回它对应档案里的哪一段,并把段号钉到【整块】的所有字段上。
@@ -1659,6 +1695,14 @@
             else { advance(dom); used.clear(); field = 'startTime'; }
             used.add(field);
           } else if (hit.anchor) {
+            if (used.has(field)) { advance(dom); used.clear(); }
+            used.add(field);
+          } else if (SINGLE_DATE_DOM.has(dom) && hit.half !== 'm') {
+            /* 荣耀那页每个奖项块是「获奖类型 / 获奖时间 / 获奖名称 / …」——
+             * 时间排在锚点之前。只让锚点推进段号的话,第二块的时间栏轮到时
+             * 锚点还没出现,8 个块的时间全部取第 1 段:名称是第 2 条奖项、
+             * 时间却是第 1 条的。这一类域不靠区块标题也能安全推进(见
+             * SINGLE_DATE_DOM 处的说明)。 */
             if (used.has(field)) { advance(dom); used.clear(); }
             used.add(field);
           } else if (hit.half !== 'm' && items[idx].sec === dom && ctx.takenSec.has(`${dom}#${ctx.idx[dom]}#${field}`)) {
