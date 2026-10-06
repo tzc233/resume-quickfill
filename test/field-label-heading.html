@@ -1,0 +1,63 @@
+<!doctype html><meta charset="utf-8">
+<title>独立文本框的标签不是区块标题</title>
+<!-- 优必选(zhaopin.ubtrobot.com)2.17.0 那份报告:「论文/专著」「专利成果」两个独立
+     textarea 的标签被 1.x 提升成了区块标题,紧随其后的「获得荣誉」因此被划进「专利」区块。
+     根因在区块标题扫描的选择器 [class*="title"] —— Phoenix 表单项把标签包在
+     <div class="form-item__title"><label class="form-item__text">…</label></div> 里,
+     外壳的类名带 title,文字又恰好能对上 SECTION_DOMAIN 的「论文」「专利」。
+
+     该页本身没因此填错,但伪标题会喂给 genericHit / ambiguousDom:
+     紧跟在后面的泛化栏(「补充说明」)会被认成专利的描述位,把专利说明写进去 ——
+     这正是「宁可留空」要拦的情况。结构照 phoenix-select-v2.html 的表单项复刻。 -->
+<style>input,textarea{display:block;width:240px;min-height:24px}</style>
+<div id="root"></div>
+<script src="../content.js"></script>
+<script>
+const item = (id, label, tag = 'textarea') =>
+  '<div class="form-item">'
+  + `<div class="form-item__title form-item__title--right"><label class="form-item__text">${label}</label></div>`
+  + `<div class="form-item__control"><${tag} id="${id}"></${tag}></div></div>`;
+const section = (heading, body) =>
+  `<div class="sc-section"><div class="sc-sectionTitle">${heading}</div>`
+  + `<div class="ux-standard-form">${body}</div></div>`;
+
+root.innerHTML =
+  // 「附加信息」不在别名表里,不构成区块 —— 下面几栏本来就不属于任何经历域
+  section('附加信息',
+    item('paperBox', '论文/专著') + item('patentBox', '专利成果')
+    + item('honorBox', '获得荣誉') + item('extraBox', '补充说明'))
+  // 真区块标题仍要认得:Phoenix 的区块标题不含 <label>
+  + section('教育经历', item('school0', '学校名称', 'input'));
+
+(async () => {
+  const profile = { basic: {},
+    education: [{ school: '示例大学', major: '示例专业', degree: '硕士' }],
+    papers: [{ name: '示例论文标题', desc: '示例论文摘要', date: '2024-05' }],
+    awards: [{ name: '示例一等奖学金', type: '校级奖学金', result: '一等', date: '2022-10' }],
+    patents: [{ name: '示例专利', no: 'CN000000', desc: '示例专利说明' }],
+  };
+  await __RQF.fill(profile);
+  const rows = __RQF.scan().rows || __RQF.scan();
+  const secOf = (label) => (rows.find((r) => r.label === label) || {}).sec;
+  const v = (id) => document.getElementById(id).value;
+
+  const checks = {
+    // 这一页的要点:两个 textarea 的标签不许被当成区块标题
+    获得荣誉不落在专利区块: !/专利/.test(secOf('获得荣誉') || ''),
+    补充说明不落在专利或论文区块: !/专利|论文/.test(secOf('补充说明') || ''),
+    // 伪标题的实际后果:泛化栏被认成专利 / 论文的描述位
+    补充说明不被灌进专利说明: !v('extraBox').includes('示例专利说明'),
+    补充说明不被灌进论文摘要: !v('extraBox').includes('示例论文摘要'),
+    获得荣誉照常装奖项: v('honorBox').includes('示例一等奖学金'),
+    // 「专利成果」原来一条规则都不收(报「未识别」);档案的 patents 本来就是结构化的,拼成整段
+    专利成果装专利: v('patentBox').includes('示例专利') && v('patentBox').includes('CN000000'),
+    专利成果不混进论文: !v('patentBox').includes('示例论文标题'),
+    // 真区块标题不能被这次改动误伤
+    真区块仍认得: /教育/.test(secOf('学校名称') || '') && v('school0') === '示例大学',
+  };
+  const fails = Object.keys(checks).filter((k) => !checks[k]);
+  parent.postMessage({ __rqf: true, page: 'field-label-heading.html', version: __RQF.version,
+    pass: !fails.length, total: Object.keys(checks).length, fails,
+    snapshot: { secs: rows.map((r) => `${r.label}→${r.sec}`), extra: v('extraBox'), paper: v('paperBox'), patent: v('patentBox') } }, '*');
+})();
+</script>

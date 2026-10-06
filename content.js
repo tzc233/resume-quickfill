@@ -225,6 +225,10 @@
     { k: 'awards',       re: /获奖|奖项|荣誉|奖学金|award|honor/i },
     // 竞赛的整段汇总位。奖项栏已被上面的 awards 收走,这条只接「参赛经历」这类标签
     { k: 'competitions', re: /参赛经历|竞赛经历|比赛经历|参赛情况|参赛记录/i },
+    /* 专利的整段汇总位。优必选那页「专利成果」是一个独立 textarea,原来一条规则都不收,
+     * 报「未识别」。拆开的「专利名称/编号/时间」已由上面的 patent.* 先收走,
+     * 这条只接整段型标签;档案没有 patents 时明确报「档案中未填写」,不拿论文去顶。 */
+    { k: 'patents',      re: /专利成果|专利情况|专利信息|发明专利|^专利$|\bpatents?\b/i },
     { k: 'skills',       re: /技能证书|专业技能|技能|技术栈|掌握技术|擅长|skill/i },
     { k: 'languages',    re: /英语|语言能力|外语|english|language (level|ability)/i },
 
@@ -652,6 +656,8 @@
     out.competitionsText = typeof P.competitions === 'string' ? P.competitions
       : join(out.competitions,
         (c) => [c.date || period(c), c.name, c.type, c.result].filter(Boolean).join(' '));
+    out.patentsText = typeof P.patents === 'string' ? P.patents
+      : join(out.patents, (p) => [p.name, p.type, p.no, p.date].filter(Boolean).join(','));
     out.languagesText = typeof P.languages === 'string' ? P.languages
       : join(out.languages, (l) => [l.name, l.cert, l.score].filter(Boolean).join(' '));
     return out;
@@ -713,7 +719,7 @@
       highestSchoolCity: b.highestSchoolCity || e0.city,
       lastMajor: b.lastMajor || e0.major,
       publications: P.publicationsText, awards: P.awardsText, languages: P.languagesText,
-      competitions: P.competitionsText,
+      competitions: P.competitionsText, patents: P.patentsText,
       skills: P.skills, campusWork: P.campusWork,
       github: L.github, linkedin: L.linkedin, homepage: L.homepage,
       intro: P.intro,
@@ -1086,9 +1092,19 @@
     return raw;
   };
 
+  /* 字段自己的标签不是区块标题。Phoenix(优必选、讯飞)的表单项把标签包成
+   * <div class="form-item__title"><label>专利成果</label></div>,外壳类名带 title,
+   * 独立 textarea 的标签又恰好能对上「论文」「专利」—— 优必选那页「论文/专著」
+   * 「专利成果」因此成了区块标题,紧随其后的「获得荣誉」被划进专利区块,
+   * 再往后的「补充说明」被 genericHit 认成专利描述位。
+   * 区块标题从不使用 <label>:候选本身是、包着、或落在 <label> 里,就是字段标签。 */
+  const isFieldLabel = (el) => el.tagName === 'LABEL' || !!el.closest('label')
+    || !!el.querySelector('label');
+
   const scanSections = () => {
     const out = [];
     for (const el of document.querySelectorAll(HEADING_SEL)) {
+      if (isFieldLabel(el)) continue;
       const t = headingText(el);
       /* 长度上限按可信度分级:真正的标题标签(h1~h6/legend)语义明确,
        * 允许带括号说明(「实习经历(第一段在职…)」);仅靠 class 名匹配上的

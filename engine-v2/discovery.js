@@ -217,10 +217,25 @@
   };
   V2.resolveAll = (fields) => {
     const state = {}, records = {};
-    return fields.map((field) => {
-      const hit = V2.resolve(field); if (!hit || hit.spec.key || !hit.spec.domain) return hit;
+    const hits = fields.map((field) => V2.resolve(field));
+    /* 段号按 .ux-standard-form 分,但不是每个容器都是一段经历。优必选教育区顶上的
+     * 「最高学历 / 最高学位 / 学习形式」是整份简历的汇总栏,自己也包在一个
+     * .ux-standard-form 里 —— 其中任一栏被认成 education 域,就占掉 0 号段位,
+     * 下面每个学校块整体后移一格(2.17.0 修「最高学历」时只堵了那一栏)。
+     * 判据:同域里别的容器认出了锚点(学校名称),这个容器却没有,它就不是一段经历,
+     * 其中的字段归属不明,留空。整页一个锚点都没认出时不启用,免得全部归零。 */
+    const anchored = {};
+    fields.forEach((field, i) => {
+      const spec = hits[i] && hits[i].spec;
+      if (!spec || spec.key || !spec.domain || !spec.anchor || !field.section) return;
+      const record = field.el.closest('.ux-standard-form');
+      if (record) (anchored[spec.domain] ||= new Set()).add(record);
+    });
+    return fields.map((field, i) => {
+      const hit = hits[i]; if (!hit || hit.spec.key || !hit.spec.domain) return hit;
       const domain = hit.spec.domain; state[domain] ||= { index: 0, seen: new Set() };
       const record = field.el.closest('.ux-standard-form');
+      if (record && field.section && anchored[domain] && !anchored[domain].has(record)) return null;
       if (record && field.section) {
         records[domain] ||= [];
         if (!records[domain].includes(record)) records[domain].push(record);

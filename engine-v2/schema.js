@@ -1,6 +1,6 @@
 (() => {
   const V2 = window.__RQF_V2_PARTS = window.__RQF_V2_PARTS || {};
-  V2.VERSION = '2.17.0';
+  V2.VERSION = '2.18.0';
   V2.schema = [
     { key: 'basic.fullName', terms: ['姓名', '中文名', 'full name', 'candidate name'], exclude: ['导师', '联系人', '推荐人'] },
     { key: 'basic.phone', terms: ['手机', '手机号', '联系电话', 'mobile', 'phone'], exclude: ['紧急', '验证码'] },
@@ -22,6 +22,9 @@
     { domain: 'education', field: 'degree', terms: ['学历', 'education level', 'degree'],
       exclude: ['最高'] },
     { domain: 'education', field: 'eduType', terms: ['学历类型', '培养方式', 'education type'] },
+    /* 「学习形式」(全日制/非全日制)档案里一直有 studyForm,1.x 也有规则,
+     * 2.x 却一条都不收 —— 优必选那页的学习形式下拉因此报「未识别字段」。 */
+    { domain: 'education', field: 'studyForm', terms: ['学习形式', '培养形式', '学习方式', 'study mode'] },
     /* 「专业排名」里有「专业」二字,会被 major 抢走 —— 讯飞那一栏因此想往
      * 排名下拉里写「计算机科学与技术」。档案里本来就有 rank,单列一条。 */
     { domain: 'education', field: 'rank', terms: ['专业排名', '成绩排名', '年级排名', '排名', 'rank'] },

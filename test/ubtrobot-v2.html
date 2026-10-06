@@ -13,17 +13,23 @@
 <div class="sec"><h2>教育经历</h2>
   <!-- 「最高学历 / 最高学位」是整份简历的汇总栏,排在教育区块顶上,
        自己并不是一段经历 —— 它一旦占掉 0 号段位,下面两个学校块就整体后移一格 -->
+  <!-- 2.18.0:「学习形式」在 2.x 里一条规则都不收(报「未识别」)。补上之后,
+       若它像这里一样也出现在汇总栏里,就会和当初的「最高学历」一样占掉 0 号段位 ——
+       没有「学校名称」这类锚点的容器不是一段经历,不许分段号 -->
   <div class="ux-standard-form">
     <label>最高学历<input id="topDegree" role="combobox"></label>
     <label>最高学位<input id="topDiploma" role="combobox"></label>
+    <label>学习形式<input id="topForm" role="combobox"></label>
   </div>
   <div class="ux-standard-form">
     <label>学校名称<input id="school0"></label><label>专业名称<input id="major0"></label>
     <label>学历<input id="degree0" role="combobox"></label>
+    <label>学习形式<input id="form0" role="combobox"></label>
   </div>
   <div class="ux-standard-form">
     <label>学校名称<input id="school1"></label><label>专业名称<input id="major1"></label>
     <label>学历<input id="degree1" role="combobox"></label>
+    <label>学习形式<input id="form1" role="combobox"></label>
   </div>
 </div>
 <div class="sec"><h2>外语能力</h2>
@@ -49,6 +55,9 @@ window.rqfRun=async()=>{
     不凭空多出第三段:!resolved.some(r=>r&&/^education\.2\./.test(r.spec.key||'')),
     // 「最高学位」在档案里没有对应字段 —— 留空,不许拿学历顶上
     最高学位无对应就留空:keyOf(topDiploma)==null,
+    // 学习形式按段落位;汇总栏里那个没有锚点,归属不明就留空
+    学习形式按段落位:keyOf(form0)==='education.0.studyForm'&&keyOf(form1)==='education.1.studyForm',
+    汇总栏的学习形式不占段号:keyOf(topForm)==null,
     语种归语种:keyOf(langName)==='languages.0.name',
     等级归等级:keyOf(langLevel)==='languages.0.level',
     姓名仍然认得:keyOf(person)==='basic.fullName',
