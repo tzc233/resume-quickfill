@@ -145,12 +145,44 @@ const LIST_SPEC = {
   },
 };
 
+/* ============ 日期 ============
+ * 档案里的日期统一是 YYYY-MM;在职/在读的结束时间写「至今」。
+ * <input type="month"> 只认 YYYY-MM,别的写法(「2025」「2020.09」)会被浏览器
+ * 静默清空 —— 页面上看着是空的,一点保存就把这条日期从档案里删掉了。
+ * 所以值不合格时退回普通文本框,原样保留,交给体检提示用户改。
+ * Firefox 不支持 month,本来就是文本框,同样靠体检兜住。 */
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const DATE_KEYS = new Set(['startTime', 'endTime', 'date', 'awardDate']);
+const dateProblem = (k, v) => {
+  if (!v || MONTH_RE.test(v)) return '';
+  if (k === 'endTime' && v === '至今') return '';
+  if (/^\d{4}$/.test(v)) return '只有年份,缺月份';
+  return '格式应为 YYYY-MM' + (k === 'endTime' ? ' 或「至今」' : '');
+};
+
+/* 排名换算成百分位:优必选这类表单的排名是「前5% / 前10% / …」下拉,
+ * 档案写的是「3/30」,两边对不上,插件按规则留空。先把换算结果摆在旁边。 */
+const rankPercent = (v) => {
+  const m = String(v || '').match(/(\d+)\s*\/\s*(\d+)/);
+  if (!m || !+m[2] || +m[1] > +m[2]) return '';
+  return `≈ 前 ${(100 * m[1] / m[2]).toFixed(1).replace(/\.0$/, '')}%`;
+};
+
+// 段头显示这一段是什么,挪顺序时才认得出谁是谁
+const TITLE_KEY = { education: 'school', work: 'company', projects: 'name', papers: 'name',
+  competitions: 'name', awards: 'name', languages: 'name', progLangs: 'name', patents: 'name', softwares: 'name' };
+
 function entryRow(listKey, data = {}, idx = 0) {
   const spec = LIST_SPEC[listKey];
   const box = document.createElement('div');
   box.className = 'entry';
   box.innerHTML = `<div class="entry-head"><span class="entry-no">第 ${idx + 1} 段</span>
-    <button class="ghost danger entry-del" title="删除这一段">✕ 删除</button></div>
+    <span class="entry-title"></span>
+    <span class="entry-ops">
+      <button class="ghost entry-up" title="上移">↑</button>
+      <button class="ghost entry-down" title="下移">↓</button>
+      <button class="ghost danger entry-del" title="删除这一段">✕ 删除</button>
+    </span></div>
     <div class="grid entry-grid"></div>`;
   const grid = box.querySelector('.entry-grid');
 
@@ -158,39 +190,74 @@ function entryRow(listKey, data = {}, idx = 0) {
     const lab = document.createElement('label');
     if (f.full) lab.className = 'span-all';
     lab.append(f.l);
+    const val = String(data[f.k] ?? '');
     let ctrl;
     if (f.type === 'select') {
       ctrl = document.createElement('select');
-      for (const o of f.opts) ctrl.append(new Option(o, o));
+      const opts = f.opts.includes(val) ? f.opts : [...f.opts, val];   // 档案里的值不在选项里也不能丢
+      for (const o of opts) ctrl.append(new Option(o, o));
     } else if (f.type === 'textarea') {
       ctrl = document.createElement('textarea');
       ctrl.rows = 3;
     } else {
       ctrl = document.createElement('input');
-      if (f.type) ctrl.type = f.type;
+      if (f.type === 'month' && !dateProblem(f.k, val)) ctrl.type = 'month';
+      else if (f.type && f.type !== 'month') ctrl.type = f.type;
+      if (f.type === 'month' && !f.ph) ctrl.placeholder = 'YYYY-MM';
     }
     if (f.ph) ctrl.placeholder = f.ph;
     ctrl.dataset.k = f.k;
-    ctrl.value = data[f.k] ?? '';
+    ctrl.value = val;
     lab.append(ctrl);
+    if (listKey === 'education' && f.k === 'rank') {
+      const hint = document.createElement('span');
+      hint.className = 'rank-hint';
+      const upd = () => { hint.textContent = rankPercent(ctrl.value); };
+      ctrl.addEventListener('input', upd); upd();
+      lab.append(hint);
+    }
     grid.append(lab);
   }
+
+  const titleEl = box.querySelector('.entry-title');
+  const titleCtrl = box.querySelector(`[data-k="${TITLE_KEY[listKey]}"]`);
+  const updTitle = () => { titleEl.textContent = titleCtrl ? titleCtrl.value.trim() : ''; };
+  if (titleCtrl) titleCtrl.addEventListener('input', updTitle);
+  updTitle();
+
+  const move = (dir) => {
+    const sib = dir < 0 ? box.previousElementSibling : box.nextElementSibling;
+    if (!sib) return;
+    if (dir < 0) sib.before(box); else sib.after(box);
+    renumber(listKey); markDirty();
+  };
+  box.querySelector('.entry-up').addEventListener('click', () => move(-1));
+  box.querySelector('.entry-down').addEventListener('click', () => move(1));
   box.querySelector('.entry-del').addEventListener('click', () => {
+    // 有内容的段先确认 —— 一点就没、又顺手保存了,就真没了
+    const filled = [...box.querySelectorAll('[data-k]')].some((c) => c.value.trim());
+    const name = titleEl.textContent ? `「${titleEl.textContent}」` : '';
+    if (filled && !confirm(`删除${box.querySelector('.entry-no').textContent}${name}?保存后不可恢复。`)) return;
     box.remove();
-    renumber(listKey);
+    renumber(listKey); markDirty();
   });
   return box;
 }
 
 function renumber(listKey) {
   const wrap = document.querySelector(`[data-list="${listKey}"] .list`);
-  [...wrap.children].forEach((c, i) => { c.querySelector('.entry-no').textContent = `第 ${i + 1} 段`; });
+  [...wrap.children].forEach((c, i) => {
+    c.querySelector('.entry-no').textContent = `第 ${i + 1} 段`;
+    c.querySelector('.entry-up').disabled = i === 0;
+    c.querySelector('.entry-down').disabled = i === wrap.children.length - 1;
+  });
 }
 
 function renderList(listKey, items) {
   const wrap = document.querySelector(`[data-list="${listKey}"] .list`);
   wrap.innerHTML = '';
   (items || []).forEach((it, i) => wrap.append(entryRow(listKey, it, i)));
+  renumber(listKey);
 }
 
 function collectList(listKey) {
@@ -209,7 +276,11 @@ for (const sec of $$('[data-list]')) {
   sec.querySelector('.add-btn').addEventListener('click', () => {
     const key = sec.dataset.list;
     const wrap = sec.querySelector('.list');
-    wrap.append(entryRow(key, {}, wrap.children.length));
+    const row = entryRow(key, {}, wrap.children.length);
+    wrap.append(row);
+    renumber(key); markDirty();
+    const first = row.querySelector('[data-k]');
+    if (first) first.focus();
   });
 }
 
@@ -223,7 +294,7 @@ function qaRow(q = '', a = '') {
     <button class="ghost danger qa-del" title="删除">✕</button>`;
   div.querySelector('.qa-q').value = q;
   div.querySelector('.qa-a').value = a;
-  div.querySelector('.qa-del').addEventListener('click', () => div.remove());
+  div.querySelector('.qa-del').addEventListener('click', () => { div.remove(); markDirty(); });
   return div;
 }
 function renderCustom(list) {
@@ -236,6 +307,8 @@ function renderCustom(list) {
 function renderResume(rf) {
   const info = $('#resume-info');
   const del = $('#resume-del');
+  RESUME_SAVED = !!(rf && rf.name);
+  scheduleRefresh();
   if (rf && rf.name) {
     info.textContent = `📎 已保存:${rf.name}(${(rf.size / 1024).toFixed(0)} KB)`;
     del.hidden = false;
@@ -243,6 +316,133 @@ function renderResume(rf) {
     info.textContent = '未上传。上传后,遇到「上传简历 / Resume / CV / 附件」类控件会自动注入该文件。';
     del.hidden = true;
   }
+}
+
+/* ============ 未保存改动 ============
+ * 档案页没有自动保存:改完直接关标签页,改动就没了,而且不会有任何提示。 */
+let DIRTY = false;
+function markDirty() {
+  DIRTY = true;
+  $('#dirty').hidden = false;
+  scheduleRefresh();
+}
+function markClean() {
+  DIRTY = false;
+  $('#dirty').hidden = true;
+}
+window.addEventListener('beforeunload', (e) => {
+  if (!DIRTY) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+/* ============ 档案体检 ============
+ * 把「填表时会被跳过」的原因提前摆出来:缺月份的日期、顺序不对的经历、
+ * 没上传的简历……这些在诊断报告里反复出现,但只有到了招聘页才看得见。 */
+const LIST_TITLE = {};
+for (const sec of $$('[data-list]')) LIST_TITLE[sec.dataset.list] = sec.querySelector('h2').textContent.trim();
+// 判断先后顺序用的日期:有开始时间看开始,一条只配一个日期的看那个日期
+const sortDate = (e) => [e.startTime, e.date, e.awardDate, e.endTime].find((v) => MONTH_RE.test(v || '')) || '';
+let RESUME_SAVED = false;
+
+function healthIssues() {
+  const out = [];
+  const add = (text, el) => out.push({ text, el });
+  if (!RESUME_SAVED) add('还没上传简历附件 —— 遇到「上传简历」控件时会被跳过', $('#resume-file').closest('.card'));
+  const bday = document.querySelector('[data-path="basic.birthday"]');
+  if (bday && bday.value.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(bday.value.trim())) {
+    add(`基本信息 · 出生日期「${bday.value.trim()}」格式应为 YYYY-MM-DD`, bday);
+  }
+  for (const [path, name] of [['basic.fullName', '姓名'], ['basic.phone', '手机号'], ['basic.email', '邮箱']]) {
+    const el = document.querySelector(`[data-path="${path}"]`);
+    if (el && !el.value.trim()) add(`基本信息 · ${name}为空`, el);
+  }
+  for (const key of Object.keys(LIST_SPEC)) {
+    const boxes = [...document.querySelectorAll(`[data-list="${key}"] .list > .entry`)];
+    const label = (f) => (LIST_SPEC[key].fields.find((x) => x.k === f) || {}).l || f;
+    const rows = boxes.map((box) => {
+      const o = {};
+      for (const c of box.querySelectorAll('[data-k]')) o[c.dataset.k] = c.value.trim();
+      return o;
+    });
+    rows.forEach((o, i) => {
+      for (const k of Object.keys(o)) {
+        if (!DATE_KEYS.has(k)) continue;
+        const why = dateProblem(k, o[k]);
+        if (why) add(`${LIST_TITLE[key]} · 第 ${i + 1} 段 · ${label(k).replace(/\s*[(（].*$/, '')}「${o[k]}」${why}`,
+          boxes[i].querySelector(`[data-k="${k}"]`));
+      }
+      if (MONTH_RE.test(o.startTime || '') && MONTH_RE.test(o.endTime || '') && o.endTime < o.startTime) {
+        add(`${LIST_TITLE[key]} · 第 ${i + 1} 段 · 结束时间早于开始时间`, boxes[i].querySelector('[data-k="endTime"]'));
+      }
+    });
+    // 插件按顺序逐段填,第一段必须是最新的;只报第一处,改完再看下一处
+    for (let i = 0; i + 1 < rows.length; i++) {
+      const a = sortDate(rows[i]), b = sortDate(rows[i + 1]);
+      if (a && b && a < b) {
+        add(`${LIST_TITLE[key]} · 第 ${i + 1}、${i + 2} 段不是时间倒序 —— 插件按顺序逐段填,第一段应是最新的(用 ↑↓ 调整)`,
+          boxes[i + 1].querySelector('.entry-up'));
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function renderHealth() {
+  const list = $('#health-list');
+  const issues = healthIssues();
+  list.innerHTML = '';
+  $('#health-count').textContent = issues.length ? `${issues.length} 项待处理` : '';
+  if (!issues.length) {
+    const li = document.createElement('li');
+    li.className = 'ok';
+    li.textContent = '✅ 没发现会导致漏填的问题';
+    list.append(li);
+    return;
+  }
+  for (const it of issues) {
+    const li = document.createElement('li');
+    li.textContent = it.text;
+    li.tabIndex = 0;
+    const go = () => {
+      if (!it.el) return;
+      it.el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (it.el.matches('input,select,textarea,button')) it.el.focus({ preventScroll: true });
+      it.el.classList.remove('flash'); void it.el.offsetWidth; it.el.classList.add('flash');
+    };
+    li.addEventListener('click', go);
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    list.append(li);
+  }
+}
+
+/* ============ 目录 ============
+ * 十几个区块一屏放不下,目录顺带显示每个列表有几段 —— 导入新档案后一眼看出变化。 */
+function renderToc() {
+  const toc = $('#toc');
+  toc.innerHTML = '';
+  $$('section.card').forEach((sec, i) => {
+    if (sec.id === 'health') return;
+    if (!sec.id) sec.id = 'sec-' + i;
+    const a = document.createElement('a');
+    a.href = '#' + sec.id;
+    a.textContent = sec.querySelector('h2').textContent.trim();
+    if (sec.dataset.list) {
+      const n = sec.querySelectorAll('.list > .entry').length;
+      const b = document.createElement('b');
+      b.textContent = n;
+      if (!n) b.className = 'zero';
+      a.append(' ', b);
+    }
+    toc.append(a);
+  });
+}
+
+let refreshTimer = null;
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => { renderHealth(); renderToc(); }, 150);
 }
 
 /* ============ 读取与保存 ============ */
@@ -267,7 +467,15 @@ const asList = (v) => (Array.isArray(v) ? v : (v && typeof v === 'object' && Obj
 
 function fillForm(profile) {
   LOADED_PROFILE = profile || {};
-  for (const el of $$('[data-path]')) el.value = getPath(profile, el.dataset.path) ?? '';
+  for (const el of $$('[data-path]')) {
+    const v = String(getPath(profile, el.dataset.path) ?? '');
+    // 同月份框:date 只认 YYYY-MM-DD,「2000.01.01」会被清空、保存即丢,退回文本框原样保留
+    if (el.dataset.origType === 'date' || el.type === 'date') {
+      el.dataset.origType = 'date';
+      el.type = !v || /^\d{4}-\d{2}-\d{2}$/.test(v) ? 'date' : 'text';
+    }
+    el.value = v;
+  }
   renderList('education', asList(profile.education).map((e) => ({ ...e, endTime: e.endTime || e.eduTime || '' })));
   renderList('work', asList(profile.work).map((w) => ({ ...w, desc: w.desc || w.workDesc || '' })));
   for (const k of ['projects', 'papers', 'competitions', 'awards', 'languages', 'progLangs', 'patents', 'softwares']) {
@@ -292,6 +500,9 @@ async function load() {
   } catch { }
   fillForm(profile);
   renderResume(resumeFile);
+  markClean();
+  renderHealth();
+  renderToc();
   renderBackupBanner();
 }
 
@@ -300,13 +511,25 @@ async function save() {
     // 记录改动时间:用来判断「档案改过但还没备份」—— 比单纯的天数更有意义
     await store.set({ profile: collectProfile(), profileUpdatedAt: Date.now() });
     toast('✅ 已保存');
+    markClean();
     renderBackupBanner();
   } catch (e) { toast('保存失败:' + e.message, true); }
 }
 
 /* ============ 事件 ============ */
 $('#btn-save').addEventListener('click', save);
-$('#qa-add').addEventListener('click', () => $('#qa-list').appendChild(qaRow()));
+$('#qa-add').addEventListener('click', () => { $('#qa-list').appendChild(qaRow()); markDirty(); });
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    save();
+  }
+});
+// 文件框不算档案改动:简历附件选中即存,导入另有确认
+const main = $('main');
+for (const type of ['input', 'change']) {
+  main.addEventListener(type, (e) => { if (e.target.type !== 'file') markDirty(); });
+}
 
 $('#resume-file').addEventListener('change', (ev) => {
   const f = ev.target.files && ev.target.files[0];
@@ -342,6 +565,23 @@ $('#btn-export').addEventListener('click', async () => {
   try { await store.set({ lastBackupAt: Date.now() }); renderBackupBanner(); } catch { }
 });
 
+/* 导入是整份覆盖。原来选中文件就直接写入,拿错一份老备份,
+ * 当前档案就悄无声息地退回去了 —— 先把每个列表的段数变化摆出来确认。 */
+function importSummary(data, fileName) {
+  const cur = collectProfile(), inc = data.profile;
+  const lines = [];
+  for (const key of Object.keys(LIST_SPEC)) {
+    const a = asList(cur[key]).length, b = asList(inc[key]).length;
+    if (a || b) lines.push(`${LIST_TITLE[key]}  ${a} → ${b} 段${a === b ? '' : '  ◀'}`);
+  }
+  const basicDiff = Object.keys({ ...(cur.basic || {}), ...(inc.basic || {}) })
+    .filter((k) => String((cur.basic || {})[k] || '') !== String((inc.basic || {})[k] || '')).length;
+  lines.push(`基本信息  ${basicDiff ? basicDiff + ' 项不同' : '相同'}`);
+  lines.push(data.resumeFile ? '简历附件  将替换为备份里的文件' : '简历附件  备份里没有,保留当前的');
+  return `用「${fileName}」覆盖当前档案:\n\n${lines.join('\n')}\n\n`
+    + (DIRTY ? '⚠️ 页面上还有未保存的改动,导入后会丢失。\n' : '') + '继续吗?';
+}
+
 $('#btn-import').addEventListener('change', (ev) => {
   const f = ev.target.files && ev.target.files[0];
   ev.target.value = '';
@@ -351,6 +591,7 @@ $('#btn-import').addEventListener('change', (ev) => {
     try {
       const data = JSON.parse(String(rd.result));
       if (!data || typeof data !== 'object' || !data.profile) throw new Error('格式不正确');
+      if (!confirm(importSummary(data, f.name))) { toast('已取消导入'); return; }
       await store.set({ profile: data.profile });
       if (data.resumeFile) await store.set({ resumeFile: data.resumeFile });
       await load();

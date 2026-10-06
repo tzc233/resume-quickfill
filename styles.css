@@ -166,3 +166,72 @@ body.options .sub { color: var(--muted); margin: 0 0 20px; }
 .toast { opacity: 0; transition: opacity .25s; color: var(--ok); font-size: 13px; }
 .toast.show { opacity: 1; }
 .toast.err { color: var(--err); }
+
+/* 目录:十几个区块一屏放不下;数字是该列表的段数 */
+.toc {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 0;
+  margin-bottom: 8px;
+  background: var(--bg);
+  scrollbar-width: thin;
+}
+.toc a {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12.5px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.toc a:hover { border-color: var(--accent); color: var(--accent); }
+.toc a b { font-weight: 600; color: var(--accent); }
+.toc a b.zero { color: #9ca3af; font-weight: 400; }
+section.card { scroll-margin-top: 56px; }
+
+/* 档案体检 */
+.health { border-color: #fde68a; background: #fffdf5; }
+.health-count { font-size: 12.5px; font-weight: 500; color: #b45309; margin-left: 6px; }
+#health-list { margin: 8px 0 0; padding: 0; list-style: none; }
+#health-list li {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  border-left: 3px solid #f59e0b;
+  margin-bottom: 4px;
+  background: #fff;
+}
+#health-list li:hover, #health-list li:focus { outline: none; background: #fef3c7; }
+#health-list li.ok { cursor: default; border-left-color: var(--ok); color: var(--ok); }
+#health-list li.ok:hover { background: #fff; }
+.flash { animation: rqf-flash 1.6s ease-out; }
+@keyframes rqf-flash { 0%, 40% { box-shadow: 0 0 0 3px rgba(245, 158, 11, .55); } 100% { box-shadow: none; } }
+
+/* 经历条目头:编号 + 名称 + 操作 */
+.entry-head { gap: 8px; }
+.entry-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry-ops { display: flex; gap: 4px; flex-shrink: 0; }
+.entry-up, .entry-down { padding: 3px 9px; font-size: 12px; }
+.entry-ops button:disabled { opacity: .35; cursor: default; border-color: var(--line); color: var(--ink); }
+.rank-hint { display: block; margin-top: 3px; font-size: 12px; color: var(--accent); }
+.rank-hint:empty { display: none; }
+
+/* 保存栏 */
+.dirty { color: #b45309; font-size: 13px; }
+.kbd-hint { color: #9ca3af; font-size: 12px; margin-left: auto; }
+
+@media (max-width: 560px) {
+  body.options .wrap { padding: 16px 16px 80px; }
+  .save-bar { flex-wrap: wrap; }
+  .kbd-hint { display: none; }
+  .qa-row { grid-template-columns: 1fr auto; }
+  .qa-row .qa-a { grid-column: 1 / -1; grid-row: 2; }
+}

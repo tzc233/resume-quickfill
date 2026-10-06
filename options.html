@@ -13,6 +13,14 @@
 
     <div id="backup-bar" hidden></div>
 
+    <nav id="toc" class="toc" aria-label="区块目录"></nav>
+
+    <section class="card health" id="health">
+      <h2>档案体检 <span id="health-count" class="health-count"></span></h2>
+      <p class="hint">这些问题会让插件在招聘页上留空或填错。点一条跳到对应位置。</p>
+      <ul id="health-list"></ul>
+    </section>
+
     <section class="card">
       <h2>基本信息</h2>
       <div class="grid">
@@ -172,6 +180,8 @@
       <button id="btn-save" class="primary">💾 保存档案</button>
       <button id="btn-export" class="ghost">导出备份 JSON</button>
       <label class="file-btn ghost-like">导入备份<input type="file" id="btn-import" accept=".json" hidden></label>
+      <span id="dirty" class="dirty" hidden>● 有未保存的改动</span>
+      <span class="kbd-hint">⌘S / Ctrl+S 保存</span>
       <span id="toast" class="toast"></span>
     </div>
   </main>
