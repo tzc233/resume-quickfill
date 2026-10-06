@@ -1,0 +1,38 @@
+<!doctype html><meta charset="utf-8">
+<!-- 优必选那页在「获得荣誉」之外另有一个「参赛经历」整段汇总框。
+     原来后者一条规则都不收 —— 竞赛只能全挤进「获得荣誉」,参赛栏留空。
+     两个框都在时就该各装各的,不许两边装同一批竞赛。 -->
+<main id="form"></main>
+<script src="../content.js"></script>
+<script>
+(async () => {
+  const profile = { basic: {},
+    awards: [
+      { name: '示例一等奖学金', type: '校级奖学金', result: '一等', date: '2022-10' },
+      { name: '示例优秀学生', type: '校级荣誉', result: '优秀学生', date: '2021-10' },
+    ],
+    competitions: [
+      { name: '示例数学建模竞赛', type: '国家级', result: '省级二等奖', startTime: '2022-09' },
+      { name: '示例程序设计竞赛', type: '校级', result: '仅参赛', startTime: '2021-05' },
+    ],
+  };
+  form.innerHTML = '<label>获得荣誉<textarea data-f="honor"></textarea></label>'
+    + '<label>参赛经历<textarea data-f="comp"></textarea></label>';
+  await __RQF.fill(profile);
+  const honor = document.querySelector('[data-f="honor"]').value;
+  const comp = document.querySelector('[data-f="comp"]').value;
+
+  const checks = {
+    参赛栏装竞赛: comp.includes('示例数学建模竞赛') && comp.includes('示例程序设计竞赛'),
+    荣誉栏装奖项: honor.includes('示例一等奖学金') && honor.includes('示例优秀学生'),
+    // 这是这一页的要点:两个框不许装同一批竞赛
+    荣誉栏不再混进竞赛: !honor.includes('示例数学建模竞赛') && !honor.includes('示例程序设计竞赛'),
+    参赛栏不混进奖项: !comp.includes('示例一等奖学金'),
+    // 没获奖的那场也要出现在参赛经历里 —— 这一栏问的是经历,不是奖
+    没获奖的竞赛也算参赛经历: comp.includes('仅参赛'),
+  };
+  const fails = Object.keys(checks).filter((k) => !checks[k]);
+  parent.postMessage({ __rqf: true, page: 'competitions-summary.html', version: __RQF.version,
+    pass: !fails.length, total: Object.keys(checks).length, fails, snapshot: { honor, comp } }, '*');
+})();
+</script>

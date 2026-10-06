@@ -1,0 +1,61 @@
+<!doctype html><meta charset="utf-8"><title>优必选表单</title>
+<!-- 优必选(zhaopin.ubtrobot.com)这页暴露三件事:
+       · 基本信息区的「最高学历」被当成 education 域的字段,占掉 0 号段位,
+         页面上第一段教育被挤到 1 号 —— 整列教育经历错位一格,最后一个学校块
+         去读档案里不存在的第三段;
+       · 「语言等级」里有「语言」二字,被 name 规则抢走 —— 想把语种写进等级框;
+       · 「参赛经历」整段汇总位一条规则都不收,竞赛全挤在「获得荣誉」里。
+     每块经历各有一个 .ux-standard-form,段号正是按它分的,照抄这层。 -->
+<style>input,textarea,[role=combobox]{display:block;width:240px;min-height:24px}</style>
+<div class="sec"><h2>个人信息</h2>
+  <div class="ux-standard-form"><label>姓名<input id="person"></label></div>
+</div>
+<div class="sec"><h2>教育经历</h2>
+  <!-- 「最高学历 / 最高学位」是整份简历的汇总栏,排在教育区块顶上,
+       自己并不是一段经历 —— 它一旦占掉 0 号段位,下面两个学校块就整体后移一格 -->
+  <div class="ux-standard-form">
+    <label>最高学历<input id="topDegree" role="combobox"></label>
+    <label>最高学位<input id="topDiploma" role="combobox"></label>
+  </div>
+  <div class="ux-standard-form">
+    <label>学校名称<input id="school0"></label><label>专业名称<input id="major0"></label>
+    <label>学历<input id="degree0" role="combobox"></label>
+  </div>
+  <div class="ux-standard-form">
+    <label>学校名称<input id="school1"></label><label>专业名称<input id="major1"></label>
+    <label>学历<input id="degree1" role="combobox"></label>
+  </div>
+</div>
+<div class="sec"><h2>外语能力</h2>
+  <div class="ux-standard-form">
+    <label>语言类型<input id="langName" role="combobox"></label>
+    <label>语言等级<input id="langLevel"></label>
+  </div>
+</div>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+window.rqfRun=async()=>{
+  const P=__RQF_V2_PARTS, fields=P.discover(), resolved=P.resolveAll(fields);
+  const keyOf=(el)=>{const i=fields.findIndex(f=>f.el===el);return i<0?undefined:(resolved[i]&&resolved[i].spec.key)};
+  const checks={
+    // 「最高学历」指向学历最高的那一段,但不占段号
+    最高学历指向首段而不占段号:keyOf(topDegree)==='education.0.degree',
+    // 关键:第一个学校块必须是 0 号,不能被「最高学历」挤到 1 号
+    第一个学校块是首段:keyOf(school0)==='education.0.school'&&keyOf(major0)==='education.0.major'
+      &&keyOf(degree0)==='education.0.degree',
+    第二个学校块是次段:keyOf(school1)==='education.1.school'&&keyOf(major1)==='education.1.major'
+      &&keyOf(degree1)==='education.1.degree',
+    // 档案只有两段教育,不许出现第三段的段号
+    不凭空多出第三段:!resolved.some(r=>r&&/^education\.2\./.test(r.spec.key||'')),
+    // 「最高学位」在档案里没有对应字段 —— 留空,不许拿学历顶上
+    最高学位无对应就留空:keyOf(topDiploma)==null,
+    语种归语种:keyOf(langName)==='languages.0.name',
+    等级归等级:keyOf(langLevel)==='languages.0.level',
+    姓名仍然认得:keyOf(person)==='basic.fullName',
+  };
+  const fails=Object.keys(checks).filter(k=>!checks[k]);
+  return {page:'ubtrobot-v2.html',version:__RQF_V2.version,pass:!fails.length,
+    total:Object.keys(checks).length,fails,keys:resolved.map(x=>x&&x.spec.key)};
+};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>

@@ -223,6 +223,8 @@
     // 专利/著作已由上面的结构化区块承接,这里只兜底整段文本型的论文字段
     { k: 'publications', re: /论文|科研成果|学术成果|发表情况|publication|paper/i },
     { k: 'awards',       re: /获奖|奖项|荣誉|奖学金|award|honor/i },
+    // 竞赛的整段汇总位。奖项栏已被上面的 awards 收走,这条只接「参赛经历」这类标签
+    { k: 'competitions', re: /参赛经历|竞赛经历|比赛经历|参赛情况|参赛记录/i },
     { k: 'skills',       re: /技能证书|专业技能|技能|技术栈|掌握技术|擅长|skill/i },
     { k: 'languages',    re: /英语|语言能力|外语|english|language (level|ability)/i },
 
@@ -647,6 +649,9 @@
     out.awardsText = typeof P.awards === 'string' ? P.awards
       : join([...out.awards, ...out.competitions],
         (a) => [a.date || period(a), a.name, a.type, a.result].filter(Boolean).join(' '));
+    out.competitionsText = typeof P.competitions === 'string' ? P.competitions
+      : join(out.competitions,
+        (c) => [c.date || period(c), c.name, c.type, c.result].filter(Boolean).join(' '));
     out.languagesText = typeof P.languages === 'string' ? P.languages
       : join(out.languages, (l) => [l.name, l.cert, l.score].filter(Boolean).join(' '));
     return out;
@@ -708,6 +713,7 @@
       highestSchoolCity: b.highestSchoolCity || e0.city,
       lastMajor: b.lastMajor || e0.major,
       publications: P.publicationsText, awards: P.awardsText, languages: P.languagesText,
+      competitions: P.competitionsText,
       skills: P.skills, campusWork: P.campusWork,
       github: L.github, linkedin: L.linkedin, homepage: L.homepage,
       intro: P.intro,
@@ -1408,8 +1414,15 @@
     let items = rerouteSummaries(collectItems(true));
     const awardSections = sections.filter(s => s.dom === 'award');
     const awardsPresent = awardSections.length || items.some(i => i.hit?.dom === 'award');
+    /* 页面另有「参赛经历」这类竞赛汇总框时,竞赛归那一栏:既不再并进奖项块,
+     * 「获得荣誉」也只留奖项 —— 否则两个框里装的是同一批竞赛(优必选那页)。 */
+    const compTextPresent = items.some(i => i.hit && !i.hit.dom && i.hit.field === 'competitions');
+    if (compTextPresent) {
+      P.awardsText = join(P.awards, a => [a.date || period(a), a.name, a.type, a.result].filter(Boolean).join(' '));
+      report.awardRouting = 'split';
+    }
     const competitionsPresent = sections.some(s => s.dom === 'comp' || s.dom === 'honor')
-      || items.some(i => i.hit?.dom === 'comp' || i.hit?.dom === 'honor');
+      || items.some(i => i.hit?.dom === 'comp' || i.hit?.dom === 'honor') || compTextPresent;
     const scholarshipOnly = awardSections.length && awardSections.every(s => /奖学金/.test(s.text || ''));
     if (awardsPresent && !competitionsPresent && !scholarshipOnly) {
       P.awards = mergeAwardEntries(P.awards, P.competitions);

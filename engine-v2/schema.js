@@ -1,6 +1,6 @@
 (() => {
   const V2 = window.__RQF_V2_PARTS = window.__RQF_V2_PARTS || {};
-  V2.VERSION = '2.16.0';
+  V2.VERSION = '2.17.0';
   V2.schema = [
     { key: 'basic.fullName', terms: ['姓名', '中文名', 'full name', 'candidate name'], exclude: ['导师', '联系人', '推荐人'] },
     { key: 'basic.phone', terms: ['手机', '手机号', '联系电话', 'mobile', 'phone'], exclude: ['紧急', '验证码'] },
@@ -14,7 +14,13 @@
     { key: 'basic.hometown', terms: ['家乡', '籍贯', '户口所在地', 'hometown', 'native place'] },
     { key: 'basic.expectedCity', terms: ['期望工作地点', '意向城市', '期望城市', 'preferred city', 'expected city'] },
     { domain: 'education', field: 'school', anchor: true, terms: ['学校名称', '毕业院校', '学校', '院校', 'school', 'university'] },
-    { domain: 'education', field: 'degree', terms: ['学历', 'education level', 'degree'] },
+    /* 基本信息区的「最高学历」指向学历最高的那一段,它本身不是一个经历块 ——
+     * 当成 education 域的字段会占掉 0 号段位,把页面上第一段教育挤到 1 号,
+     * 于是整列教育经历错位一格(优必选那页第二个学校块因此读到了档案里不
+     * 存在的第三段)。写成定点路径,不参与段号分配。 */
+    { key: 'education.0.degree', terms: ['最高学历'] },
+    { domain: 'education', field: 'degree', terms: ['学历', 'education level', 'degree'],
+      exclude: ['最高'] },
     { domain: 'education', field: 'eduType', terms: ['学历类型', '培养方式', 'education type'] },
     /* 「专业排名」里有「专业」二字,会被 major 抢走 —— 讯飞那一栏因此想往
      * 排名下拉里写「计算机科学与技术」。档案里本来就有 rank,单列一条。 */
@@ -39,8 +45,12 @@
     { domain: 'awards', field: 'type', terms: ['获奖类型', '奖项类型', '获奖类别', '荣誉类型'] },
     { domain: 'awards', field: 'result', terms: ['获奖等级', '奖项等级', '荣誉等级'] },
     { domain: 'awards', field: 'desc', terms: ['获奖描述', '奖项描述', 'description'] },
-    { domain: 'languages', field: 'name', anchor: true, terms: ['语言', '语种', 'language'] },
-    { domain: 'languages', field: 'level', terms: ['精通程度', '熟练程度', 'proficiency', 'language level'] },
+    /* 「语言等级」里有「语言」二字,会被 name 抢走 —— 优必选那一栏因此想把
+     * 语种名写进等级框。等级/水平/程度一律归 level。 */
+    { domain: 'languages', field: 'name', anchor: true, terms: ['语言类型', '语言', '语种', 'language'],
+      exclude: ['等级', '水平', '程度', '证书', '成绩', '分数'] },
+    { domain: 'languages', field: 'level',
+      terms: ['语言等级', '外语等级', '等级', '语言水平', '精通程度', '熟练程度', 'proficiency', 'language level'] },
   ];
   V2.readPath = (obj, path) => path.split('.').reduce((v, k) => v == null ? undefined : v[k], obj);
   V2.valueFor = (profile, spec) => spec.key === 'basic.idType'
