@@ -246,16 +246,5 @@
     }
     return results;
   };
-  V2.readValue = (field) => {
-    if (field.el.isContentEditable) return field.el.textContent.trim();
-    const phoenix = field.el.closest('.phoenix-select');
-    if (phoenix) {
-      // The input may only contain an uncommitted search query.
-      const display = phoenix.querySelector('.phoenix-select__tipEle')?.textContent?.trim() || '';
-      return display === '请选择' ? '' : display;
-    }
-    const owner = field.el.closest(ownerSelector) || field.el;
-    const value = field.el.value || owner.querySelector('.ant-select-selection-item,.el-select__selected-item,.ant-select-selection-placeholder')?.textContent?.trim() || '';
-    return /^(请选择|please select|证件)$/i.test(value) ? '' : value;
-  };
+  V2.readValue = V2.readControlValue;
 })();

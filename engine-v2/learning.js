@@ -24,15 +24,17 @@
     const path = hit?.spec?.key;
     if (path) return `field:${path}`;
     const label = clean(field?.text).replace(/请选择|请搜索|必填/g, '').trim();
-    return label ? `label:${label.slice(0, 80)}` : '';
+    if (!label) return '';
+    const peers = V2.discover().filter(f => clean(f.text).replace(/请选择|请搜索|必填/g,'').trim() === label);
+    const at=peers.findIndex(f=>f.el===field.el);
+    return peers.length>1 ? (at<0?'':`label:${label.slice(0,80)}#${at}`) : `label:${label.slice(0,80)}`;
   };
   /* ---- 填空的记忆 ----
    * 下拉学会了、填空没学会:页面上那些档案里压根没有的问题(年龄、就读院系、
    * 证书编号…)每次都得手打一遍。这里把手填的内容按「站点 + 标签」记下来。
    *
    * 三条自我约束:
-   *   · 只记【规则没认出来】的字段 —— 认出来的该由档案驱动,记一份既是重复
-   *     存个人信息,也会让以后更新档案时被旧记忆盖掉;
+   *   · 档案有值时始终优先；识别出的字段记忆只补档案缺值;
    *   · 验证码/密码一类绝不记;
    *   · 同一个标签在页面上重复出现(重复的经历块)时带上序号,
    *     否则一个值会被灌进每一块 —— 那是比留空更糟的错。 */
@@ -59,12 +61,10 @@
     const el = field.el;
     if (el.tagName === 'SELECT') {
       const option = el.selectedOptions?.[0];
-      return option && option.value ? { text: option.textContent.trim(), value: option.value, adapter: 'native-select' } : null;
+      return option && V2.readControlValue(field) ? { text: option.textContent.trim(), value: option.value, adapter: 'native-select' } : null;
     }
-    const owner = el.closest('.ant-select,.el-select,[class*="select"]') || el.parentElement;
-    const text = clean(owner?.querySelector('.ant-select-selection-item,.el-input__inner,[class*="selected"],[class*="selection-item"]')?.textContent
-      || el.value || owner?.textContent);
-    return text && !/^(请选择|选择|please select)$/.test(text) ? { text, value: String(el.value || ''), adapter: 'popup-combobox' } : null;
+    const text = V2.readControlValue(field);
+    return text ? { text, value: '', adapter: 'popup-combobox' } : null;
   };
   const identify = (el) => {
     const fields = V2.discover();
@@ -73,53 +73,99 @@
     const index = fields.indexOf(field);
     return { field, fields, hit: V2.resolveAll(fields)[index] };
   };
-  const save = async (field, hit, choice) => {
-    const key = semanticKey(field, hit); if (!key || !choice?.text) return;
+  let writes = Promise.resolve();
+  const update = (key, row) => {
+    const task = writes.then(async () => {
     const data = (await api.storage.local.get(STORE))[STORE] || {};
-    for (const scope of scopes()) data[`${scope}|${key}`] = { ...choice, updatedAt: Date.now() };
+    for (const scope of scopes()) {
+      if (row) data[`${scope}|${key}`] = {...row, updatedAt:Date.now()};
+      else delete data[`${scope}|${key}`];
+    }
     await api.storage.local.set({ [STORE]: data });
+    });
+    writes = task.catch(() => {}); return task;
+  };
+  const save = async (field, hit, choice) => {
+    const key = semanticKey(field, hit); if (!key || SENSITIVE.test(field.text)) return;
+    return update(key, choice?.text ? choice : null);
   };
   const capture = (el) => setTimeout(async () => {
+    if (V2.fillInFlight) return;
     const found = identify(el); if (!found) return;
     await save(found.field, found.hit, selected(found.field));
   }, 80);
 
-  const saveText = async (field, fields, text) => {
-    const key = textKey(field, fields); if (!key) return;
-    const data = (await api.storage.local.get(STORE))[STORE] || {};
-    for (const scope of scopes()) data[`${scope}|${key}`] = { text, kind: 'text', updatedAt: Date.now() };
-    await api.storage.local.set({ [STORE]: data });
+  const saveText = async (field, fields, text, hit) => {
+    if (!isTexty(field) || SENSITIVE.test(field.text) || String(text).length > 2000) return;
+    const key = hit?.spec?.key ? `text:${hit.spec.key}` : textKey(field, fields); if (!key) return;
+    return update(key, text ? {text,kind:'text'} : null);
   };
-  const captureText = (el) => setTimeout(async () => {
-    const text = String(el.value || '').trim();
-    if (!text || text.length > 2000) return;
+  const captureText = (el, text = String(el.value || '').trim()) => setTimeout(async () => {
+    if (text.length > 2000) return;
     const found = identify(el);
-    // 规则认出来的字段交给档案,不进记忆
-    if (!found || found.hit || !isTexty(found.field)) return;
-    await saveText(found.field, found.fields, text);
+    // 识别出的字段按语义路径存储，复用时档案优先。
+    if (!found || !isTexty(found.field)) return;
+    await saveText(found.field, found.fields, text, found.hit);
   }, 80);
 
   document.addEventListener('change', (event) => {
-    if (!event.isTrusted) return;
-    const el = event.target.closest?.('select,[role=combobox],.ant-select,.el-select,.aui-select');
+    if (!event.isTrusted || V2.fillInFlight) return;
+    const el = V2.selectionOwner(event.target);
     if (el) { capture(el); return; }
     const box = event.target;
     if (box?.matches?.('input,textarea') && box.type !== 'password') captureText(box);
   }, true);
+  let activeSelection = null;
+  document.addEventListener('pointerdown', event => {
+    if (!event.isTrusted || V2.fillInFlight) return;
+    const owner=V2.selectionOwner(event.target);
+    if(owner){activeSelection=identify(owner);if(activeSelection)activeSelection.before=V2.readControlValue(activeSelection.field);}
+  },true);
+  document.addEventListener('focusin', event => {
+    if (!event.isTrusted) return;
+    const owner = V2.selectionOwner(event.target);
+    if (owner) {
+      activeSelection = identify(event.target);
+      if (activeSelection) activeSelection.before = V2.readControlValue(activeSelection.field);
+    }
+  }, true);
+  const textTimers = new WeakMap();
+  document.addEventListener('input', event => {
+    if (!event.isTrusted || V2.fillInFlight) return;
+    const el=event.target;
+    if (!el.matches?.('input,textarea') || V2.selectionOwner(el)) return;
+    clearTimeout(textTimers.get(el));
+    const text=String(el.value || '').trim();
+    textTimers.set(el,setTimeout(()=>captureText(el,text),400));
+  },true);
   document.addEventListener('click', (event) => {
-    if (!event.isTrusted || !event.target.closest?.('[role=option],[role=treeitem],.ant-select-item-option,.el-select-dropdown__item,.aui-select-dropdown__item')) return;
-    const open = Array.from(document.querySelectorAll('[role=combobox],select,.aui-select input')).find((el) => el.getAttribute('aria-expanded') === 'true' || el.matches(':focus'));
-    if (open) capture(open);
+    if (!event.isTrusted || V2.fillInFlight) return;
+    const owner=V2.selectionOwner(event.target);
+    if(owner && !activeSelection){ activeSelection=identify(owner); if(activeSelection) activeSelection.before=V2.readControlValue(activeSelection.field); }
+    if (!activeSelection && !event.target.closest?.('[role=option],[role=treeitem],.ant-select-item-option,.ant-select-dropdown-menu-item,.el-select-dropdown__item,.aui-select-dropdown__item')) return;
+    if (activeSelection) {
+      const previous = activeSelection;
+      setTimeout(async()=>{
+        if (V2.fillInFlight) return;
+        const fields=V2.discover(),hits=V2.resolveAll(fields);
+        const matches=fields.filter((f,i)=>semanticKey(f,hits[i])===semanticKey(previous.field,previous.hit));
+        const current=matches.find(f=>f.el===previous.field.el) || (matches.length===1?matches[0]:null);
+        if(current && V2.readControlValue(current)!==previous.before) await save(current,previous.hit,selected(current));
+      },180);
+    }
   }, true);
 
   V2.learnedFor = async (field, hit) => {
+    await writes;
     const key = semanticKey(field, hit); if (!key) return null;
     const data = (await api.storage.local.get(STORE))[STORE] || {};
     for (const scope of scopes()) if (data[`${scope}|${key}`]) return data[`${scope}|${key}`];
     return null;
   };
-  V2.learnedTextFor = async (field, fields) => {
-    const key = textKey(field, fields); if (!key) return null;
+  V2.learnedTextFor = async (field, fields, hit) => {
+    await writes;
+    if (!isTexty(field) || SENSITIVE.test(field.text)) return null;
+    const key = hit?.spec?.key ? `text:${hit.spec.key}` : textKey(field, fields); if (!key) return null;
     const data = (await api.storage.local.get(STORE))[STORE] || {};
     for (const scope of scopes()) {
       const row = data[`${scope}|${key}`];
@@ -130,17 +176,21 @@
   V2.rememberSelection = save;
   V2.rememberText = saveText;
   V2.learningInfo = async () => {
+    await writes;
     const data = (await api.storage.local.get(STORE))[STORE] || {};
     const keys = Object.keys(data);
     const here = keys.filter((key) => scopes().some((scope) => key.startsWith(`${scope}|`)));
-    const texts = here.filter((key) => key.includes('|input:'));
+    const texts = here.filter((key) => key.includes('|input:') || key.includes('|text:'));
     return { total: keys.length, current: here.length,
       currentText: texts.length, currentSelect: here.length - texts.length };
   };
-  V2.clearLearningHere = async () => {
+  V2.clearLearningHere = () => {
+    const task = writes.then(async () => {
     const data = (await api.storage.local.get(STORE))[STORE] || {};
     const currentScopes = scopes();
     for (const key of Object.keys(data)) if (currentScopes.some((scope) => key.startsWith(`${scope}|`))) delete data[key];
     await api.storage.local.set({ [STORE]: data });
+    });
+    writes = task.catch(() => {}); return task;
   };
 })();

@@ -3,14 +3,20 @@
   window.__RQF_V2 = {
     version: V2.VERSION,
     async fill(profile, resumeFile) {
+      if (V2.fillInFlight) return V2.fillInFlight;
+      const task = this._fill(profile, resumeFile);
+      V2.fillInFlight = task;
       try {
-        return await this._fill(profile, resumeFile);
+        return await task;
       } catch (e) {
         /* 进度条现在归 2.x 收尾 —— 一旦这里抛错而没人收,页面上会永远挂着
          * 一条「正在处理组合控件…」,比没有进度条更让人以为卡死。 */
         const ui = (window.__RQF && window.__RQF.ui) || { finish() {} };
         ui.finish(`⚠️ 填充出错:${String((e && e.message) || e).slice(0, 40)}`);
         throw e;
+      } finally {
+        V2.fillInFlight = null;
+        V2.deferredLearning = null;
       }
     },
     async _fill(profile, resumeFile) {
@@ -19,6 +25,11 @@
       // 下拉和日期会触发表单整体重渲染。先让兼容层完成这些高扰动操作，
       // 再由 2.x 写普通文本，避免 React 用旧状态把刚写入的内容清空。
       const ui = (window.__RQF && window.__RQF.ui) || { step() {}, finish() {} };
+      V2.deferredLearning = new WeakSet();
+      const initial = V2.discover(), initialHits = V2.resolveAll(initial);
+      for (let i=0;i<initial.length;i++) {
+        if (V2.isSelection(initial[i]) && !V2.readValue(initial[i]) && V2.learnedFor && await V2.learnedFor(initial[i], initialHits[i])) V2.deferredLearning.add(initial[i].el);
+      }
       /* keepProgress:1.x 跑完不收尾。它的 finish 会起一个 5 秒后销毁的定时器,
        * 而下面这一段(每个下拉 700ms 等待、逐层试触发)轻松超过 5 秒 ——
        * 进度条自己撤掉、页面却还在被点,用户判断不出什么时候能动手。 */
@@ -46,20 +57,19 @@
         if (!field) { skipped.push({ label: fields[fieldIndex].text, reason: '页面重渲染后无法唯一定位字段', engine: 'v2' }); continue; }
         if (V2.readValue(field)) continue;
         const hit = resolutions[fieldIndex];
-        const isSelection = field.tag === 'select' || field.role === 'combobox' || !!field.el.closest('.ant-select,.el-select,.aui-select');
+        const isSelection = V2.isSelection(field);
         const learned = isSelection && V2.learnedFor ? await V2.learnedFor(field, hit) : null;
-        /* 填空也复用上次手填的内容 —— 但只在【规则没认出这个字段】时,
-         * 档案永远优先:下拉的记忆是「这个站点的选项该点哪一个」,填空的记忆
-         * 只是「档案里没有的那些问题上次答了什么」,不该盖掉档案。 */
-        const learnedText = !isSelection && !hit && V2.learnedTextFor
-          ? await V2.learnedTextFor(field, fields) : null;
+        // 填空记忆补充档案缺值；档案有值时始终优先。
+        const learnedText = !isSelection && V2.learnedTextFor
+          ? await V2.learnedTextFor(field, fields, hit) : null;
         if (!hit && !learned && !learnedText) continue;
         const fromProfile = hit ? V2.valueFor(profile, hit.spec) : null;
         const value = learned || (fromProfile == null || fromProfile === '' ? learnedText : fromProfile);
         if (value == null || value === '') continue;
         const adapter = V2.adapters.find((a) => a.supports(field)); if (!adapter) continue;
+        if (V2.readValue(field)) continue; // storage lookup can yield while the user edits
         let ok = false;
-        try { ok = await adapter.write(field, value, hit?.spec || {}); }
+        try { ok = await adapter.write(field, adapter.id === 'phoenix-calendar' && learned ? learned.text : value, hit?.spec || {}); }
         catch { field.failure = '控件操作异常，已继续其他字段'; }
         if (adapter.id === 'native-text' || adapter.id === 'native-select') {
           const expected = String(field.el.value);

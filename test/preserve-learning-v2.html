@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8">
+<label>姓名<input id="name" value="人工姓名"></label>
+<label>性别<select id="gender" size="3"><option value="">请选择</option><option value="m">男</option><option value="f">女</option></select></label>
+<label>民族<select id="ethnicity"><option value="other">其他民族</option><option value="han">汉族</option></select></label>
+<div class="form-item"><label>意向城市</label><div class="ant-select"><span class="ant-select-selection-selected-value">杭州</span><input id="city"></div></div>
+<div class="form-item"><label>籍贯</label><div class="aui-select"><span class="aui-select__tags-text">南京</span><input id="home"></div></div>
+<label>研究偏好<input id="answer"></label><label>其他说明<input id="note"></label>
+<label>邮箱<input id="mail"></label>
+<label>自定义原因<input class="repeat"></label><label>自定义原因<input class="repeat"></label>
+<label>验证码<input id="captcha"></label>
+<div class="form-item"><label>公司性质</label><div class="phoenix-select"><span class="phoenix-select__tipEle"></span><input id="nature"></div></div>
+<script>
+const memory={};window.chrome={storage:{local:{async get(k){await new Promise(r=>setTimeout(r,10));return {[k]:structuredClone(memory[k])}},async set(v){await new Promise(r=>setTimeout(r,10));Object.assign(memory,structuredClone(v))}}}};
+window.changes=[];document.addEventListener('change',e=>changes.push(e.target.id));
+nature.onclick=()=>{if(document.querySelector('[role=option]'))return;const b=document.createElement('button');b.setAttribute('role','option');b.textContent='民营';b.onclick=()=>{nature.parentElement.querySelector('span').textContent='民营';nature.value='';b.remove()};document.body.append(b)};
+window.profile={basic:{fullName:'档案姓名',gender:'男',ethnicity:'汉族',expectedCity:'上海',hometown:'北京'}};
+</script>
+<script>
+/* 这一页是给 test/manual-learning.cjs 当舞台用的 —— 要验的是「可信的人工输入」,
+ * 页内脚本伪造不出 isTrusted=true 的事件,所以断言写在那个 Playwright 驱动里。
+ * 这里给 ?run=1 回一个空结果,免得按目录批量跑的执行器在这一页白等 120 秒。 */
+if (location.search.includes('run=1')) parent.postMessage({ __rqf: true,
+  page: 'preserve-learning-v2.html', pass: true, total: 0, fails: [],
+  note: '由 test/manual-learning.cjs 驱动(需要可信输入事件)' }, '*');
+</script>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/learning.js"></script><script src="../engine-v2/runtime.js"></script>

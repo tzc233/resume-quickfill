@@ -1418,6 +1418,7 @@
     }
     // 档案段数多于页面区块数时,先把「+ 添加」点出来
     items = rerouteSummaries(await expandBlocks(P, items, collectItems, report, sections));
+    const originallyEmptyWidgets = new WeakSet(items.filter(it => it.tag === 'WIDGET' && !widgetValue(it.el)).map(it => it.el));
 
     /* 页面上已经有内容的经历块 —— 你自己填的,或网站解析简历填进去的 ——
      * 按锚点的现有值认回它对应档案里的哪一段,并把段号钉到【整块】的所有字段上。
@@ -1763,6 +1764,14 @@
       if (!v) { report.skipped.push({ label: hit.label, reason: '档案中未填写' }); continue; }
 
       /* --- 写入 --- */
+      const completeGeneratedMonth = tag === 'WIDGET' && (hit.ym || hit.half) === 'm' && ymYearJustFilled && originallyEmptyWidgets.has(el);
+      if (!completeGeneratedMonth && type !== 'radio' && !el.value && window.__RQF_V2_PARTS?.readControlValue?.({el})) {
+        report.skipped.push({ label: hit.label, reason: '已有显示内容,未覆盖' }); continue;
+      }
+      if (window.__RQF_V2_PARTS?.deferredLearning?.has(el) ||
+          Array.from(el.querySelectorAll('input,select,textarea')).some(n => window.__RQF_V2_PARTS?.deferredLearning?.has(n))) {
+        report.skipped.push({ label: hit.label, reason: '交由本地人工选择记忆处理' }); continue;
+      }
       if (tag === 'WIDGET') {
         const kind = widgetKind(el);
         // 展开浮层 → 等渲染 → 点选,是整个流程里最慢的一步,单独报一下
@@ -1772,7 +1781,7 @@
          * 所以档案里可另存一份 <字段>Path(如 cityPath = 上海/上海市),仅级联控件使用。 */
         const pathV = (kind === '自定义级联' && P.basic && P.basic[`${semKey}Path`]) || v;
         const ymRole = hit.ym || hit.half || '';
-        const force = ymRole === 'm' && ymYearJustFilled;
+        const force = completeGeneratedMonth; // 只补本轮空控件生成的默认月，保留原有月份。
         const r = kind === '自定义下拉' ? await fillWidget(el, semKey, v, force)
           : kind === '自定义日期' ? await fillDatePicker(el, v)
             : kind === '自定义级联' ? await fillCascader(el, pathV)
@@ -1791,7 +1800,8 @@
         continue;
       }
       if (tag === 'SELECT') {
-        if (el.value && el.selectedIndex > 0) { report.skipped.push({ label: hit.label, reason: '已有选择,未覆盖' }); continue; }
+        const selected = window.__RQF_V2_PARTS?.readControlValue?.({el});
+        if (selected || (!window.__RQF_V2_PARTS?.readControlValue && el.value && !/请选择|please select/i.test(el.selectedOptions[0]?.textContent || ''))) { report.skipped.push({ label: hit.label, reason: '已有选择,未覆盖' }); continue; }
         const picked = fillSelect(el, semKey, v);
         if (picked !== null) { mark(el); report.filled.push({ label: hit.label, value: picked }); }
         else report.skipped.push({ label: hit.label, reason: '选项未匹配' });
@@ -2345,6 +2355,8 @@
   const isSelectLike = (el) => widgetKind(el) === '自定义下拉';
 
   const widgetValue = (el) => {
+    const shared = window.__RQF_V2_PARTS?.readControlValue?.({el});
+    if (shared) return clean(shared);
     /* Moka:选中值渲染在 <span class="sd-Input-display-value">,内部 input 的
      * value 恒为空(它只是搜索框)。读错位置有两个后果:已填的下拉被当成空的
      * 重新点选(会覆盖 ATS 解析好的内容),点选之后回读又永远拿不到值,

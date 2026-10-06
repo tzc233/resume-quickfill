@@ -1,5 +1,26 @@
 (() => {
   const V2 = window.__RQF_V2_PARTS;
+  V2.selectionOwner = el => el.closest('.ant-select,.el-select,.aui-select,.phoenix-select,.ud__select,[class*="sd-Dropdown"],[class*="sd-Select"]') || el.closest('select,[role=combobox]');
+  V2.isSelection = field => !!V2.selectionOwner(field.el);
+  V2.readControlValue = ({el}) => {
+    const valid = value => /^(请选择.*|请输入.*|please select.*|select an? .*|选择|证件)$/i.test(String(value).trim()) ? '' : String(value || '').trim();
+    if (el.tagName === 'SELECT') {
+      const options = Array.from(el.selectedOptions || []).filter(o => !o.disabled && valid(o.textContent));
+      return options.map(o => valid(o.textContent) || o.value).join('、');
+    }
+    if (el.matches('input[type=radio],input[type=checkbox]')) return el.checked ? el.value || 'checked' : '';
+    if (el.isContentEditable) return valid(el.textContent);
+    const owner = V2.selectionOwner(el) || el;
+    const selectors = '.phoenix-select__tipEle,.ant-select-selection-item,.ant-select-selection-placeholder,.ant-select-selection-selected-value,.ant-select-selection__rendered > [title],.el-select__selected-item,.el-select__tags-text,.aui-select__tags-text,[class*="display-value"],[class*="selection-item"],[class*="selection-selected-value"],[class*="picker-label"]';
+    const shown = Array.from(owner.querySelectorAll(selectors)).map(n => valid(n.textContent)).filter(Boolean);
+    if (shown.length) return shown.join('、');
+    const inputs = owner.matches('input,textarea') ? [owner] : Array.from(owner.querySelectorAll('input:not([type=hidden]),textarea'));
+    // Search input text is not a committed selection, except read-only date/select displays.
+    const values = inputs.filter(n => !V2.selectionOwner(n) || n.readOnly || !/search/i.test(n.type + ' ' + n.className) && !n.matches('.phoenix-select__input,.ant-select-selection-search-input'))
+      .map(n => valid(n.value)).filter(Boolean);
+    return values.join('、') || valid(owner.getAttribute('aria-valuetext') || '');
+  };
+  V2.readValue = V2.readControlValue;
   const clean = (s) => String(s || '').replace(/([a-z\d])([A-Z])/g, '$1 $2').toLowerCase().replace(/[*：:()（）_\-]/g, ' ').replace(/\s+/g, ' ').trim();
   /* 上溯取「容器文字减去通往控件的那一支」—— 剩下的就是标签。
    * 这条是兜底,但不可或缺:飞书招聘(小鹏等)的标签既不在 label[for]、
