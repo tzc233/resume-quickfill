@@ -57,8 +57,12 @@ const SITES = { 'jobs.example.com': T };
       } } };
     }, { profile: PROFILE, memory: MEMORY, sites: SITES });
     const dialogs = [];
-    let acceptNext = false;
-    page.on('dialog', (d) => { dialogs.push({ type: d.type(), msg: d.message() }); acceptNext ? d.accept() : d.dismiss(); });
+    let acceptNext = false, promptAnswer = '';
+    page.on('dialog', (d) => {
+      dialogs.push({ type: d.type(), msg: d.message() });
+      if (d.type() === 'prompt') return d.accept(promptAnswer);
+      return acceptNext ? d.accept() : d.dismiss();
+    });
 
     await page.goto('http://rqf.test/options.html');
     await page.waitForSelector("#health-list li");
@@ -183,6 +187,72 @@ const SITES = { 'jobs.example.com': T };
     const keys = Object.keys(db.rqfV2LearnedSelections);
     ok('一键清理只清无关站点', !keys.some((k) => k.includes('search.example.org')) && keys.some((k) => k.includes('jobs.example.com')), keys);
     ok('清理后列表刷新', (await page.locator('.mem-site').count()) === 1);
+
+    /* 10. 简历版本:事实共享,措辞分版本 */
+    const saveKey = process.platform === 'darwin' ? 'Meta+s' : 'Control+s';
+    const intro = page.locator('[data-path="intro"]');
+    await intro.fill('示例默认介绍');
+    await page.keyboard.press(saveKey); await page.waitForTimeout(200);
+    promptAnswer = '央国企';
+    await page.locator('#ver-add').click();
+    await page.waitForTimeout(150);
+    ok('新建版本后切到该版本', /央国企/.test(await page.locator('#ver-tabs .active').innerText()));
+    ok('版本模式下事实栏不可改', await page.locator('[data-path="basic.fullName"]').isDisabled());
+    ok('版本模式下经历结构不可改', !(await page.locator('[data-list="education"] .add-btn').isVisible())
+      && !(await page.locator('[data-list="education"] .entry-del').first().isVisible()));
+    ok('措辞栏可改且提示沿用默认', !(await intro.isDisabled()) && (await intro.inputValue()) === ''
+      && /沿用默认.*示例默认介绍/.test(await intro.getAttribute('placeholder')));
+    await intro.fill('示例国企版介绍');
+    const research = page.locator('[data-list="education"] .entry').first().locator('[data-k="research"]');
+    await research.fill('示例国企版研究方向');
+    ok('版本模式下默认问答只读', await page.locator('.qa-row.qa-base .qa-a').first().isDisabled());
+    await page.locator('#qa-add').click();
+    const vq = page.locator('.qa-row:not(.qa-base)').last();
+    await vq.locator('.qa-q').fill('为什么'); await vq.locator('.qa-a').fill('示例国企版回答');
+    await page.keyboard.press(saveKey); await page.waitForTimeout(250);
+    db = await page.evaluate(() => window.__db);
+    const vid = db.profile.versions && db.profile.versions[0] && db.profile.versions[0].id;
+    ok('版本元数据落盘', !!vid && db.profile.versions[0].name === '央国企', db.profile.versions);
+    ok('措辞覆盖存进版本', db.profile._v[vid].intro === '示例国企版介绍'
+      && db.profile.education[0]._v[vid].research === '示例国企版研究方向', db.profile);
+    ok('默认措辞不被版本改动', db.profile.intro === '示例默认介绍');
+    ok('版本问答单独存', db.profile._v[vid].custom.some((c) => c.a === '示例国企版回答')
+      && !db.profile.custom.some((c) => c.a === '示例国企版回答'));
+
+    const pdf = path.join(require('os').tmpdir(), '示例国企.pdf');
+    fs.writeFileSync(pdf, '%PDF-1.4 示例');
+    await page.locator('#resume-file').setInputFiles(pdf);
+    await page.waitForTimeout(300);
+    db = await page.evaluate(() => window.__db);
+    ok('版本附件单独存、不动默认附件', db.resumeFiles && db.resumeFiles[vid] && db.resumeFiles[vid].name === '示例国企.pdf' && !db.resumeFile, { rf: db.resumeFile, rfs: Object.keys(db.resumeFiles || {}) });
+    fs.unlinkSync(pdf);
+    ok('版本附件显示在附件区', /示例国企\.pdf/.test(await page.locator('#resume-info').innerText()));
+
+    await page.locator('#ver-tabs [data-ver="default"]').click();
+    await page.waitForTimeout(150);
+    ok('切回默认显示默认措辞且事实可改', (await intro.inputValue()) === '示例默认介绍'
+      && !(await page.locator('[data-path="basic.fullName"]').isDisabled()));
+    ok('默认版本看不到版本附件', !/示例国企\.pdf/.test(await page.locator('#resume-info').innerText()));
+    // 默认版本里新加一段并挪到最前:版本覆盖必须跟着原来那一段走,而不是跟着「第 1 段」这个位置
+    await page.locator('[data-list="education"] .add-btn').click();
+    await page.locator('[data-list="education"] .entry').last().locator('[data-k="school"]').fill('示例新学校');
+    await page.locator('[data-list="education"] .entry').last().locator('.entry-up').click();
+    await page.keyboard.press(saveKey); await page.waitForTimeout(250);
+    db = await page.evaluate(() => window.__db);
+    ok('调整顺序后版本覆盖跟着条目走', db.profile.education[0].school === '示例新学校' && !db.profile.education[0]._v
+      && db.profile.education[1]._v[vid].research === '示例国企版研究方向', db.profile.education);
+
+    await page.locator(`#ver-tabs [data-ver="${vid}"]`).click();
+    await page.waitForTimeout(150);
+    ok('再进版本时覆盖值回显', (await intro.inputValue()) === '示例国企版介绍');
+    acceptNext = true;
+    await page.locator('#ver-del').click();
+    await page.waitForTimeout(150);
+    await page.keyboard.press(saveKey); await page.waitForTimeout(250);
+    db = await page.evaluate(() => window.__db);
+    ok('删除版本清掉其覆盖与附件', !(db.profile.versions || []).length && !JSON.stringify(db.profile).includes(vid)
+      && !(db.resumeFiles || {})[vid], db.profile);
+    ok('删除版本后回到默认', /默认|互联网/.test(await page.locator('#ver-tabs .active').innerText()));
 
     console.log(JSON.stringify({ pass: true, total: checks.length, checks }));
   } finally { await browser.close(); }

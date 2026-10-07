@@ -12,6 +12,9 @@
   </header>
 
   <div id="backup-bar" hidden></div>
+  <div id="ver-bar" class="ver-bar" hidden>
+    <span>简历版本</span><select id="ver" title="按网站记住:同一网站下次打开沿用这次的选择"></select>
+  </div>
   <button id="btn-fill" class="primary big">⚡ 一键填充当前页面</button>
   <button id="btn-scan" class="ghost wide">🔍 复制诊断报告(不填写 · 贴给 AI 就能优化)</button>
   <button id="btn-check" class="ghost wide">🩺 档案自检(看插件里实际存了什么)</button>
@@ -25,6 +28,7 @@
   <footer class="pop-foot">数据仅存本地 · 不自动提交 · 协议勾选与验证码请自行完成</footer>
   <script src="api.js"></script>
   <script src="backup.js"></script>
+  <script src="versions.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

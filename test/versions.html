@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><title>简历版本:事实共享、措辞分版本</title>
+<!-- 投互联网和投央国企,简历差在措辞:项目描述、技能、研究方向、校园经历、附件 PDF。
+     事实(日期、名称、获奖级别、成绩)必须在所有版本里一致 —— 两份简历写出两套事实,
+     背调时就是硬伤。所以版本只覆盖措辞类栏目,其余一律沿用默认版本。 -->
+<script src="../versions.js"></script>
+<script>
+const base = {
+  basic: { fullName: '示例姓名', expectedSalary: '30k', _v: { soe: { expectedSalary: '面议', fullName: '不许改名' } } },
+  intro: '默认自我介绍',
+  skills: '默认技能',
+  education: [{ school: '示例大学', endTime: '2027-06', research: '默认研究方向',
+    _v: { soe: { research: '国企版研究方向', endTime: '1999-01' } } }],
+  work: [{ company: '示例科技', desc: '默认实习描述', _v: { soe: { desc: '国企版实习描述' }, net: { desc: '' } } }],
+  competitions: [{ name: '示例竞赛', type: '省级', _v: { soe: { type: '国家级' } } }],
+  custom: [{ q: '为什么', a: '默认的为什么' }],
+  versions: [{ id: 'soe', name: '央国企' }, { id: 'net', name: '互联网' }],
+  _v: { soe: { intro: '国企版自我介绍', custom: [{ q: '为什么', a: '国企版的为什么' }] } },
+};
+const V = window.rqfVersions;
+const soe = V.apply(base, 'soe'), def = V.apply(base, 'default'), net = V.apply(base, 'net'), ghost = V.apply(base, 'gone');
+const files = { resumeFile: { name: '默认.pdf' }, resumeFiles: { soe: { name: '国企.pdf' } } };
+const hasV = (o) => JSON.stringify(o).includes('"_v"');
+const checks = {
+  措辞类按版本覆盖: soe.intro === '国企版自我介绍' && soe.education[0].research === '国企版研究方向'
+    && soe.work[0].desc === '国企版实习描述' && soe.basic.expectedSalary === '面议',
+  没覆盖的沿用默认: soe.skills === '默认技能',
+  // 关键:事实类栏目即便 _v 里写了也不许生效
+  事实不随版本变: soe.basic.fullName === '示例姓名' && soe.education[0].endTime === '2027-06'
+    && soe.competitions[0].type === '省级',
+  空覆盖等于沿用默认: net.work[0].desc === '默认实习描述',
+  默认版本不受影响: def.intro === '默认自我介绍' && def.work[0].desc === '默认实习描述',
+  不存在的版本按默认: ghost.intro === '默认自我介绍',
+  // 自定义问答:版本的答案排在前面(先匹配者胜),默认的仍可兜底
+  版本问答优先且保留默认: soe.custom[0].a === '国企版的为什么' && soe.custom.some((c) => c.a === '默认的为什么'),
+  引擎看不到版本内部结构: !hasV(soe) && !hasV(def) && !('versions' in soe),
+  不改动原档案: base._v.soe.intro === '国企版自我介绍' && base.intro === '默认自我介绍',
+  版本有自己的简历附件: V.resume('soe', files.resumeFile, files.resumeFiles).name === '国企.pdf',
+  版本没传附件就用默认的: V.resume('net', files.resumeFile, files.resumeFiles).name === '默认.pdf',
+  版本列表含默认版本: V.list(base).map((x) => x.name).join('/') === '默认/央国企/互联网',
+};
+const fails = Object.keys(checks).filter((k) => !checks[k]);
+const r = { page: 'versions.html', pass: !fails.length, total: Object.keys(checks).length, fails };
+if (location.search.includes('run=1')) parent.postMessage({ __rqf: true, ...r }, '*');
+</script>

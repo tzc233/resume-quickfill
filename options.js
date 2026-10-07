@@ -176,6 +176,8 @@ function entryRow(listKey, data = {}, idx = 0) {
   const spec = LIST_SPEC[listKey];
   const box = document.createElement('div');
   box.className = 'entry';
+  // 原对象:保存时带回页面不渲染的键(版本覆盖 _v、旧版遗留字段),否则一保存就被吞掉
+  box._orig = data;
   box.innerHTML = `<div class="entry-head"><span class="entry-no">第 ${idx + 1} 段</span>
     <span class="entry-title"></span>
     <span class="entry-ops">
@@ -262,14 +264,16 @@ function renderList(listKey, items) {
 
 function collectList(listKey) {
   const wrap = document.querySelector(`[data-list="${listKey}"] .list`);
+  const shown = new Set(LIST_SPEC[listKey].fields.map((f) => f.k));
   return [...wrap.children].map((box) => {
     const o = {};
+    for (const [k, v] of Object.entries(box._orig || {})) if (!shown.has(k)) o[k] = JSON.parse(JSON.stringify(v));
     for (const c of box.querySelectorAll('[data-k]')) {
       const v = c.value.trim();
       if (v) o[c.dataset.k] = v;
     }
     return o;
-  }).filter((o) => Object.keys(o).length);
+  }).filter((o) => Object.keys(o).some((k) => k !== '_v'));
 }
 
 for (const sec of $$('[data-list]')) {
@@ -304,17 +308,24 @@ function renderCustom(list) {
 }
 
 /* ============ 简历附件 ============ */
-function renderResume(rf) {
+/* 每个版本可以有自己的附件 PDF(resumeFiles[版本 id]),没传就用默认附件 */
+const RESUME = { base: null, files: {} };
+const kb = (f) => `${(f.size / 1024).toFixed(0)} KB`;
+function renderResume() {
   const info = $('#resume-info');
   const del = $('#resume-del');
-  RESUME_SAVED = !!(rf && rf.name);
+  const own = CUR === 'default' ? RESUME.base : RESUME.files[CUR];
+  RESUME_SAVED = !!((own && own.name) || (RESUME.base && RESUME.base.name));
   scheduleRefresh();
-  if (rf && rf.name) {
-    info.textContent = `📎 已保存:${rf.name}(${(rf.size / 1024).toFixed(0)} KB)`;
-    del.hidden = false;
+  del.hidden = !(own && own.name);
+  if (own && own.name) {
+    info.textContent = (CUR === 'default' ? '📎 已保存:' : '📎 本版本附件:') + `${own.name}(${kb(own)})`;
+  } else if (CUR !== 'default') {
+    info.textContent = RESUME.base && RESUME.base.name
+      ? `本版本未单独上传,沿用默认版本的附件:${RESUME.base.name}`
+      : '本版本未单独上传,默认版本也没有附件。';
   } else {
     info.textContent = '未上传。上传后,遇到「上传简历 / Resume / CV / 附件」类控件会自动注入该文件。';
-    del.hidden = true;
   }
 }
 
@@ -423,7 +434,7 @@ function renderToc() {
   const toc = $('#toc');
   toc.innerHTML = '';
   $$('section.card').forEach((sec, i) => {
-    if (sec.id === 'health') return;
+    if (sec.id === 'health' || !sec.querySelector('h2')) return;
     if (!sec.id) sec.id = 'sec-' + i;
     const a = document.createElement('a');
     a.href = '#' + sec.id;
@@ -482,6 +493,7 @@ const memPromotable = (k, row) => {
   if (k.kind !== 'field' && k.kind !== 'text') return { ok: false };
   const el = memTarget(k.rest);
   if (!el) return { ok: false, why: '档案里没有这一栏' };
+  if (el.disabled) return { ok: false, why: '这是所有版本共用的栏目,切回默认版本再写进档案' };
   if (el.value.trim()) return { ok: false, why: '档案已有值,不覆盖' };
   if (el.tagName === 'SELECT') {
     const opt = [...el.options].find((o) => o.value === row.text || o.text === row.text);
@@ -624,8 +636,168 @@ function renderMemory() {
   }
 }
 
+/* ============ 简历版本 ============
+ * 规则见 versions.js:事实所有版本共用,版本里只改 VERSIONED 列出的措辞栏和附件。
+ * 版本模式下:事实栏只读(灰色),措辞栏显示本版本的覆盖值、占位里给出默认值;
+ * 经历的增删和排序只在默认版本里做 —— 覆盖挂在条目自己身上,结构必须共用。 */
+const VR = window.rqfVersions;
+let CUR = 'default';
+const verName = (id) => (VR.list(LOADED_PROFILE).find((v) => v.id === id) || {}).name || '默认';
+const verOf = (obj) => (obj && obj._v && obj._v[CUR]) || {};
+// 某个 data-path 在版本里可覆盖吗;可以就返回它挂在哪个对象上、叫什么
+const verSlot = (path, p) => {
+  if (VR.VERSIONED.root.includes(path)) return { holder: p, k: path };
+  const m = path.match(/^basic\.(\w+)$/);
+  if (m && VR.VERSIONED.basic.includes(m[1])) return { holder: (p.basic ||= {}), k: m[1] };
+  return null;
+};
+const putVer = (obj, k, v) => {
+  obj._v ||= {};
+  obj._v[CUR] ||= {};
+  if (v) obj._v[CUR][k] = v; else delete obj._v[CUR][k];
+  if (!Object.keys(obj._v[CUR]).length) delete obj._v[CUR];
+  if (!Object.keys(obj._v).length) delete obj._v;
+};
+const stripVer = (obj, id) => {
+  if (Array.isArray(obj)) { obj.forEach((x) => stripVer(x, id)); return; }
+  if (!obj || typeof obj !== 'object') return;
+  if (obj._v) { delete obj._v[id]; if (!Object.keys(obj._v).length) delete obj._v; }
+  for (const k of Object.keys(obj)) if (k !== '_v') stripVer(obj[k], id);
+};
+
+function collectVersion() {
+  const p = JSON.parse(JSON.stringify(LOADED_PROFILE || {}));
+  for (const el of $$('[data-path]')) {
+    const slot = verSlot(el.dataset.path, p);
+    if (slot) putVer(slot.holder, slot.k, el.value.trim());
+  }
+  for (const key of VR.LISTS) {
+    const boxes = $$(`[data-list="${key}"] .list > .entry`);
+    boxes.forEach((box, i) => {
+      const e = (p[key] || [])[i];
+      if (!e) return;
+      for (const k of VR.VERSIONED[key]) {
+        const c = box.querySelector(`[data-k="${k}"]`);
+        if (c) putVer(e, k, c.value.trim());
+      }
+    });
+  }
+  const own = $$('.qa-row:not(.qa-base)')
+    .map((r) => ({ q: r.querySelector('.qa-q').value.trim(), a: r.querySelector('.qa-a').value.trim() }))
+    .filter((x) => x.q && x.a);
+  p._v ||= {};
+  p._v[CUR] ||= {};
+  if (own.length) p._v[CUR].custom = own; else delete p._v[CUR].custom;
+  if (!Object.keys(p._v[CUR]).length) delete p._v[CUR];
+  if (!Object.keys(p._v).length) delete p._v;
+  return p;
+}
+
+function applyMode() {
+  const ver = CUR !== 'default';
+  document.body.classList.toggle('ver-mode', ver);
+  const decorate = (el, holder, k) => {
+    if (el.dataset.ph0 === undefined) el.dataset.ph0 = el.placeholder || '';
+    el.classList.toggle('v-field', ver && !!holder);
+    if (!ver) { el.disabled = false; el.placeholder = el.dataset.ph0; return; }
+    // 只读栏的示例占位(Zhang San、汉族…)看起来像真数据,版本模式下拿掉
+    if (!holder) { el.disabled = true; el.placeholder = ''; return; }
+    const base = el.value.trim();
+    el.disabled = false;
+    el.value = verOf(holder)[k] || '';
+    el.placeholder = base ? `沿用默认:${base.replace(/\s+/g, ' ').slice(0, 60)}` : '(默认版本这里也为空)';
+  };
+  for (const el of $$('[data-path]')) {
+    const slot = verSlot(el.dataset.path, LOADED_PROFILE);
+    decorate(el, slot && slot.holder, slot && slot.k);
+  }
+  for (const key of Object.keys(LIST_SPEC)) {
+    for (const box of $$(`[data-list="${key}"] .list > .entry`)) {
+      for (const c of box.querySelectorAll('[data-k]')) {
+        const can = (VR.VERSIONED[key] || []).includes(c.dataset.k);
+        decorate(c, can ? box._orig : null, c.dataset.k);
+      }
+    }
+  }
+  if (ver) {
+    for (const r of $$('.qa-row')) {
+      r.classList.add('qa-base');
+      r.querySelectorAll('input,textarea').forEach((x) => { x.disabled = true; });
+    }
+    const first = $('#qa-list .qa-base');
+    for (const it of verOf(LOADED_PROFILE).custom || []) $('#qa-list').insertBefore(qaRow(it.q, it.a), first);
+  }
+  renderVersionBar();
+  renderResume();
+}
+
+function renderVersionBar() {
+  const tabs = $('#ver-tabs');
+  tabs.innerHTML = '';
+  const all = VR.list(LOADED_PROFILE);
+  for (const v of all) {
+    const b = document.createElement('button');
+    b.className = 'ver-tab' + (v.id === CUR ? ' active' : '');
+    b.dataset.ver = v.id;
+    b.textContent = v.name;
+    b.addEventListener('click', () => { if (v.id !== CUR) switchVersion(v.id); });
+    tabs.append(b);
+  }
+  $('#ver-del').hidden = CUR === 'default';
+  $('#ver-rename').hidden = all.length < 2 && CUR === 'default';
+  $('#ver-hint').textContent = CUR === 'default'
+    ? (all.length < 2
+      ? '只有一份简历就不用管这里。投不同方向(如互联网 / 央国企)措辞不同时新建一个版本:日期、学校、奖项级别这些事实所有版本共用,版本里只改措辞和附件 PDF,没改的栏目沿用默认版本。填表时在弹窗里选版本。'
+      : '正在编辑默认版本:事实、经历的增删与排序都在这里改,所有版本共用。')
+    : `正在编辑「${verName(CUR)}」版:灰色栏目是所有版本共用的事实,回默认版本里改;可编辑的栏目留空即沿用默认版本。`;
+}
+
+function switchVersion(id) {
+  LOADED_PROFILE = collectProfile();   // 先把当前页面上的改动收进内存,切换不丢
+  CUR = id;
+  fillForm(LOADED_PROFILE);   // fillForm 末尾会 applyMode —— 不能再调一次,第二次会把覆盖值当成默认值
+  renderHealth(); renderToc(); renderMemory();
+}
+
+$('#ver-add').addEventListener('click', () => {
+  const name = (prompt('新版本的名字(如:央国企、互联网)', '') || '').trim();
+  if (!name) return;
+  LOADED_PROFILE = collectProfile();
+  const id = 'v' + Date.now().toString(36);
+  (LOADED_PROFILE.versions ||= []).push({ id, name });
+  markDirty();
+  switchVersion(id);
+  toast(`已新建「${name}」版,改完记得保存`);
+});
+$('#ver-rename').addEventListener('click', () => {
+  const name = (prompt('版本名字', verName(CUR)) || '').trim();
+  if (!name) return;
+  LOADED_PROFILE = collectProfile();
+  if (CUR === 'default') LOADED_PROFILE.defaultVersionName = name;
+  else (LOADED_PROFILE.versions || []).forEach((v) => { if (v.id === CUR) v.name = name; });
+  markDirty();
+  renderVersionBar();
+});
+$('#ver-del').addEventListener('click', async () => {
+  const id = CUR, name = verName(id);
+  if (!confirm(`删除「${name}」版本?\n它的措辞覆盖、自定义问答和单独上传的附件都会删除。`)) return;
+  LOADED_PROFILE = collectProfile();
+  LOADED_PROFILE.versions = (LOADED_PROFILE.versions || []).filter((v) => v.id !== id);
+  stripVer(LOADED_PROFILE, id);
+  if (RESUME.files[id]) {
+    delete RESUME.files[id];
+    try { await store.set({ resumeFiles: RESUME.files }); } catch (e) { toast('附件删除失败:' + e.message, true); }
+  }
+  CUR = 'default';
+  fillForm(LOADED_PROFILE);
+  markDirty();
+  renderHealth(); renderToc(); renderMemory();
+  toast(`已删除「${name}」版,保存后生效`);
+});
+
 /* ============ 读取与保存 ============ */
 function collectProfile() {
+  if (CUR !== 'default') return collectVersion();
   // 以存储里的完整档案为底,只覆盖页面负责渲染的部分,页面不认识的字段原样保留
   const p = JSON.parse(JSON.stringify(LOADED_PROFILE || {}));
   for (const el of $$('[data-path]')) {
@@ -661,6 +833,7 @@ function fillForm(profile) {
     renderList(k, asList(profile[k]));
   }
   renderCustom(profile.custom || []);
+  applyMode();
 }
 
 /* 备份提示条:档案改过没备份 / 超过 30 天没备份时出现 */
@@ -671,16 +844,17 @@ async function renderBackupBanner() {
 }
 
 async function load() {
-  let profile = {}, resumeFile = null;
+  let profile = {};
   try {
-    const st = await store.get(['profile', 'resumeFile', MEM_STORE, MEM_SITES]);
+    const st = await store.get(['profile', 'resumeFile', 'resumeFiles', MEM_STORE, MEM_SITES]);
     profile = st.profile || {};
-    resumeFile = st.resumeFile || null;
+    RESUME.base = st.resumeFile || null;
+    RESUME.files = st.resumeFiles || {};
     MEM = st[MEM_STORE] || {};
     MEM_ON = st[MEM_SITES] || {};
   } catch { }
+  CUR = 'default';
   fillForm(profile);
-  renderResume(resumeFile);
   markClean();
   renderHealth();
   renderToc();
@@ -691,7 +865,9 @@ async function load() {
 async function save() {
   try {
     // 记录改动时间:用来判断「档案改过但还没备份」—— 比单纯的天数更有意义
-    await store.set({ profile: collectProfile(), profileUpdatedAt: Date.now() });
+    const p = collectProfile();
+    await store.set({ profile: p, profileUpdatedAt: Date.now() });
+    LOADED_PROFILE = p;
     toast('✅ 已保存');
     markClean();
     renderMemory();
@@ -701,7 +877,12 @@ async function save() {
 
 /* ============ 事件 ============ */
 $('#btn-save').addEventListener('click', save);
-$('#qa-add').addEventListener('click', () => { $('#qa-list').appendChild(qaRow()); markDirty(); });
+$('#qa-add').addEventListener('click', () => {
+  // 版本模式下新加的是该版本自己的问答,排在默认问答前面(先匹配者胜)
+  const row = qaRow();
+  $('#qa-list').insertBefore(row, $('#qa-list .qa-base'));
+  markDirty();
+});
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
     e.preventDefault();
@@ -723,23 +904,29 @@ $('#resume-file').addEventListener('change', (ev) => {
   rd.onload = async () => {
     const dataBase64 = String(rd.result).split(',')[1] || '';
     try {
-      await store.set({ resumeFile: { name: f.name, type: f.type || 'application/pdf', size: f.size, dataBase64 } });
-      renderResume({ name: f.name, size: f.size });
-      toast('✅ 简历已保存到插件本地');
+      const file = { name: f.name, type: f.type || 'application/pdf', size: f.size, dataBase64 };
+      if (CUR === 'default') { await store.set({ resumeFile: file }); RESUME.base = file; }
+      else { RESUME.files[CUR] = file; await store.set({ resumeFiles: RESUME.files }); }
+      renderResume();
+      toast(CUR === 'default' ? '✅ 简历已保存到插件本地' : `✅ 已保存为「${verName(CUR)}」版的附件`);
     } catch (e) { toast('保存失败:' + e.message, true); }
   };
   rd.readAsDataURL(f);
 });
 
 $('#resume-del').addEventListener('click', async () => {
-  try { await store.remove('resumeFile'); renderResume(null); toast('已删除简历附件'); }
-  catch (e) { toast('删除失败:' + e.message, true); }
+  try {
+    if (CUR === 'default') { await store.remove('resumeFile'); RESUME.base = null; }
+    else { delete RESUME.files[CUR]; await store.set({ resumeFiles: RESUME.files }); }
+    renderResume();
+    toast('已删除简历附件');
+  } catch (e) { toast('删除失败:' + e.message, true); }
 });
 
 $('#btn-export').addEventListener('click', async () => {
-  let resumeFile = null;
-  try { ({ resumeFile } = await store.get('resumeFile')); } catch { }
-  const blob = new Blob([JSON.stringify({ profile: collectProfile(), resumeFile }, null, 2)], { type: 'application/json' });
+  let resumeFile = null, resumeFiles = {};
+  try { ({ resumeFile, resumeFiles = {} } = await store.get(['resumeFile', 'resumeFiles'])); } catch { }
+  const blob = new Blob([JSON.stringify({ profile: collectProfile(), resumeFile, resumeFiles }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `resume-quickfill-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -760,6 +947,8 @@ function importSummary(data, fileName) {
   const basicDiff = Object.keys({ ...(cur.basic || {}), ...(inc.basic || {}) })
     .filter((k) => String((cur.basic || {})[k] || '') !== String((inc.basic || {})[k] || '')).length;
   lines.push(`基本信息  ${basicDiff ? basicDiff + ' 项不同' : '相同'}`);
+  const nv = (x) => ((x && x.versions) || []).length;
+  if (nv(cur) || nv(inc)) lines.push(`简历版本  ${nv(cur) + 1} → ${nv(inc) + 1} 个(含默认)`);
   lines.push(data.resumeFile ? '简历附件  将替换为备份里的文件' : '简历附件  备份里没有,保留当前的');
   return `用「${fileName}」覆盖当前档案:\n\n${lines.join('\n')}\n\n`
     + (DIRTY ? '⚠️ 页面上还有未保存的改动,导入后会丢失。\n' : '') + '继续吗?';
@@ -777,6 +966,7 @@ $('#btn-import').addEventListener('change', (ev) => {
       if (!confirm(importSummary(data, f.name))) { toast('已取消导入'); return; }
       await store.set({ profile: data.profile });
       if (data.resumeFile) await store.set({ resumeFile: data.resumeFile });
+      if (data.resumeFiles && Object.keys(data.resumeFiles).length) await store.set({ resumeFiles: data.resumeFiles });
       await load();
       toast('✅ 导入成功');
     } catch (e) { toast('导入失败:' + e.message, true); }
