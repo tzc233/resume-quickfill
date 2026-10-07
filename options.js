@@ -445,6 +445,185 @@ function scheduleRefresh() {
   refreshTimer = setTimeout(() => { renderHealth(); renderToc(); }, 150);
 }
 
+/* ============ 填写记忆 ============
+ * 记忆原来是个只进不出的黑箱:看不到记了什么,只能在弹窗里逐站清空;
+ * 2.20.0 之前还会把无关网站输入框里打的字一并记下。这里按站点摊开,
+ * 并给两条出路:对单站有用的留着,对所有站都成立的写进档案 / 自定义问答。
+ * 删除直接写存储(先读最新再删,不覆盖其它标签页刚记下的);写进档案只改表单,走正常保存。 */
+const MEM_STORE = 'rqfV2LearnedSelections', MEM_SITES = 'rqfV2LearnSites';
+let MEM = {}, MEM_ON = {};
+const memKey = (key) => {
+  const m = key.match(/^site:([^|]+)\|(field|text|label|input):(.*)$/);
+  return m ? { host: m[1], kind: m[2], rest: m[3] } : null;
+};
+// 记忆里的路径与档案同名(basic.wechat / education.0.degree),找到档案页上对应的那一栏
+const memTarget = (path) => {
+  const el = document.querySelector(`[data-path="${path}"]`);
+  if (el) return el;
+  const m = path.match(/^(\w+)\.(\d+)\.(\w+)$/);
+  if (!m || !LIST_SPEC[m[1]]) return null;
+  const box = document.querySelectorAll(`[data-list="${m[1]}"] .list > .entry`)[+m[2]];
+  return box ? box.querySelector(`[data-k="${m[3]}"]`) : null;
+};
+const memPathLabel = (path) => {
+  const el = document.querySelector(`[data-path="${path}"]`);
+  if (el) return (el.closest('label')?.firstChild?.textContent || path).trim();
+  const m = path.match(/^(\w+)\.(\d+)\.(\w+)$/);
+  if (m && LIST_SPEC[m[1]]) {
+    const f = LIST_SPEC[m[1]].fields.find((x) => x.k === m[3]);
+    return `${LIST_TITLE[m[1]]} 第 ${+m[2] + 1} 段 · ${f ? f.l : m[3]}`;
+  }
+  return path;
+};
+const memLabel = (k, row) => (k.kind === 'field' || k.kind === 'text')
+  ? memPathLabel(k.rest) : (row.label || k.rest.replace(/#\d+$/, ''));
+// 能写进档案吗:那一栏存在、目前为空、值放得进去(下拉要有这个选项,月份框要是 YYYY-MM)
+const memPromotable = (k, row) => {
+  if (k.kind !== 'field' && k.kind !== 'text') return { ok: false };
+  const el = memTarget(k.rest);
+  if (!el) return { ok: false, why: '档案里没有这一栏' };
+  if (el.value.trim()) return { ok: false, why: '档案已有值,不覆盖' };
+  if (el.tagName === 'SELECT') {
+    const opt = [...el.options].find((o) => o.value === row.text || o.text === row.text);
+    return opt ? { ok: true, el, value: opt.value } : { ok: false, why: '档案的下拉里没有这个选项' };
+  }
+  if (el.type === 'month' && !MONTH_RE.test(row.text)) return { ok: false, why: '不是 YYYY-MM 格式' };
+  return { ok: true, el, value: row.text };
+};
+// 疑似无关:没点过填充、且只有零散输入框记录(没有一条对上简历字段)
+const memJunk = (host, keys) => !MEM_ON[host] && keys.every((key) => memKey(key).kind === 'input');
+const fmtDay = (t) => (t ? new Date(t).toISOString().slice(0, 10) : '');
+
+async function memMutate(fn) {
+  const st = await store.get([MEM_STORE, MEM_SITES]);
+  const data = st[MEM_STORE] || {}, sites = st[MEM_SITES] || {};
+  fn(data, sites);
+  await store.set({ [MEM_STORE]: data, [MEM_SITES]: sites });
+  MEM = data; MEM_ON = sites;
+  renderMemory();
+}
+
+function renderMemory() {
+  const host = $('#memory');
+  const bySite = {};
+  for (const key of Object.keys(MEM)) {
+    const k = memKey(key);
+    if (k) (bySite[k.host] ||= []).push(key);
+  }
+  const hosts = Object.keys(bySite);
+  const latest = (h) => Math.max(...bySite[h].map((key) => MEM[key].updatedAt || 0));
+  hosts.sort((a, b) => (!!MEM_ON[b] - !!MEM_ON[a]) || latest(b) - latest(a));
+  const total = hosts.reduce((n, h) => n + bySite[h].length, 0);
+  const texts = Object.keys(MEM).filter((key) => /\|(text|input):/.test(key)).length;
+  $('#memory-summary').textContent = total
+    ? `共 ${hosts.length} 个网站、${total} 条(填空 ${texts} / 下拉 ${total - texts})`
+    : '还没有记忆。在点过「一键填充」的网站上手动补填后,会出现在这里。';
+  const junk = hosts.filter((h) => memJunk(h, bySite[h]));
+  const clean = $('#mem-clean');
+  clean.hidden = !junk.length;
+  clean.textContent = `清理 ${junk.length} 个疑似无关站点`;
+  clean.onclick = () => {
+    const list = junk.slice(0, 12).join('\n') + (junk.length > 12 ? `\n…等 ${junk.length} 个` : '');
+    if (!confirm(`这些网站没点过「一键填充」,记下的只是零散输入框里的内容:\n\n${list}\n\n删除它们的全部记忆?`)) return;
+    memMutate((data) => { for (const h of junk) for (const key of bySite[h]) delete data[key]; })
+      .then(() => toast('已清理'), (e) => toast('清理失败:' + e.message, true));
+  };
+
+  host.innerHTML = '';
+  for (const h of hosts) {
+    const keys = bySite[h];
+    const isJunk = memJunk(h, keys);
+    const det = document.createElement('details');
+    det.className = 'mem-site';
+    det.dataset.host = h;
+    det.open = !!MEM_ON[h] && keys.length <= 30;
+    const sum = document.createElement('summary');
+    sum.innerHTML = '<b></b><span class="mem-meta"></span>';
+    sum.querySelector('b').textContent = h;
+    sum.querySelector('.mem-meta').textContent = ` · ${keys.length} 条 · 最近 ${fmtDay(latest(h))}`;
+    if (MEM_ON[h]) sum.insertAdjacentHTML('beforeend', '<span class="badge badge-on">已启用</span>');
+    if (isJunk) sum.insertAdjacentHTML('beforeend', '<span class="badge badge-junk">疑似无关</span>');
+    det.append(sum);
+
+    const ops = document.createElement('div');
+    ops.className = 'mem-ops';
+    if (MEM_ON[h]) {
+      const off = document.createElement('button');
+      off.className = 'ghost mem-site-off';
+      off.textContent = '停用该站记忆';
+      off.title = '以后在这个网站手动填写不再记录;已有记忆保留,点「一键填充」会重新启用';
+      off.onclick = () => memMutate((data, sites) => { delete sites[h]; })
+        .then(() => toast(`已停用 ${h} 的记忆`), (e) => toast('操作失败:' + e.message, true));
+      ops.append(off);
+    }
+    const del = document.createElement('button');
+    del.className = 'ghost danger mem-site-del';
+    del.textContent = '清除该站全部记忆';
+    del.onclick = () => {
+      if (!confirm(`删除 ${h} 的 ${keys.length} 条记忆?`)) return;
+      memMutate((data) => { for (const key of keys) delete data[key]; })
+        .then(() => toast('已清除'), (e) => toast('清除失败:' + e.message, true));
+    };
+    ops.append(del);
+    det.append(ops);
+
+    for (const key of keys.sort((a, b) => (MEM[b].updatedAt || 0) - (MEM[a].updatedAt || 0))) {
+      const k = memKey(key), row = MEM[key];
+      const r = document.createElement('div');
+      r.className = 'mem-row';
+      r.dataset.key = key;
+      r.innerHTML = '<span class="mem-type"></span><span class="mem-label"></span><span class="mem-val"></span><span class="mem-acts"></span>';
+      r.querySelector('.mem-type').textContent = (k.kind === 'text' || k.kind === 'input') ? '填空' : '下拉';
+      r.querySelector('.mem-label').textContent = memLabel(k, row);
+      const val = r.querySelector('.mem-val');
+      val.textContent = row.text;
+      val.title = `${row.text}\n记于 ${fmtDay(row.updatedAt)}`;
+      const acts = r.querySelector('.mem-acts');
+      if (k.kind === 'field' || k.kind === 'text') {
+        const b = document.createElement('button');
+        b.className = 'ghost mem-promote';
+        b.textContent = '写进档案';
+        const p = memPromotable(k, row);
+        b.disabled = !p.ok;
+        if (p.why) b.title = p.why;
+        b.onclick = () => {
+          const q = memPromotable(k, row);
+          if (!q.ok) return;
+          q.el.value = q.value;
+          q.el.dispatchEvent(new Event('input', { bubbles: true }));
+          b.disabled = true; b.textContent = '✓ 已写入';
+          toast('已写进档案,保存后对所有网站生效');
+        };
+        acts.append(b);
+      } else if (k.kind === 'input') {
+        const q = memLabel(k, row);
+        const b = document.createElement('button');
+        b.className = 'ghost mem-qa';
+        b.textContent = '转为自定义问答';
+        const exists = $$('.qa-row').some((x) => x.querySelector('.qa-q').value.trim() === q);
+        b.disabled = exists;
+        if (exists) b.title = '自定义问答里已有这个关键词';
+        b.onclick = () => {
+          $('#qa-list').appendChild(qaRow(q, row.text));
+          markDirty();
+          b.disabled = true; b.textContent = '✓ 已加入';
+          toast('已加到自定义问答,保存后对所有网站生效');
+        };
+        acts.append(b);
+      }
+      const d = document.createElement('button');
+      d.className = 'ghost danger mem-del';
+      d.textContent = '✕';
+      d.title = '删除这条记忆';
+      d.onclick = () => memMutate((data) => { delete data[key]; })
+        .catch((e) => toast('删除失败:' + e.message, true));
+      acts.append(d);
+      det.append(r);
+    }
+    host.append(det);
+  }
+}
+
 /* ============ 读取与保存 ============ */
 function collectProfile() {
   // 以存储里的完整档案为底,只覆盖页面负责渲染的部分,页面不认识的字段原样保留
@@ -494,15 +673,18 @@ async function renderBackupBanner() {
 async function load() {
   let profile = {}, resumeFile = null;
   try {
-    const st = await store.get(['profile', 'resumeFile']);
+    const st = await store.get(['profile', 'resumeFile', MEM_STORE, MEM_SITES]);
     profile = st.profile || {};
     resumeFile = st.resumeFile || null;
+    MEM = st[MEM_STORE] || {};
+    MEM_ON = st[MEM_SITES] || {};
   } catch { }
   fillForm(profile);
   renderResume(resumeFile);
   markClean();
   renderHealth();
   renderToc();
+  renderMemory();
   renderBackupBanner();
 }
 
@@ -512,6 +694,7 @@ async function save() {
     await store.set({ profile: collectProfile(), profileUpdatedAt: Date.now() });
     toast('✅ 已保存');
     markClean();
+    renderMemory();
     renderBackupBanner();
   } catch (e) { toast('保存失败:' + e.message, true); }
 }

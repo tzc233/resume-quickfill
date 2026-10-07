@@ -16,6 +16,18 @@ const PROFILE = {
   futureField: { keep: '页面不认识的字段不许被保存吞掉' },
 };
 
+/* 本地填写记忆:一个点过填充的招聘站 + 一个 2.20.0 之前误记的无关站(只有零散输入框) */
+const T = Date.now();
+const MEMORY = {
+  'site:jobs.example.com|text:basic.wechat': { text: '示例微信号', kind: 'text', label: '微信号', updatedAt: T },
+  'site:jobs.example.com|field:basic.politicalStatus': { text: '共青团员', value: 'ty', adapter: 'native-select', label: '政治面貌', updatedAt: T },
+  'site:jobs.example.com|text:basic.fullName': { text: '别的示例名', kind: 'text', label: '姓名', updatedAt: T },
+  'site:jobs.example.com|input:年龄': { text: '25', kind: 'text', label: '年龄', updatedAt: T },
+  'site:search.example.org|input:搜索': { text: '示例搜索词', kind: 'text', updatedAt: T - 9e8 },
+  'site:search.example.org|input:评论': { text: '示例评论', kind: 'text', updatedAt: T - 9e8 },
+};
+const SITES = { 'jobs.example.com': T };
+
 (async () => {
   const browser = await chromium.launch({channel: 'chrome', headless: true});
   const checks = [];
@@ -30,8 +42,8 @@ const PROFILE = {
       const type = file.endsWith('.js') ? 'application/javascript' : file.endsWith('.css') ? 'text/css' : 'text/html';
       return route.fulfill({body: fs.readFileSync(file), contentType: type});
     });
-    await page.addInitScript((profile) => {
-      const db = { profile, lastBackupAt: Date.now() };
+    await page.addInitScript(({ profile, memory, sites }) => {
+      const db = { profile, lastBackupAt: Date.now(), rqfV2LearnedSelections: memory, rqfV2LearnSites: sites };
       const pick = (keys) => {
         if (keys == null) return { ...db };
         const ks = Array.isArray(keys) ? keys : [keys];
@@ -43,7 +55,7 @@ const PROFILE = {
         async set(obj) { Object.assign(db, JSON.parse(JSON.stringify(obj))); },
         async remove(k) { delete db[k]; },
       } } };
-    }, PROFILE);
+    }, { profile: PROFILE, memory: MEMORY, sites: SITES });
     const dialogs = [];
     let acceptNext = false;
     page.on('dialog', (d) => { dialogs.push({ type: d.type(), msg: d.message() }); acceptNext ? d.accept() : d.dismiss(); });
@@ -123,6 +135,54 @@ const PROFILE = {
     /* 8. 目录导航带段数 */
     const toc = await page.locator('#toc').innerText();
     ok('目录列出区块与段数', /教育经历\s*1/.test(toc) && /荣誉奖项[^\n]*2/.test(toc), toc);
+
+    /* 9. 填写记忆管理 */
+    const site = (h) => page.locator(`.mem-site[data-host="${h}"]`);
+    const row = (k) => page.locator(`.mem-row[data-key="${k}"]`);
+    ok('记忆按站点列出', (await page.locator('.mem-site').count()) === 2);
+    ok('无关站点被标出', (await site('search.example.org').locator('.badge-junk').count()) === 1
+      && (await site('jobs.example.com').locator('.badge-junk').count()) === 0);
+    ok('启用的站点有标记', /已启用/.test(await site('jobs.example.com').locator('summary').innerText()));
+    ok('记忆显示可读标签与值', /微信号[\s\S]*示例微信号/.test(await row('site:jobs.example.com|text:basic.wechat').innerText()));
+    ok('无关站点默认折叠', !(await site('search.example.org').evaluate((d) => d.open)));
+
+    await page.locator('#dirty').evaluate(() => {});
+    await row('site:jobs.example.com|text:basic.wechat').locator('.mem-promote').click();
+    ok('写进档案:填入对应输入框', (await page.locator('[data-path="basic.wechat"]').inputValue()) === '示例微信号');
+    ok('写进档案后标记未保存', await page.locator('#dirty').isVisible());
+    await row('site:jobs.example.com|field:basic.politicalStatus').locator('.mem-promote').click();
+    ok('下拉记忆写进档案', (await page.locator('[data-path="basic.politicalStatus"]').inputValue()) === '共青团员');
+    ok('档案已有值时不给覆盖', await row('site:jobs.example.com|text:basic.fullName').locator('.mem-promote').isDisabled());
+    await row('site:jobs.example.com|input:年龄').locator('.mem-qa').click();
+    const qa = await page.locator('.qa-row').evaluateAll((rs) => rs.map((r) => [r.querySelector('.qa-q').value, r.querySelector('.qa-a').value]));
+    ok('未识别的问题转为自定义问答', qa.some(([q, a]) => q === '年龄' && a === '25'), qa);
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+s' : 'Control+s');
+    await page.waitForTimeout(250);
+    db = await page.evaluate(() => window.__db);
+    ok('保存后跨站生效的档案值落盘', db.profile.basic.wechat === '示例微信号'
+      && db.profile.custom.some((c) => c.q === '年龄' && c.a === '25'), db.profile);
+
+    await site('search.example.org').evaluate((d) => { d.open = true; });
+    await row('site:search.example.org|input:评论').locator('.mem-del').click();
+    await page.waitForTimeout(200);
+    db = await page.evaluate(() => window.__db);
+    ok('删除单条记忆', !db.rqfV2LearnedSelections['site:search.example.org|input:评论']
+      && !!db.rqfV2LearnedSelections['site:search.example.org|input:搜索']);
+
+    await site('jobs.example.com').locator('.mem-site-off').click();
+    await page.waitForTimeout(200);
+    db = await page.evaluate(() => window.__db);
+    ok('停用本站记忆', !db.rqfV2LearnSites['jobs.example.com']);
+    ok('停用不删已有记忆', !!db.rqfV2LearnedSelections['site:jobs.example.com|input:年龄']);
+
+    const before = dialogs.length;
+    await page.locator('#mem-clean').click();
+    await page.waitForTimeout(250);
+    ok('一键清理前确认并列出站点', dialogs.length === before + 1 && /search\.example\.org/.test(dialogs[before].msg), dialogs.slice(before));
+    db = await page.evaluate(() => window.__db);
+    const keys = Object.keys(db.rqfV2LearnedSelections);
+    ok('一键清理只清无关站点', !keys.some((k) => k.includes('search.example.org')) && keys.some((k) => k.includes('jobs.example.com')), keys);
+    ok('清理后列表刷新', (await page.locator('.mem-site').count()) === 1);
 
     console.log(JSON.stringify({ pass: true, total: checks.length, checks }));
   } finally { await browser.close(); }

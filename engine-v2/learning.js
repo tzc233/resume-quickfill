@@ -66,6 +66,15 @@
     return { field, fields, hit: V2.resolveAll(fields)[index] };
   };
   let writes = Promise.resolve();
+  /* 容量上限。原来只增不减,而每次写入都要整份读出再写回 —— 2.20.0 之前
+   * 无关网站输入框里打的字也被记了进来,用得越久越重。超出时删最旧的。 */
+  const MAX_ROWS = 1500;
+  const trim = (data) => {
+    const keys = Object.keys(data);
+    if (keys.length <= MAX_ROWS) return;
+    keys.sort((a, b) => (data[a].updatedAt || 0) - (data[b].updatedAt || 0));
+    for (const k of keys.slice(0, keys.length - MAX_ROWS)) delete data[k];
+  };
   const update = (key, row) => {
     const task = writes.then(async () => {
     const data = (await api.storage.local.get(STORE))[STORE] || {};
@@ -73,13 +82,15 @@
       if (row) data[`${scope}|${key}`] = {...row, updatedAt:Date.now()};
       else delete data[`${scope}|${key}`];
     }
+    trim(data);
     await api.storage.local.set({ [STORE]: data });
     });
     writes = task.catch(() => {}); return task;
   };
   const save = async (field, hit, choice, fields) => {
     const key = semanticKey(field, hit, fields); if (!key || SENSITIVE.test(field.text)) return;
-    return update(key, choice?.text ? choice : null);
+    // label:档案页的记忆管理靠它显示「这是哪一栏」,键里的标签是归一化过的
+    return update(key, choice?.text ? { ...choice, label: textLabel(field).slice(0, 60) } : null);
   };
   const capture = (el) => setTimeout(async () => {
     if (V2.fillInFlight) return;
@@ -90,7 +101,7 @@
   const saveText = async (field, fields, text, hit) => {
     if (!isTexty(field) || SENSITIVE.test(field.text) || String(text).length > 2000) return;
     const key = hit?.spec?.key ? `text:${hit.spec.key}` : textKey(field, fields); if (!key) return;
-    return update(key, text ? {text,kind:'text'} : null);
+    return update(key, text ? { text, kind: 'text', label: textLabel(field).slice(0, 60) } : null);
   };
   const captureText = (el, text = String(el.value || '').trim()) => setTimeout(async () => {
     if (text.length > 2000) return;

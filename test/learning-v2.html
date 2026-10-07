@@ -29,6 +29,15 @@ window.rqfRun=async()=>{
   await new Promise(r=>setTimeout(r,200));
   const remembered=await P.learnedTextFor(fieldOf(age).f,P.discover());
   const info=await P.learningInfo();
+  // 记一条时带上可读的标签 —— 档案页的记忆管理要靠它显示「这是哪一栏」
+  const STORE='rqfV2LearnedSelections';
+  const ageRow=Object.entries(memory[STORE]).find(([,r])=>r.text==='25');
+  /* 容量上限:原来只增不减,每次写入整份读出再写回。塞满 1600 条旧记录后再记一条,
+     总数回到上限以内,删掉的是最旧的,新记的那条必须留下 */
+  const old={};for(let i=0;i<1600;i++)old['site:old.example.com|input:旧问题'+i]={text:'旧'+i,kind:'text',updatedAt:1000+i};
+  memory[STORE]={...memory[STORE],...old};
+  {const {fs,f}=fieldOf(lab1); await P.rememberText(f,fs,'第一个实验室');}
+  const capped=memory[STORE], cappedKeys=Object.keys(capped);
   const checks={
     '无档案字段也能复用':after.nature==='private',
     '结果标记来自学习':result.v2.filled.some(x=>x.learned&&x.value==='民营'),
@@ -40,6 +49,10 @@ window.rqfRun=async()=>{
     '重复标签按序号对位':after.lab2==='第二个实验室'&&after.lab1==='',
     '合成事件不被当成手填':remembered==='25',
     '本地记录可诊断':info.current>=1&&info.currentText>=1&&info.currentSelect>=1,
+    '记忆带可读标签':!!ageRow&&/年龄/.test(ageRow[1].label||''),
+    '记忆有容量上限':cappedKeys.length<=1500,
+    '超限先删最旧的':!capped['site:old.example.com|input:旧问题0']&&!!capped['site:old.example.com|input:旧问题1599'],
+    '超限时新记的留下':Object.values(capped).some(r=>r.text==='第一个实验室'),
   };
   const fails=Object.keys(checks).filter(k=>!checks[k]);
   return {page:'learning-v2.html',version:result.version,pass:!fails.length,total:Object.keys(checks).length,fails};

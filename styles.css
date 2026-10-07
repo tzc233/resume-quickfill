@@ -235,3 +235,35 @@ section.card { scroll-margin-top: 56px; }
   .qa-row { grid-template-columns: 1fr auto; }
   .qa-row .qa-a { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* 填写记忆 */
+.mem-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.mem-bar .hint { flex: 1; min-width: 0; }
+.mem-site { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: #fcfcfd; }
+.mem-site summary { cursor: pointer; padding: 8px 12px; font-size: 13px; }
+.mem-meta { color: var(--muted); }
+.badge { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 11.5px; line-height: 18px; }
+.badge-on { background: var(--accent-weak); color: var(--accent); }
+.badge-junk { background: #fef3c7; color: #92400e; }
+.mem-ops { display: flex; gap: 6px; padding: 0 12px 8px; flex-wrap: wrap; }
+.mem-ops button, .mem-acts button { padding: 3px 10px; font-size: 12px; }
+.mem-acts button:disabled { opacity: .45; cursor: default; border-color: var(--line); color: var(--muted); }
+.mem-row {
+  display: grid;
+  grid-template-columns: 3em minmax(0, 1.2fr) minmax(0, 1.5fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 12px;
+  border-top: 1px dashed var(--line);
+  font-size: 12.5px;
+}
+.mem-type { color: var(--muted); }
+.mem-label, .mem-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem-val { color: var(--ink); }
+.mem-acts { display: flex; gap: 4px; justify-content: flex-end; min-width: 12.5em; }
+#mem-clean { padding: 4px 12px; font-size: 12.5px; }
+@media (max-width: 560px) {
+  .mem-row { grid-template-columns: 3em minmax(0, 1fr) auto; }
+  .mem-acts { min-width: 0; }
+  .mem-val { grid-column: 2 / 3; grid-row: 2; }
+}

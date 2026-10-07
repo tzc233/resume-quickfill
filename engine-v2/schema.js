@@ -1,6 +1,6 @@
 (() => {
   const V2 = window.__RQF_V2_PARTS = window.__RQF_V2_PARTS || {};
-  V2.VERSION = '2.20.0';
+  V2.VERSION = '2.21.0';
   V2.schema = [
     { key: 'basic.fullName', terms: ['姓名', '中文名', 'full name', 'candidate name'], exclude: ['导师', '联系人', '推荐人'] },
     { key: 'basic.phone', terms: ['手机', '手机号', '联系电话', 'mobile', 'phone'], exclude: ['紧急', '验证码'] },
