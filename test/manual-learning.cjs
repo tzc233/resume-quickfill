@@ -7,6 +7,14 @@ const {chromium}=require(process.env.RQF_PLAYWRIGHT || 'playwright');
   const root=path.resolve(__dirname,'..');
   await page.route('**/*',route=>{const u=new URL(route.request().url());if(u.origin!=='http://rqf.test')return route.abort();const file=path.resolve(root,'.'+u.pathname);if(!file.startsWith(root+path.sep))return route.abort();return route.fulfill({body:fs.readFileSync(file),contentType:file.endsWith('.js')?'application/javascript':'text/html'})});
   await page.goto('http://rqf.test/test/preserve-learning-v2.html');
+  // 没点过「一键填充」的站点:手打的内容不记、也不做任何识别(每次停顿都全页扫描,大页面会卡)
+  await page.locator('#answer').fill('不该被记住');await page.locator('#note').click();await page.waitForTimeout(700);
+  assert.equal(await page.evaluate(()=>chrome.storage.local.get('rqfV2LearnedSelections').then(m=>Object.keys(m.rqfV2LearnedSelections||{}).length)),0,'unarmed site must not learn');
+  await page.locator('#answer').fill('');
+  // 点过一次「一键填充」即对本站启用,并记住这个站点
+  await page.evaluate(()=>__RQF_V2.fill({basic:{}}));
+  assert(await page.evaluate(()=>chrome.storage.local.get('rqfV2LearnSites').then(m=>!!(m.rqfV2LearnSites||{})[location.hostname])),'fill must arm this site');
+  await page.evaluate(()=>{changes=[]});
   await page.locator('#gender').focus();await page.locator('#gender').press('ArrowDown');await page.locator('#gender').press('End');await page.locator('#gender').press('Enter');await page.locator('#gender').press('Tab');
   assert.equal(await page.locator('#gender').inputValue(),'f','keyboard selection');
   await page.locator('#answer').fill('人工研究方向');
@@ -34,6 +42,12 @@ const {chromium}=require(process.env.RQF_PLAYWRIGHT || 'playwright');
   await page.locator('#answer').fill('');await page.locator('#note').click();await page.waitForTimeout(700);
   const found=await page.evaluate(()=>{const f=__RQF_V2_PARTS.discover();return __RQF_V2_PARTS.learnedTextFor(f.find(x=>x.el.id==='answer'),f)});
   assert.equal(found,null,'manual clear should forget previous text');
-  console.log(JSON.stringify({pass:true,checks:['trusted text/select/portal events','concurrent memory writes','sensitive exclusion','legacy respects learned choice','occupied text and first native option retained','Ant/AUI display retained','second run zero writes','manual clearing forgets']}));
+  // 此前启用过的站点:页面一加载就挂上监听,不必先点填充
+  await page.goto('http://rqf.test/test/preserve-learning-v2.html?armed=1');
+  await page.waitForTimeout(100);
+  await page.locator('#answer').fill('启用站点的人工回答');await page.locator('#note').click();await page.waitForTimeout(700);
+  const armedMem=await page.evaluate(()=>chrome.storage.local.get('rqfV2LearnedSelections'));
+  assert(Object.values(armedMem.rqfV2LearnedSelections||{}).some(r=>r.text==='启用站点的人工回答'),'armed site must learn on load');
+  console.log(JSON.stringify({pass:true,checks:['unarmed site learns nothing','fill arms site','armed site learns on load','trusted text/select/portal events','concurrent memory writes','sensitive exclusion','legacy respects learned choice','occupied text and first native option retained','Ant/AUI display retained','second run zero writes','manual clearing forgets']}));
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});

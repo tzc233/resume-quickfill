@@ -7,25 +7,17 @@
   const STORE = 'rqfV2LearnedSelections';
   const clean = (s) => String(s || '').replace(/([a-z\d])([A-Z])/g, '$1 $2')
     .toLowerCase().replace(/[*：:()（）_\-]/g, ' ').replace(/\s+/g, ' ').trim();
-  const framework = () => {
-    const html = document.documentElement.innerHTML.slice(0, 250000);
-    const src = Array.from(document.scripts).map((x) => x.src).join(' ');
-    if (/moka|mokahr/i.test(src + html)) return 'ats:moka';
-    if (/beisen|italent/i.test(src + html)) return 'ats:beisen';
-    if (/mioffice|xiaomi\.jobs/i.test(location.hostname + src)) return 'ats:mioffice';
-    if (document.querySelector('.ant-select,.ant-form-item')) return 'ui:antd';
-    if (document.querySelector('.el-select,.el-form-item')) return 'ui:element';
-    return '';
-  };
-  const platformScope = framework();
+  /* 原来这里在每个网页加载时把整页 innerHTML 序列化一遍,用来猜组件库 ——
+   * 结果从没被用上(记忆早已只按站点存),白白在每个页面、每个 iframe 上付一次整页序列化。 */
   // 相同组件库只代表交互相同，不代表不同站点的答案相同。
   const scopes = () => [`site:${location.hostname}`];
-  const semanticKey = (field, hit) => {
+  const semanticKey = (field, hit, known) => {
     const path = hit?.spec?.key;
     if (path) return `field:${path}`;
     const label = clean(field?.text).replace(/请选择|请搜索|必填/g, '').trim();
     if (!label) return '';
-    const peers = V2.discover().filter(f => clean(f.text).replace(/请选择|请搜索|必填/g,'').trim() === label);
+    // 调用方手里已经有一份全页扫描时直接用 —— discover 在大页面上是百毫秒级
+    const peers = (known || V2.discover()).filter(f => clean(f.text).replace(/请选择|请搜索|必填/g,'').trim() === label);
     const at=peers.findIndex(f=>f.el===field.el);
     return peers.length>1 ? (at<0?'':`label:${label.slice(0,80)}#${at}`) : `label:${label.slice(0,80)}`;
   };
@@ -85,14 +77,14 @@
     });
     writes = task.catch(() => {}); return task;
   };
-  const save = async (field, hit, choice) => {
-    const key = semanticKey(field, hit); if (!key || SENSITIVE.test(field.text)) return;
+  const save = async (field, hit, choice, fields) => {
+    const key = semanticKey(field, hit, fields); if (!key || SENSITIVE.test(field.text)) return;
     return update(key, choice?.text ? choice : null);
   };
   const capture = (el) => setTimeout(async () => {
     if (V2.fillInFlight) return;
     const found = identify(el); if (!found) return;
-    await save(found.field, found.hit, selected(found.field));
+    await save(found.field, found.hit, selected(found.field), found.fields);
   }, 80);
 
   const saveText = async (field, fields, text, hit) => {
@@ -108,56 +100,83 @@
     await saveText(found.field, found.fields, text, found.hit);
   }, 80);
 
-  document.addEventListener('change', (event) => {
-    if (!event.isTrusted || V2.fillInFlight) return;
-    const el = V2.selectionOwner(event.target);
-    if (el) { capture(el); return; }
-    const box = event.target;
-    if (box?.matches?.('input,textarea') && box.type !== 'password') captureText(box);
-  }, true);
-  let activeSelection = null;
-  document.addEventListener('pointerdown', event => {
-    if (!event.isTrusted || V2.fillInFlight) return;
-    const owner=V2.selectionOwner(event.target);
-    if(owner){activeSelection=identify(owner);if(activeSelection)activeSelection.before=V2.readControlValue(activeSelection.field);}
-  },true);
-  document.addEventListener('focusin', event => {
-    if (!event.isTrusted) return;
-    const owner = V2.selectionOwner(event.target);
-    if (owner) {
-      activeSelection = identify(event.target);
-      if (activeSelection) activeSelection.before = V2.readControlValue(activeSelection.field);
-    }
-  }, true);
-  const textTimers = new WeakMap();
-  document.addEventListener('input', event => {
-    if (!event.isTrusted || V2.fillInFlight) return;
-    const el=event.target;
-    if (!el.matches?.('input,textarea') || V2.selectionOwner(el)) return;
-    clearTimeout(textTimers.get(el));
-    const text=String(el.value || '').trim();
-    textTimers.set(el,setTimeout(()=>captureText(el,text),400));
-  },true);
-  document.addEventListener('click', (event) => {
-    if (!event.isTrusted || V2.fillInFlight) return;
-    const owner=V2.selectionOwner(event.target);
-    if(owner && !activeSelection){ activeSelection=identify(owner); if(activeSelection) activeSelection.before=V2.readControlValue(activeSelection.field); }
-    if (!activeSelection && !event.target.closest?.('[role=option],[role=treeitem],.ant-select-item-option,.ant-select-dropdown-menu-item,.el-select-dropdown__item,.aui-select-dropdown__item')) return;
-    if (activeSelection) {
-      const previous = activeSelection;
-      setTimeout(async()=>{
-        if (V2.fillInFlight) return;
-        const fields=V2.discover(),hits=V2.resolveAll(fields);
-        const matches=fields.filter((f,i)=>semanticKey(f,hits[i])===semanticKey(previous.field,previous.hit));
-        const current=matches.find(f=>f.el===previous.field.el) || (matches.length===1?matches[0]:null);
-        if(current && V2.readControlValue(current)!==previous.before) await save(current,previous.hit,selected(current));
-      },180);
-    }
-  }, true);
+  /* ---- 只在用过插件的站点上监听 ----
+   * 这个脚本随 content_scripts 注入每一个网页、每一个 iframe。原来五个监听器无条件挂上:
+   * 任何网站上每打一段字、每点一个下拉,都要做一次全页 discover + resolveAll ——
+   * 300 个输入框的页面上每次停顿主线程卡 ~180ms,规模再大就是秒级;
+   * 而且搜索框、评论框里打的字也被当成「手动填写」记进了本地存储。
+   * 现在:某站点第一次点「一键填充」时启用并记下这个站点,以后该站点一加载就挂上;
+   * 其余网站只付一次小小的存储读取,不挂任何监听。 */
+  const SITES = 'rqfV2LearnSites';
+  let armed = false;
+  const listen = () => {
+    document.addEventListener('change', (event) => {
+      if (!event.isTrusted || V2.fillInFlight) return;
+      const el = V2.selectionOwner(event.target);
+      if (el) { capture(el); return; }
+      const box = event.target;
+      if (box?.matches?.('input,textarea') && box.type !== 'password') captureText(box);
+    }, true);
+    let activeSelection = null;
+    document.addEventListener('pointerdown', event => {
+      if (!event.isTrusted || V2.fillInFlight) return;
+      const owner=V2.selectionOwner(event.target);
+      if(owner){activeSelection=identify(owner);if(activeSelection)activeSelection.before=V2.readControlValue(activeSelection.field);}
+    },true);
+    document.addEventListener('focusin', event => {
+      if (!event.isTrusted) return;
+      const owner = V2.selectionOwner(event.target);
+      if (owner) {
+        activeSelection = identify(event.target);
+        if (activeSelection) activeSelection.before = V2.readControlValue(activeSelection.field);
+      }
+    }, true);
+    const textTimers = new WeakMap();
+    document.addEventListener('input', event => {
+      if (!event.isTrusted || V2.fillInFlight) return;
+      const el=event.target;
+      if (!el.matches?.('input,textarea') || V2.selectionOwner(el)) return;
+      clearTimeout(textTimers.get(el));
+      const text=String(el.value || '').trim();
+      textTimers.set(el,setTimeout(()=>captureText(el,text),400));
+    },true);
+    document.addEventListener('click', (event) => {
+      if (!event.isTrusted || V2.fillInFlight) return;
+      const owner=V2.selectionOwner(event.target);
+      if(owner && !activeSelection){ activeSelection=identify(owner); if(activeSelection) activeSelection.before=V2.readControlValue(activeSelection.field); }
+      if (!activeSelection && !event.target.closest?.('[role=option],[role=treeitem],.ant-select-item-option,.ant-select-dropdown-menu-item,.el-select-dropdown__item,.aui-select-dropdown__item')) return;
+      if (activeSelection) {
+        const previous = activeSelection;
+        setTimeout(async()=>{
+          if (V2.fillInFlight) return;
+          const fields=V2.discover(),hits=V2.resolveAll(fields);
+          const matches=fields.filter((f,i)=>semanticKey(f,hits[i],fields)===semanticKey(previous.field,previous.hit,fields));
+          const current=matches.find(f=>f.el===previous.field.el) || (matches.length===1?matches[0]:null);
+          if(current && V2.readControlValue(current)!==previous.before) await save(current,previous.hit,selected(current),fields);
+        },180);
+      }
+    }, true);
 
-  V2.learnedFor = async (field, hit) => {
+  };
+  V2.armLearning = async (persist) => {
+    if (!armed) { armed = true; listen(); }
+    if (!persist) return;
+    const task = writes.then(async () => {
+      const sites = (await api.storage.local.get(SITES))[SITES] || {};
+      if (sites[location.hostname]) return;
+      sites[location.hostname] = Date.now();
+      await api.storage.local.set({ [SITES]: sites });
+    });
+    writes = task.catch(() => {}); return task;
+  };
+  Promise.resolve().then(() => api.storage.local.get(SITES))
+    .then((d) => { if (((d && d[SITES]) || {})[location.hostname]) V2.armLearning(false); })
+    .catch(() => {});
+
+  // fields:调用方已有的全页扫描。不传就每个下拉各扫一遍全页 —— 填充时是 O(N²)
+  V2.learnedFor = async (field, hit, fields) => {
     await writes;
-    const key = semanticKey(field, hit); if (!key) return null;
+    const key = semanticKey(field, hit, fields || undefined); if (!key) return null;
     const data = (await api.storage.local.get(STORE))[STORE] || {};
     for (const scope of scopes()) if (data[`${scope}|${key}`]) return data[`${scope}|${key}`];
     return null;

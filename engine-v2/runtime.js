@@ -4,6 +4,8 @@
     version: V2.VERSION,
     async fill(profile, resumeFile) {
       if (V2.fillInFlight) return V2.fillInFlight;
+      // 用户在这个站点点了填充,才对它启用手动填写的记忆(见 learning.js)
+      if (V2.armLearning) await V2.armLearning(true);
       const task = this._fill(profile, resumeFile);
       V2.fillInFlight = task;
       try {
@@ -28,7 +30,7 @@
       V2.deferredLearning = new WeakSet();
       const initial = V2.discover(), initialHits = V2.resolveAll(initial);
       for (let i=0;i<initial.length;i++) {
-        if (V2.isSelection(initial[i]) && !V2.readValue(initial[i]) && V2.learnedFor && await V2.learnedFor(initial[i], initialHits[i])) V2.deferredLearning.add(initial[i].el);
+        if (V2.isSelection(initial[i]) && !V2.readValue(initial[i]) && V2.learnedFor && await V2.learnedFor(initial[i], initialHits[i], initial)) V2.deferredLearning.add(initial[i].el);
       }
       /* keepProgress:1.x 跑完不收尾。它的 finish 会起一个 5 秒后销毁的定时器,
        * 而下面这一段(每个下拉 700ms 等待、逐层试触发)轻松超过 5 秒 ——
@@ -58,7 +60,7 @@
         if (V2.readValue(field)) continue;
         const hit = resolutions[fieldIndex];
         const isSelection = V2.isSelection(field);
-        const learned = isSelection && V2.learnedFor ? await V2.learnedFor(field, hit) : null;
+        const learned = isSelection && V2.learnedFor ? await V2.learnedFor(field, hit, fields.includes(field) ? fields : null) : null;
         // 填空记忆补充档案缺值；档案有值时始终优先。
         const learnedText = !isSelection && V2.learnedTextFor
           ? await V2.learnedTextFor(field, fields, hit) : null;

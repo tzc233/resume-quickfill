@@ -11,6 +11,8 @@
 <div class="form-item"><label>公司性质</label><div class="phoenix-select"><span class="phoenix-select__tipEle"></span><input id="nature"></div></div>
 <script>
 const memory={};window.chrome={storage:{local:{async get(k){await new Promise(r=>setTimeout(r,10));return {[k]:structuredClone(memory[k])}},async set(v){await new Promise(r=>setTimeout(r,10));Object.assign(memory,structuredClone(v))}}}};
+/* ?armed=1:模拟「此前在本站点过一键填充」—— 记忆监听只在这样的站点上挂 */
+if(location.search.includes('armed=1'))memory.rqfV2LearnSites={[location.hostname]:Date.now()};
 window.changes=[];document.addEventListener('change',e=>changes.push(e.target.id));
 nature.onclick=()=>{if(document.querySelector('[role=option]'))return;const b=document.createElement('button');b.setAttribute('role','option');b.textContent='民营';b.onclick=()=>{nature.parentElement.querySelector('span').textContent='民营';nature.value='';b.remove()};document.body.append(b)};
 window.profile={basic:{fullName:'档案姓名',gender:'男',ethnicity:'汉族',expectedCity:'上海',hometown:'北京'}};
