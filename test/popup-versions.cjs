@@ -5,14 +5,11 @@ const fs = require('fs'), path = require('path'), assert = require('assert/stric
 const {chromium} = require(process.env.RQF_PLAYWRIGHT || 'playwright');
 const root = path.resolve(__dirname, '..');
 
-const PROFILE = {
-  basic: { fullName: '示例姓名' },
-  intro: '默认自我介绍',
-  work: [{ company: '示例科技', desc: '默认实习描述', _v: { soe: { desc: '国企版实习描述' } } }],
-  versions: [{ id: 'soe', name: '央国企' }],
-  defaultVersionName: '互联网',
-  _v: { soe: { intro: '国企版自我介绍' } },
-};
+// 两份独立的简历:私企(默认)与央国企,事实与经历都可以不同
+const PROFILE = { _name: '私企', basic: { fullName: '示例姓名' }, intro: '私企自我介绍',
+  work: [{ company: '示例科技', desc: '私企版实习描述' }] };
+const SOE = { basic: { fullName: '示例姓名' }, intro: '国企版自我介绍',
+  work: [{ company: '示例科技', desc: '国企版实习描述' }], projects: [{ name: '只在国企版的项目' }] };
 
 const open = async (browser, host, db) => {
   const page = await browser.newPage();
@@ -59,13 +56,13 @@ const open = async (browser, host, db) => {
   const checks = [];
   const ok = (name, cond, extra) => { assert(cond, name + (extra ? ' :: ' + JSON.stringify(extra) : '')); checks.push(name); };
   try {
-    const db = { profile: PROFILE, lastBackupAt: Date.now(),
+    const db = { profile: PROFILE, altProfiles: { soe: { name: '央国企', profile: SOE } }, lastBackupAt: Date.now(),
       resumeFile: { name: '默认.pdf', size: 1, dataBase64: '' },
       resumeFiles: { soe: { name: '国企.pdf', size: 1, dataBase64: '' } } };
 
     let page = await open(browser, 'jobs.example.com', db);
     const opts = await page.locator('#ver option').allTextContents();
-    ok('弹窗列出全部版本', opts.join('/') === '互联网/央国企', opts);
+    ok('弹窗列出全部简历', opts.join('/') === '私企/央国企', opts);
     ok('没选过就用默认版本', (await page.locator('#ver').inputValue()) === 'default');
 
     await page.selectOption('#ver', 'soe');
@@ -78,10 +75,10 @@ const open = async (browser, host, db) => {
     const cap = await page.evaluate(() => window.__captured);
     const calls = await page.evaluate(() => window.__calls);
     ok('注入了版本解析脚本', calls.some((c) => c.files && c.files.includes('versions.js')), calls);
-    ok('引擎拿到的是所选版本的措辞', cap.profile.intro === '国企版自我介绍' && cap.profile.work[0].desc === '国企版实习描述', cap.profile);
-    ok('事实照旧', cap.profile.basic.fullName === '示例姓名' && cap.profile.work[0].company === '示例科技');
-    ok('引擎拿到的是所选版本的附件', cap.resumeFile && cap.resumeFile.name === '国企.pdf', cap.resumeFile);
-    ok('引擎看不到版本内部结构', !JSON.stringify(cap.profile).includes('"_v"'));
+    ok('引擎拿到的是所选简历的全部内容', cap.profile.intro === '国企版自我介绍' && cap.profile.work[0].desc === '国企版实习描述'
+      && cap.profile.projects && cap.profile.projects[0].name === '只在国企版的项目', cap.profile);
+    ok('引擎拿到的是所选简历的附件', cap.resumeFile && cap.resumeFile.name === '国企.pdf', cap.resumeFile);
+    ok('引擎看不到简历名等元数据', !JSON.stringify(cap.profile).includes('"_name"'));
     ok('弹窗显示用的是哪个版本', /央国企/.test(await page.locator('#status').innerText()));
     // 下一个弹窗接着用这一个写过的存储(每次打开弹窗都是新页面,状态只在存储里)
     Object.assign(db, await page.evaluate(() => window.__db));
@@ -96,11 +93,22 @@ const open = async (browser, host, db) => {
     await page.click('#btn-fill');
     await page.waitForFunction(() => window.__captured);
     const cap2 = await page.evaluate(() => window.__captured);
-    ok('默认版本填默认措辞与附件', cap2.profile.intro === '默认自我介绍' && cap2.resumeFile.name === '默认.pdf', cap2);
+    ok('默认简历填默认内容与附件', cap2.profile.intro === '私企自我介绍' && !cap2.profile.projects
+      && cap2.resumeFile.name === '默认.pdf', cap2);
+    await page.close();
+
+    // 央国企没上传附件:不带附件,也不拿私企的 PDF 顶替,并且说清楚
+    const noPdf = { ...db, resumeFiles: {}, rqfVersionBySite: { 'jobs.example.com': 'soe' } };
+    page = await open(browser, 'jobs.example.com', noPdf);
+    await page.click('#btn-fill');
+    await page.waitForFunction(() => window.__captured);
+    const cap3 = await page.evaluate(() => window.__captured);
+    ok('没传附件的简历不顶替别的附件', cap3.resumeFile === null, cap3.resumeFile);
+    ok('弹窗说明这份简历没有附件', /央国企[\s\S]*未上传附件/.test(await page.locator('#status').innerText()));
     await page.close();
 
     // 没建过版本:选择器不出现,行为与原来一致
-    const plain = { profile: { basic: { fullName: '示例姓名' }, intro: '默认自我介绍' }, lastBackupAt: Date.now() };
+    const plain = { profile: { basic: { fullName: '示例姓名' }, intro: '私企自我介绍' }, lastBackupAt: Date.now() };
     page = await open(browser, 'jobs.example.com', plain);
     ok('没有版本时不显示选择器', !(await page.locator('#ver-bar').isVisible()));
     await page.close();

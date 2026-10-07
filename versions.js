@@ -1,64 +1,105 @@
 /* ============================================================================
- * 简历版本:事实共享,措辞分版本
+ * 多份简历:各自独立维护(例如「私企」一份、「央国企」一份)
  *
- * 投互联网和投央国企,两份简历差在措辞 —— 项目/实习描述、技能、研究方向、
- * 校园经历、为什么选择我们,以及附件 PDF。日期、名称、获奖级别、成绩这些事实
- * 必须在所有版本里一致:两份简历写出两套事实,背调时就是硬伤。
- * 所以不做「整份档案复制 N 份」(复制出来的事实迟早各改各的),而是:
+ * 存储:
+ *   profile            默认简历(profile._name 是它的名字)
+ *   altProfiles        { <id>: { name, profile } }  其余简历,每份都是完整档案
+ *   resumeFile         默认简历的附件 PDF
+ *   resumeFiles        { <id>: 附件 }                其余简历各自的附件
  *
- *   档案本身 = 默认版本;任何对象(档案根、basic、每一段经历)都可以带
- *   _v: { <版本 id>: { 栏目: 措辞 } },只有 VERSIONED 列出的栏目会被采用,
- *   空值等于沿用默认。覆盖挂在经历条目自己身上,条目挪顺序时跟着走。
+ * 每份简历互不继承:事实、经历的增删、附件都可以不同。附件没传就不带 ——
+ * 宁可这次不注入,也不拿私企版的 PDF 去投央国企。
+ * 两份简历写出矛盾的事实(同一个奖一份写省级、一份写国家级)背调时是硬伤,
+ * 但改不改由用户定:factDiffs 只负责找出来,档案页的体检里提醒。
  *
- * 弹窗、档案页、注入到页面的填充脚本共用这一份;引擎拿到的是合并后、
- * 去掉 _v / versions 的普通档案,对版本一无所知。
+ * 弹窗、档案页、注入到页面的填充脚本共用这一份;引擎拿到的是普通档案。
  * ========================================================================== */
 (() => {
   const g = typeof window !== 'undefined' ? window : self;
-  const VERSIONED = {
-    root: ['intro', 'skills', 'campusWork'],
-    basic: ['expectedCity', 'expectedCityPath', 'expectedCity2', 'expectedSalary', 'availableDate'],
-    education: ['research'],
-    work: ['desc', 'skills'],
-    projects: ['role', 'desc', 'duty'],
-    papers: ['desc'],
-    competitions: ['desc'],
-    awards: ['desc'],
-  };
-  const LISTS = Object.keys(VERSIONED).filter((k) => k !== 'root' && k !== 'basic');
-  const filled = (v) => v != null && String(v).trim() !== '';
+  const clone = (x) => JSON.parse(JSON.stringify(x == null ? null : x));
+  const META = ['_name', '_v', 'versions', 'defaultVersionName'];
+  const strip = (p) => { const o = clone(p || {}) || {}; for (const k of META) delete o[k]; return o; };
 
-  const overlay = (obj, keys, id) => {
-    if (!obj || typeof obj !== 'object') return obj;
-    const v = obj._v && obj._v[id];
-    if (v) for (const k of keys) if (filled(v[k])) obj[k] = v[k];
-    delete obj._v;
-    return obj;
+  /** 全部简历,默认简历在最前 */
+  const list = (st) => [
+    { id: 'default', name: (st && st.profile && st.profile._name) || '默认简历' },
+    ...Object.entries((st && st.altProfiles) || {}).map(([id, x]) => ({ id, name: (x && x.name) || '未命名简历' })),
+  ];
+
+  /** 取出某份简历给引擎用:档案副本 + 它自己的附件。id 不存在时用默认简历。 */
+  const pick = (st, id) => {
+    const alt = id && id !== 'default' && st && st.altProfiles && st.altProfiles[id];
+    if (alt) return { id, profile: strip(alt.profile), resumeFile: (st.resumeFiles || {})[id] || null };
+    return { id: 'default', profile: st && st.profile ? strip(st.profile) : null, resumeFile: (st && st.resumeFile) || null };
   };
 
-  /** 合并出某个版本的档案。id 为 'default' 或不存在的版本时就是默认版本。 */
-  const apply = (profile, id) => {
-    const p = JSON.parse(JSON.stringify(profile || {}));
-    const known = (p.versions || []).some((x) => x.id === id);
-    const vid = known ? id : null;
-    // 自定义问答:版本的答案排在前面(引擎先匹配者胜),默认的仍可兜底
-    const own = vid && p._v && p._v[vid] && Array.isArray(p._v[vid].custom) ? p._v[vid].custom : [];
-    overlay(p, VERSIONED.root, vid);
-    if (own.length) p.custom = [...own, ...(p.custom || [])];
-    overlay(p.basic, VERSIONED.basic, vid);
-    for (const k of LISTS) if (Array.isArray(p[k])) p[k].forEach((e) => overlay(e, VERSIONED[k], vid));
-    delete p.versions;
-    delete p.defaultVersionName;
+  /* ---- 事实矛盾 ----
+   * 只比「同一段经历」(按名称对上)里的事实栏,且两边都有值才算 ——
+   * 一份写了一份没写、某段只在一份里出现,都是取舍,不是矛盾。措辞栏不比。 */
+  const BASIC_FACTS = ['fullName', 'gender', 'birthday', 'idNumber', 'phone', 'email',
+    'politicalStatus', 'ethnicity', 'hometown', 'nationality', 'gradYear'];
+  const LIST_FACTS = {
+    education: ['school', ['degree', 'major', 'college', 'startTime', 'endTime', 'eduType', 'studyForm', 'rank', 'gpaScore', 'gpaTotal']],
+    work: ['company', ['title', 'type', 'startTime', 'endTime']],
+    projects: ['name', ['startTime', 'endTime']],
+    papers: ['name', ['type', 'authorOrder', 'date', 'url']],
+    competitions: ['name', ['type', 'result', 'awardDate', 'startTime', 'endTime']],
+    awards: ['name', ['type', 'result', 'date']],
+    languages: ['name', ['cert', 'score']],
+    patents: ['name', ['type', 'no', 'date']],
+    softwares: ['name', ['type', 'date']],
+  };
+  const val = (v) => String(v == null ? '' : v).trim();
+  const factDiffs = (a, b) => {
+    const out = [];
+    const ab = (a && a.basic) || {}, bb = (b && b.basic) || {};
+    for (const k of BASIC_FACTS) {
+      if (val(ab[k]) && val(bb[k]) && val(ab[k]) !== val(bb[k])) out.push({ list: null, field: `basic.${k}`, a: val(ab[k]), b: val(bb[k]) });
+    }
+    for (const [list, [key, fields]] of Object.entries(LIST_FACTS)) {
+      const bs = Array.isArray(b && b[list]) ? b[list] : [];
+      (Array.isArray(a && a[list]) ? a[list] : []).forEach((ea, index) => {
+        const name = val(ea && ea[key]);
+        const eb = name && bs.find((x) => val(x && x[key]) === name);
+        if (!eb) return;
+        for (const f of fields) {
+          if (val(ea[f]) && val(eb[f]) && val(ea[f]) !== val(eb[f])) out.push({ list, index, name, field: f, a: val(ea[f]), b: val(eb[f]) });
+        }
+      });
+    }
+    return out;
+  };
+
+  /* ---- 2.22.0 的「版本覆盖」结构 → 独立简历 ----
+   * 2.22.0 让版本只覆盖措辞(_v 挂在各对象上)。改成独立简历后,把每个版本
+   * 按当时的规则合并成一整份档案。只在发现旧结构时转换,且不丢任何内容。 */
+  const legacyMerge = (profile, id) => {
+    const p = clone(profile || {});
+    const walk = (obj) => {
+      if (Array.isArray(obj)) { obj.forEach(walk); return; }
+      if (!obj || typeof obj !== 'object') return;
+      const v = obj._v && obj._v[id];
+      if (v) {
+        for (const [k, x] of Object.entries(v)) {
+          if (k === 'custom' && Array.isArray(x)) obj.custom = [...x, ...(obj.custom || [])];
+          else if (val(x)) obj[k] = x;
+        }
+      }
+      delete obj._v;
+      for (const k of Object.keys(obj)) walk(obj[k]);
+    };
+    walk(p);
     return p;
   };
+  const migrate = (st) => {
+    const p = st && st.profile;
+    if (!p || !Array.isArray(p.versions) || !p.versions.length) return { changed: false };
+    const altProfiles = { ...((st && st.altProfiles) || {}) };
+    for (const v of p.versions) altProfiles[v.id] = { name: v.name, profile: strip(legacyMerge(p, v.id)) };
+    const profile = strip(legacyMerge(p, null));
+    if (p.defaultVersionName) profile._name = p.defaultVersionName;
+    return { changed: true, profile, altProfiles };
+  };
 
-  /** 版本有自己的附件就用它,没有就用默认附件 */
-  const resume = (id, resumeFile, resumeFiles) =>
-    (id && id !== 'default' && resumeFiles && resumeFiles[id]) || resumeFile || null;
-
-  /** 全部版本(默认版本在最前) */
-  const list = (profile) => [{ id: 'default', name: (profile && profile.defaultVersionName) || '默认' },
-    ...((profile && profile.versions) || [])];
-
-  g.rqfVersions = { VERSIONED, LISTS, apply, resume, list };
+  g.rqfVersions = { list, pick, factDiffs, migrate };
 })();

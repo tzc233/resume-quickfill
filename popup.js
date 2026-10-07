@@ -10,11 +10,18 @@ const CHIPS = [
   ['GitHub', 'links.github'], ['主页', 'links.homepage'], ['LinkedIn', 'links.linkedin'], ['自我介绍', 'intro'],
 ];
 
-/* 简历版本(见 versions.js):按网站记住选择 —— 一个网站基本对应一家公司,
- * 投过一次央国企版,下次打开同一网站还是它。没建过版本时选择器不出现。 */
+/* 多份简历(见 versions.js):按网站记住选择 —— 一个网站基本对应一家公司,
+ * 投过一次央国企那份,下次打开同一网站还是它。只有一份简历时选择器不出现。 */
 const VER_BY_SITE = 'rqfVersionBySite';
-let VER = 'default', VER_NAME = '', HOST = '';
+const RESUME_KEYS = ['profile', 'altProfiles', 'resumeFile', 'resumeFiles'];
+let VER = 'default', VER_NAME = '', HOST = '', HAS_PDF = true;
 const V = window.rqfVersions;
+// 2.22.0 的版本结构在档案页保存前,弹窗就地按新结构读
+const readResumes = async () => {
+  const st = await rqfApi.storage.local.get(RESUME_KEYS);
+  const m = V.migrate(st);
+  return m.changed ? { ...st, profile: m.profile, altProfiles: m.altProfiles } : st;
+};
 
 function esc(s) { const d = document.createElement('span'); d.textContent = s ?? ''; return d.innerHTML; }
 
@@ -94,14 +101,16 @@ async function doFill() {
       func: async (verId) => {
         const ext = (typeof browser !== 'undefined' && browser.storage) ? browser : chrome;
         try {
-          const st = await ext.storage.local.get(['profile', 'resumeFile', 'resumeFiles']);
+          let st = await ext.storage.local.get(['profile', 'altProfiles', 'resumeFile', 'resumeFiles']);
           if (!st.profile) return { error: 'NO_PROFILE' };
           if (!window.__RQF_V2) return { error: 'NO_ENGINE' };
-          // 引擎只认普通档案:在这里按所选版本合并好,连同该版本的附件一起交过去
+          // 引擎只认普通档案:取出所选那份简历,连同它自己的附件一起交过去
           const Vs = self.rqfVersions;
-          const profile = Vs ? Vs.apply(st.profile, verId) : st.profile;
-          const resume = Vs ? Vs.resume(verId, st.resumeFile, st.resumeFiles) : st.resumeFile;
-          return window.__RQF_V2.fill(profile, resume || null);
+          if (!Vs) return window.__RQF_V2.fill(st.profile, st.resumeFile || null);
+          const m = Vs.migrate(st);
+          if (m.changed) st = { ...st, profile: m.profile, altProfiles: m.altProfiles };
+          const { profile, resumeFile } = Vs.pick(st, verId);
+          return window.__RQF_V2.fill(profile, resumeFile);
         } catch (e) { return { error: String((e && e.message) || e) }; }
       },
     });
@@ -133,7 +142,8 @@ async function doFill() {
     status.textContent = '还没有个人档案 — 点击右上角「⚙️ 档案」先完善信息。';
     return;
   }
-  status.textContent = (VER_NAME ? `「${VER_NAME}」版 · ` : '') + `✅ 已填 ${agg.filled.length} 项`
+  status.textContent = (VER_NAME ? `「${VER_NAME}」简历${HAS_PDF ? '' : '(未上传附件,这次不注入附件)'} · ` : '')
+    + `✅ 已填 ${agg.filled.length} 项`
     + (agg.expanded.length ? ` · 自动展开 ${agg.expanded.join(' ')}` : '')
     + (agg.fileFilled ? '(含简历附件)' : '')
     + (agg.skipped.length ? ` · 跳过 ${agg.skipped.length}` : '')
@@ -169,8 +179,10 @@ async function doScan() {
       func: async (verId) => {
         const ext = (typeof browser !== 'undefined' && browser.storage) ? browser : chrome;
         try {
-          const st = await ext.storage.local.get('profile');
-          const profile = self.rqfVersions ? self.rqfVersions.apply(st.profile || {}, verId) : (st.profile || {});
+          let st = await ext.storage.local.get(['profile', 'altProfiles']);
+          const Vs = self.rqfVersions;
+          if (Vs) { const m = Vs.migrate(st); if (m.changed) st = { ...st, profile: m.profile, altProfiles: m.altProfiles }; }
+          const profile = Vs ? (Vs.pick(st, verId).profile || {}) : (st.profile || {});
           return window.__RQF_V2 ? await window.__RQF_V2.deepDiagnose(profile) : null;
         } catch { return null; }
       },
@@ -361,17 +373,15 @@ const CHECK_TEXT = [['intro', '自我介绍'], ['skills', '专业技能'], ['cam
 async function doCheck() {
   const status = $('#status'), res = $('#result');
   res.innerHTML = '';
-  let profile = null, resumeFile = null, resumeFiles = null;
-  try { ({ profile, resumeFile, resumeFiles } = await rqfApi.storage.local.get(['profile', 'resumeFile', 'resumeFiles'])); } catch { }
+  let profile = null, resumeFile = null;
+  // 自检看的是「这次填充会用的那一份」简历与它的附件
+  try { ({ profile, resumeFile } = V.pick(await readResumes(), VER)); } catch { }
   if (!profile) { status.textContent = '插件里还没有任何档案 —— 请先到「⚙️ 档案」导入或填写。'; return; }
-  // 自检看的是「这次填充会用的那一份」:所选版本合并后的档案与附件
-  profile = V.apply(profile, VER);
-  resumeFile = V.resume(VER, resumeFile, resumeFiles);
 
   const lines = ['# 档案自检'], html = [];
   if (VER_NAME) {
-    lines.push(`简历版本:${VER_NAME}`);
-    html.push(`<div class="row ok"><span>简历版本</span><em>${esc(VER_NAME)}</em></div>`);
+    lines.push(`简历:${VER_NAME}`);
+    html.push(`<div class="row ok"><span>简历</span><em>${esc(VER_NAME)}</em></div>`);
   }
   const has = (v) => !!String(v ?? '').trim();
 
@@ -422,10 +432,10 @@ async function doCheck() {
 /* 弹窗里就地导出备份:不必先进档案页,降低「懒得备份」的摩擦 */
 async function exportBackup() {
   try {
-    const st = await rqfApi.storage.local.get(['profile', 'resumeFile', 'resumeFiles']);
+    const st = await rqfApi.storage.local.get(RESUME_KEYS);
     if (!st.profile) return;
-    const blob = new Blob([JSON.stringify({ profile: st.profile, resumeFile: st.resumeFile || null,
-      resumeFiles: st.resumeFiles || {} }, null, 2)],
+    const blob = new Blob([JSON.stringify({ profile: st.profile, altProfiles: st.altProfiles || {},
+      resumeFile: st.resumeFile || null, resumeFiles: st.resumeFiles || {} }, null, 2)],
       { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     await rqfApi.downloads.download({
@@ -453,28 +463,32 @@ async function clearLearningHere() {
   } catch (e) { status.textContent = '清除失败:' + ((e && e.message) || e); }
 }
 
-async function initVersions(profile) {
-  const vers = V.list(profile);
+async function initVersions(st) {
+  const vers = V.list(st);
   const bar = $('#ver-bar'), sel = $('#ver');
-  if (!profile || vers.length < 2) { bar.hidden = true; return; }
+  const pdf = (id) => !!V.pick(st, id).resumeFile;
+  if (!st.profile || vers.length < 2) { bar.hidden = true; return; }
   let bySite = {};
   try {
     const [tab] = await rqfApi.tabs.query({ active: true, currentWindow: true });
     HOST = tab && /^https?:/i.test(tab.url || '') ? new URL(tab.url).hostname : '';
     bySite = (await rqfApi.storage.local.get(VER_BY_SITE))[VER_BY_SITE] || {};
   } catch { }
-  // 记住的版本被删了就回到默认
+  // 记住的简历被删了就回到默认
   VER = vers.some((v) => v.id === bySite[HOST]) ? bySite[HOST] : 'default';
   sel.innerHTML = '';
   for (const v of vers) sel.append(new Option(v.name, v.id));
   sel.value = VER;
   VER_NAME = vers.find((v) => v.id === VER).name;
+  HAS_PDF = pdf(VER);
   bar.hidden = false;
   sel.addEventListener('change', async () => {
     VER = sel.value;
     VER_NAME = vers.find((v) => v.id === VER).name;
-    renderChips(V.apply(profile, VER));
-    $('#status').textContent = `已切换到「${VER_NAME}」版` + (HOST ? `,${HOST} 以后默认用它` : '');
+    HAS_PDF = pdf(VER);
+    renderChips(V.pick(st, VER).profile);
+    $('#status').textContent = `已切换到「${VER_NAME}」简历` + (HOST ? `,${HOST} 以后默认用它` : '')
+      + (HAS_PDF ? '' : '。这份简历还没上传附件');
     if (!HOST) return;
     try {
       const cur = (await rqfApi.storage.local.get(VER_BY_SITE))[VER_BY_SITE] || {};
@@ -485,10 +499,11 @@ async function initVersions(profile) {
 }
 
 async function init() {
-  let profile = null;
-  try { ({ profile } = await rqfApi.storage.local.get('profile')); } catch { }
-  await initVersions(profile);
-  renderChips(profile ? V.apply(profile, VER) : profile);
+  let st = {};
+  try { st = await readResumes(); } catch { }
+  await initVersions(st);
+  const profile = st.profile ? V.pick(st, VER).profile : null;
+  renderChips(profile);
   if (!profile) $('#status').textContent = '尚未创建档案 — 请先点击右上角「⚙️ 档案」完善信息。';
   $('#btn-fill').addEventListener('click', doFill);
   $('#btn-scan').addEventListener('click', doScan);

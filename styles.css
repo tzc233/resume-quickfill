@@ -274,7 +274,7 @@ section.card { scroll-margin-top: 56px; }
 .ver-bar span { flex-shrink: 0; }
 .ver-bar select { padding: 5px 8px; }
 
-/* 档案页:简历版本 */
+/* 档案页:多份简历 */
 .ver-card { padding: 12px 16px; }
 .ver-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ver-row b { font-size: 14px; margin-right: 4px; }
@@ -287,9 +287,4 @@ section.card { scroll-margin-top: 56px; }
 .ver-row .ghost { padding: 4px 12px; font-size: 12.5px; }
 .ver-row [hidden] { display: none; }
 #ver-hint { margin: 8px 0 0; }
-body.ver-mode .ver-card { border-color: var(--accent); background: var(--accent-weak); }
-body.ver-mode .add-btn, body.ver-mode .entry-ops, body.ver-mode .qa-base .qa-del { display: none; }
-body.ver-mode .card input:disabled, body.ver-mode .card select:disabled, body.ver-mode .card textarea:disabled {
-  background: #f3f4f6; color: #6b7280; cursor: not-allowed;
-}
-.v-field { border-color: #a5b4fc; background: #fafaff; }
+
