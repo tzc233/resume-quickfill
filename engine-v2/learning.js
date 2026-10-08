@@ -98,6 +98,65 @@
     await save(found.field, found.hit, selected(found.field), found.fields);
   }, 80);
 
+  /* ---- 填一段,学会填另一段 ----
+   * 用户手填(提交)了一栏:拿这次填充用的那份简历反查它是档案的哪个栏目。能唯一对上,
+   * 就记下「这个标签 + 这种记录块 = 这个栏目」,并把结构相同的兄弟块里同一栏补上
+   * 档案的对应记录 —— 只补空栏,档案没有那一段就不补。规则认得的字段不学。 */
+  const hash = (s) => { let h = 5381; for (const c of String(s)) h = ((h << 5) + h + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+  const DATE_KEY = /^(startTime|endTime|date|awardDate)$/;
+  const propagate = async (found, block, row) => {
+    const P = V2.lastProfile; const [dom, fieldName] = row.path.split('.');
+    for (const [k, peer] of block.peers.entries()) {
+      if (k === block.index) continue;
+      const entry = (P[dom] || [])[k + (row.rec - row.occ)];
+      let value = entry && entry[fieldName];
+      if (value == null || value === '') continue;
+      if (row.fmt) value = V2.applyDateFormat(row.fmt, value);
+      const target = V2.discover().filter((f) => peer.contains(f.el))[block.pos];
+      if (!target || clean(target.text) !== row.label || V2.readValue(target)) continue;
+      const adapter = V2.adapters.find((a) => a.supports(target)); if (!adapter) continue;
+      V2.propagating = true;
+      try {
+        let ok = await adapter.write(target, String(value), {});
+        for (const alt of ok ? [] : V2.variants(String(value), row.ex)) { if ((ok = await adapter.write(target, alt, {}))) break; }
+      } catch { /* 这一块失败不影响其它块 */ } finally { V2.propagating = false; }
+    }
+  };
+  const learnSemantic = async (found, shown) => {
+    const P = V2.lastProfile;
+    if (!P || !found || !shown || found.hit?.spec?.key) return;
+    if (SENSITIVE.test(found.field.text) || V2.isFamily(found.field.el)) return;
+    const m = V2.profileMatch(P, shown); if (!m) return;
+    const block = V2.recordBlock(found.field, found.fields);
+    const isList = !m.path.startsWith('basic.');
+    if (isList && !block) return;   // 列表栏却不在重复块里:段号定不下来,不学
+    let rec = -1;
+    if (isList) {
+      rec = m.recs.includes(block.index) ? block.index : (new Set(m.recs).size === 1 ? m.recs[0] : null);
+      if (rec == null) return;
+    }
+    const [dom, fieldName] = m.path.split('.');
+    const original = isList ? P[dom]?.[rec]?.[fieldName] : P.basic?.[fieldName];
+    const fmt = DATE_KEY.test(fieldName) ? V2.dateFormat(shown, original) : '';
+    const ex = !fmt && original && String(original) !== String(shown) ? { from: String(original), to: String(shown) } : null;
+    const label = clean(found.field.text);
+    const sig = block ? block.sig : '';
+    const row = { path: m.path, label, sig, occ: block ? block.index : 0, rec, fmt, ex, kind: 'sem', text: String(shown).slice(0, 60) };
+    await update(`sem:${label.slice(0, 60)}@${hash(sig)}`, row);
+    V2.semRows = [...V2.semRows.filter((r) => !(r.label === label && r.sig === sig)), row];
+    if (isList) await propagate(found, block, row);
+  };
+  const learnCommit = (el) => setTimeout(async () => {
+    if (V2.fillInFlight || V2.propagating) return;
+    const found = identify(el); if (!found) return;
+    await learnSemantic(found, V2.readControlValue(found.field));
+  }, 120);
+  V2.loadSemRows = async () => {
+    const data = (await api.storage.local.get(STORE))[STORE] || {};
+    const prefix = `site:${location.hostname}|sem:`;
+    V2.semRows = Object.entries(data).filter(([k]) => k.startsWith(prefix)).map(([, r]) => r);
+  };
+
   const saveText = async (field, fields, text, hit) => {
     if (!isTexty(field) || SENSITIVE.test(field.text) || String(text).length > 2000) return;
     const key = hit?.spec?.key ? `text:${hit.spec.key}` : textKey(field, fields); if (!key) return;
@@ -124,9 +183,9 @@
     document.addEventListener('change', (event) => {
       if (!event.isTrusted || V2.fillInFlight) return;
       const el = V2.selectionOwner(event.target);
-      if (el) { capture(el); return; }
+      if (el) { capture(el); learnCommit(el); return; }
       const box = event.target;
-      if (box?.matches?.('input,textarea') && box.type !== 'password') captureText(box);
+      if (box?.matches?.('input,textarea') && box.type !== 'password') { captureText(box); learnCommit(box); }
     }, true);
     let activeSelection = null;
     document.addEventListener('pointerdown', event => {
@@ -163,7 +222,7 @@
           const fields=V2.discover(),hits=V2.resolveAll(fields);
           const matches=fields.filter((f,i)=>semanticKey(f,hits[i],fields)===semanticKey(previous.field,previous.hit,fields));
           const current=matches.find(f=>f.el===previous.field.el) || (matches.length===1?matches[0]:null);
-          if(current && V2.readControlValue(current)!==previous.before) await save(current,previous.hit,selected(current),fields);
+          if(current && V2.readControlValue(current)!==previous.before){ await save(current,previous.hit,selected(current),fields); await learnSemantic({field:current,fields,hit:hits[fields.indexOf(current)]},V2.readControlValue(current)); }
         },180);
       }
     }, true);

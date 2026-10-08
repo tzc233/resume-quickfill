@@ -494,7 +494,7 @@ function scheduleRefresh() {
 const MEM_STORE = 'rqfV2LearnedSelections', MEM_SITES = 'rqfV2LearnSites';
 let MEM = {}, MEM_ON = {};
 const memKey = (key) => {
-  const m = key.match(/^site:([^|]+)\|(field|text|label|input):(.*)$/);
+  const m = key.match(/^site:([^|]+)\|(field|text|label|input|sem):(.*)$/);
   return m ? { host: m[1], kind: m[2], rest: m[3] } : null;
 };
 // 记忆里的路径与档案同名(basic.wechat / education.0.degree),找到档案页上对应的那一栏
@@ -516,7 +516,14 @@ const memPathLabel = (path) => {
   }
   return path;
 };
-const memLabel = (k, row) => (k.kind === 'field' || k.kind === 'text')
+// 学到的规律(填一段学一段):「就读学府」= 教育经历 · 学校名称
+const semDesc = (path) => {
+  const [dom, f] = String(path || '').split('.');
+  if (dom === 'basic') return memPathLabel(path);
+  const spec = LIST_SPEC[dom] && LIST_SPEC[dom].fields.find((x) => x.k === f);
+  return `${LIST_TITLE[dom] || dom} · ${spec ? spec.l : f}`;
+};
+const memLabel = (k, row) => k.kind === 'sem' ? (row.label || k.rest.replace(/@.*$/, '')) : (k.kind === 'field' || k.kind === 'text')
   ? memPathLabel(k.rest) : (row.label || k.rest.replace(/#\d+$/, ''));
 // 能写进档案吗:那一栏存在、目前为空、值放得进去(下拉要有这个选项,月份框要是 YYYY-MM)
 const memPromotable = (k, row) => {
@@ -614,11 +621,11 @@ function renderMemory() {
       r.className = 'mem-row';
       r.dataset.key = key;
       r.innerHTML = '<span class="mem-type"></span><span class="mem-label"></span><span class="mem-val"></span><span class="mem-acts"></span>';
-      r.querySelector('.mem-type').textContent = (k.kind === 'text' || k.kind === 'input') ? '填空' : '下拉';
+      r.querySelector('.mem-type').textContent = k.kind === 'sem' ? '规律' : (k.kind === 'text' || k.kind === 'input') ? '填空' : '下拉';
       r.querySelector('.mem-label').textContent = memLabel(k, row);
       const val = r.querySelector('.mem-val');
-      val.textContent = row.text;
-      val.title = `${row.text}\n记于 ${fmtDay(row.updatedAt)}`;
+      val.textContent = k.kind === 'sem' ? `= ${semDesc(row.path)}${row.fmt ? `(日期写法 ${row.fmt})` : ''}` : row.text;
+      val.title = `${k.kind === 'sem' ? `从你填的「${row.text || ''}」学到` : row.text}\n记于 ${fmtDay(row.updatedAt)}`;
       const acts = r.querySelector('.mem-acts');
       if (k.kind === 'field' || k.kind === 'text') {
         const b = document.createElement('button');

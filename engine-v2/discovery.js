@@ -219,9 +219,116 @@
     }
     return best;
   };
+  /* ---------- 填一段,学会填另一段 ----------
+   * 用户要的:手填了硕士那一段(学校 / 专业 / 时间 / 下拉),本科那一段就该自己填上。
+   * 原来的填写记忆只会原样重放「这个站点这个标签上次填了什么」,换一段就不认。
+   * 这里学的是「这一栏是什么」:用户填的值能唯一对上档案的某个栏目(education.school…),
+   * 就记下「这个标签 = 这个栏目」,再按段的位置给结构相同的兄弟块配上档案的对应记录。 */
+
+  /* 记录块:往上找到这样一个祖先 —— 它的某个兄弟和它「长得一样」(控件标签序列相同)。
+   * index 是它在同形兄弟里的位置(第几段)。找不到就不是重复块。 */
+  V2.recordBlock = (field, fields) => {
+    const own = (box) => fields.filter((f) => box.contains(f.el));
+    const shape = (list) => list.map((f) => f.text).join('|');
+    let node = field.el;
+    for (let d = 0; d < 12 && node.parentElement && node.parentElement !== document.body; d++) {
+      node = node.parentElement;
+      const mine = own(node);
+      if (mine.length > 30) return null;
+      const parent = node.parentElement;
+      if (!parent || mine.length < 1) continue;
+      const sig = shape(mine);
+      const peers = Array.from(parent.children).filter((c) => c === node || (own(c).length === mine.length && shape(own(c)) === sig));
+      if (peers.length >= 2) {
+        return { el: node, sig, index: peers.indexOf(node), peers, pos: mine.indexOf(mine.find((f) => f.el === field.el)) };
+      }
+    }
+    return null;
+  };
+
+  const LIST_DOMAINS = ['education', 'work', 'projects', 'papers', 'competitions', 'awards', 'languages'];
+  const DATE_FIELDS = /^(startTime|endTime|date|awardDate)$/;
+  const degreeLevel = (t) => (/博士|phd|doctor/i.test(t) ? 4 : /硕士|研究生|master/i.test(t) ? 3
+    : /本科|学士|bachelor/i.test(t) ? 2 : /大专|专科/i.test(t) ? 1 : 0);
+  const ymOf = (t) => { const m = String(t || '').match(/((?:19|20)\d{2})\D{0,3}(\d{1,2})(?!\d)/); return m && +m[2] >= 1 && +m[2] <= 12 ? `${m[1]}-${String(+m[2]).padStart(2, '0')}` : ''; };
+  /* 值 → 档案里哪个栏目。只认能唯一确定「栏目类型」的情况(同一个值出现在两段的同一栏没关系,
+   * 出现在两个不同的栏就不学 —— 城市「上海」可能是现居也可能是期望,猜错就是错填)。 */
+  V2.profileMatch = (profile, text) => {
+    const raw = String(text || '').trim();
+    const v = clean(raw);
+    if (!profile || !v || v.length < 2) return null;
+    const ym = ymOf(raw);
+    const hits = [];
+    for (const dom of LIST_DOMAINS) {
+      (Array.isArray(profile[dom]) ? profile[dom] : []).forEach((e, rec) => {
+        for (const [field, val] of Object.entries(e || {})) {
+          if (typeof val !== 'string' || !val.trim()) continue;
+          const pv = clean(val);
+          let ok;
+          if (DATE_FIELDS.test(field)) ok = !!ym && ymOf(val) === ym;
+          else if (field === 'degree') ok = !!degreeLevel(v) && degreeLevel(v) === degreeLevel(pv);
+          else ok = pv === v || (pv.length >= 2 && v.length >= 2 && v.length <= pv.length + 6 && (v.includes(pv) || pv.includes(v)));
+          if (ok) hits.push({ path: `${dom}.${field}`, rec });
+        }
+      });
+    }
+    for (const [field, val] of Object.entries(profile.basic || {})) {
+      if (typeof val === 'string' && val.trim() && clean(val) === v) hits.push({ path: `basic.${field}`, rec: -1 });
+    }
+    const paths = [...new Set(hits.map((h) => h.path))];
+    if (paths.length !== 1) return null;
+    return { path: paths[0], recs: hits.map((h) => h.rec) };
+  };
+
+  /* 日期写法:用户把档案的 2024-09 写成「2024.09」「2024年9月」—— 记成模板,兄弟块照着写 */
+  V2.dateFormat = (shown, iso) => {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})/); if (!m) return '';
+    const s = String(shown || '').trim();
+    let fmt = s.replace(m[1], '{y}');
+    if (fmt === s) return '';
+    if (fmt.includes(m[2])) fmt = fmt.replace(m[2], '{mm}');
+    else if (fmt.includes(String(+m[2]))) fmt = fmt.replace(String(+m[2]), '{m}');
+    else return '';
+    return V2.applyDateFormat(fmt, iso) === s ? fmt : '';
+  };
+  V2.applyDateFormat = (fmt, iso) => {
+    const m = String(iso || '').match(/^(\d{4})-(\d{2})/);
+    return m && fmt ? fmt.replace('{y}', m[1]).replace('{mm}', m[2]).replace('{m}', String(+m[2])) : iso;
+  };
+
+  /* 选项换算:用户的例子是「档案 硕士 → 选了 硕士研究生」「档案 09 → 选了 9月」,
+   * 把同样的加前后缀 / 去前导零套到别的值上。只产出候选 —— 页面上没有这个选项,适配器照样留空。 */
+  V2.variants = (value, ex) => {
+    const v = String(value || ''), out = [];
+    if (!ex || !ex.from || !ex.to) return out;
+    const f = String(ex.from), t = String(ex.to);
+    if (v === f) out.push(t);
+    if (t.startsWith(f)) out.push(v + t.slice(f.length));
+    if (t.endsWith(f)) out.push(t.slice(0, t.length - f.length) + v);
+    const fz = f.replace(/^0+(?=\d)/, ''), vz = v.replace(/^0+(?=\d)/, '');
+    if (/^\d+$/.test(f) && /^\d+$/.test(v) && t.startsWith(fz)) out.push(vz + t.slice(fz.length));
+    return [...new Set(out)].filter((x) => x && x !== v);
+  };
+
+  /* 下次填充:规则认不出的字段,按学会的「标签 + 记录块形状」认,段号按块的位置换算 */
+  V2.semRows = [];
+  V2.learnedSemHit = (field, fields) => {
+    if (!V2.semRows.length || V2.isFamily(field.el)) return null;
+    const label = clean(field.text);
+    const block = V2.recordBlock(field, fields);
+    const row = V2.semRows.find((r) => r.label === label && r.sig === (block ? block.sig : ''));
+    if (!row) return null;
+    const [dom, fieldName] = row.path.split('.');
+    if (row.path.startsWith('basic.')) return { spec: { key: row.path, learnedSem: true }, score: 40 };
+    if (!block) return null;
+    const rec = block.index + (row.rec - row.occ);
+    if (rec < 0) return null;
+    return { spec: { key: `${dom}.${rec}.${fieldName}`, learnedSem: true, fmt: row.fmt || '', ex: row.ex || null }, score: 40 };
+  };
+
   V2.resolveAll = (fields) => {
     const state = {}, records = {};
-    const hits = fields.map((field) => V2.resolve(field));
+    const hits = fields.map((field) => V2.resolve(field) || V2.learnedSemHit(field, fields));
     /* 段号按 .ux-standard-form 分,但不是每个容器都是一段经历。优必选教育区顶上的
      * 「最高学历 / 最高学位 / 学习形式」是整份简历的汇总栏,自己也包在一个
      * .ux-standard-form 里 —— 其中任一栏被认成 education 域,就占掉 0 号段位,

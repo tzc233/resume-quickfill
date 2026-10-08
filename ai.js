@@ -49,6 +49,16 @@
   };
   const LIST = /^(education|work|projects|papers|competitions|awards|languages)\./;
 
+  // 示范题:标签全部不在评测集里,不泄露答案;中英文提示共用
+  const EXAMPLES = [
+    '{"id":1,"label":"户口所在地","section":"基本信息","group":""} -> {"id":1,"key":"basic.hometown","record":-1}',
+    '{"id":2,"label":"个人简介","section":"其他","group":""} -> {"id":2,"key":"intro","record":-1}',
+    '{"id":3,"label":"公司","section":"实践经历","group":"实践经历 2"} -> {"id":3,"key":"work.company","record":1}',
+    '{"id":4,"label":"就读院校","section":"学习经历","group":"学习经历 1"} -> {"id":4,"key":"education.school","record":0}',
+    '{"id":5,"label":"所获荣誉","section":"荣誉","group":"荣誉 3"} -> {"id":5,"key":"awards.name","record":2}',
+    '{"id":6,"label":"联系人与本人关系","section":"紧急联系人","group":""} -> {"id":6,"key":"none","record":-1}',
+    '{"id":7,"label":"民族","section":"基本信息","group":""} -> {"id":7,"key":"basic.ethnicity","record":-1}',
+  ];
   const SYSTEM = [
     'You map fields of a Chinese job-application form to keys of the applicant\'s profile.',
     'For each field you get: id, label, section (module heading), group (record header such as "奖励荣誉 1" or a relative such as "父亲"), and options for dropdowns.',
@@ -59,14 +69,24 @@
     'Never guess. A wrong key is worse than "none".',
     'Always return one answer for every field id you are given.',
     'Examples (field -> answer):',
-    '{"id":1,"label":"户口所在地","section":"基本信息","group":""} -> {"id":1,"key":"basic.hometown","record":-1}',
-    '{"id":2,"label":"个人简介","section":"其他","group":""} -> {"id":2,"key":"intro","record":-1}',
-    '{"id":3,"label":"公司","section":"实践经历","group":"实践经历 2"} -> {"id":3,"key":"work.company","record":1}',
-    '{"id":4,"label":"就读院校","section":"学习经历","group":"学习经历 1"} -> {"id":4,"key":"education.school","record":0}',
-    '{"id":5,"label":"所获荣誉","section":"荣誉","group":"荣誉 3"} -> {"id":5,"key":"awards.name","record":2}',
-    '{"id":6,"label":"联系人与本人关系","section":"紧急联系人","group":""} -> {"id":6,"key":"none","record":-1}',
-    '{"id":7,"label":"民族","section":"基本信息","group":""} -> {"id":7,"key":"basic.ethnicity","record":-1}',
+    ...EXAMPLES,
     'Profile keys:',
+    ...Object.entries(KEYS).map(([k, d]) => `${k}: ${d}`),
+  ].join('\n');
+  /* 中文提示。官方声明支持的语言里没有中文,但能不能用要直接量:
+   * 自测页把中文提示和英文提示各跑一遍,并排给出结果。 */
+  const SYSTEM_ZH = [
+    '你要把一张中文招聘申请表的字段,对应到求职者档案的栏目。',
+    '每个字段给你:id、label(标签)、section(所在模块标题)、group(记录头,如「奖励荣誉 1」,或家人称谓如「父亲」),下拉框还有 options(选项)。',
+    'key 只能从下面的档案栏目里选一个,或者答 "none"。',
+    'record:列表类栏目(education / work / projects / papers / competitions / awards / languages)填从 0 开始的段号,按 group 或 section 里的序号算(「教育经历 2」→ 1);其他栏目填 -1。',
+    '以下情况一律答 "none":拿不准;问的是别人(紧急联系人、推荐人、父母以外的亲属);验证码、密码、协议、同意;问求职者和招聘单位关系的是/否题;没有合适的栏目。',
+    '项目模块里问「所在单位 / 公司」的字段没有对应栏目,答 "none"。',
+    '绝不要猜。答错栏比答 none 更糟。',
+    '给你的每个 id 都必须作答。',
+    '示例(字段 -> 回答):',
+    ...EXAMPLES,
+    '档案栏目:',
     ...Object.entries(KEYS).map(([k, d]) => `${k}: ${d}`),
   ].join('\n');
 
@@ -122,12 +142,12 @@
   };
 
   /** 必须在用户点击里调用:首次会触发模型下载。onProgress(0~1) */
-  const createSession = async (onProgress) => {
+  const createSession = async (onProgress, lang = 'en') => {
     const LM = api();
     if (!LM) throw new Error('这个浏览器没有本机模型接口');
     return LM.create({
       ...OPTS,
-      initialPrompts: [{ role: 'system', content: SYSTEM }],
+      initialPrompts: [{ role: 'system', content: lang === 'zh' ? SYSTEM_ZH : SYSTEM }],
       monitor(m) { m.addEventListener('downloadprogress', (e) => onProgress && onProgress(e.loaded)); },
     });
   };
@@ -182,5 +202,5 @@
     return { rows, right, wrong, missed, total: cases.length };
   };
 
-  g.rqfAI = { KEYS, SYSTEM, buildPrompt, schema, validate, guarded, availability, createSession, resolveFields, score };
+  g.rqfAI = { KEYS, SYSTEM, SYSTEM_ZH, buildPrompt, schema, validate, guarded, availability, createSession, resolveFields, score };
 })();

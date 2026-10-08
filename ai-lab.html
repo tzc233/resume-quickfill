@@ -22,7 +22,7 @@
 
     <section class="card">
       <h2>2. 运行自测</h2>
-      <p class="hint">逐组把字段交给模型,和人工标注的答案比对。<strong>错填</strong>最要紧:它对应真实填表时把内容写进错的栏。</p>
+      <p class="hint">逐组把字段交给模型,和人工标注的答案比对;中文提示、英文提示各跑一遍,并排比较。<strong>错填</strong>最要紧:它对应真实填表时把内容写进错的栏。</p>
       <div class="row-btns">
         <button id="run" class="primary" disabled>运行自测</button>
         <button id="copy" class="ghost" disabled>复制结果(发给维护者)</button>
@@ -33,7 +33,7 @@
     <section class="card">
       <h2>逐字段结果</h2>
       <table class="lab-table">
-        <thead><tr><th>表单</th><th>标签</th><th>模块 / 组</th><th>正确答案</th><th>模型答案</th><th>判定</th></tr></thead>
+        <thead><tr><th>表单</th><th>标签</th><th>模块 / 组</th><th>正确答案</th><th>中文提示</th><th>英文提示</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </section>

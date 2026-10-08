@@ -23,6 +23,8 @@ const MEMORY = {
   'site:jobs.example.com|field:basic.politicalStatus': { text: '共青团员', value: 'ty', adapter: 'native-select', label: '政治面貌', updatedAt: T },
   'site:jobs.example.com|text:basic.fullName': { text: '别的示例名', kind: 'text', label: '姓名', updatedAt: T },
   'site:jobs.example.com|input:年龄': { text: '25', kind: 'text', label: '年龄', updatedAt: T },
+  // 填一段学一段学到的规律
+  'site:jobs.example.com|sem:就读学府@abc': { path: 'education.school', label: '就读学府', sig: 'x', occ: 0, rec: 0, kind: 'sem', text: '示例大学', updatedAt: T },
   'site:search.example.org|input:搜索': { text: '示例搜索词', kind: 'text', updatedAt: T - 9e8 },
   'site:search.example.org|input:评论': { text: '示例评论', kind: 'text', updatedAt: T - 9e8 },
 };
@@ -148,6 +150,8 @@ const SITES = { 'jobs.example.com': T };
       && (await site('jobs.example.com').locator('.badge-junk').count()) === 0);
     ok('启用的站点有标记', /已启用/.test(await site('jobs.example.com').locator('summary').innerText()));
     ok('记忆显示可读标签与值', /微信号[\s\S]*示例微信号/.test(await row('site:jobs.example.com|text:basic.wechat').innerText()));
+    const semRow = await row('site:jobs.example.com|sem:就读学府@abc').innerText();
+    ok('学到的规律显示成「标签 = 栏目」', /规律/.test(semRow) && /就读学府/.test(semRow) && /教育经历.*学校名称/.test(semRow), semRow);
     ok('无关站点默认折叠', !(await site('search.example.org').evaluate((d) => d.open)));
 
     await page.locator('#dirty').evaluate(() => {});

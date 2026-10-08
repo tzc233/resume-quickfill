@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><title>填一段,学会填另一段</title>
+<!-- 用户要的:「我填了硕士那一段的学校、专业、时间、下拉,它就该自己把本科那一段填上」。
+     原来的填写记忆只会原样重放「这个站点这个标签上次填了什么」,换一段就不认。
+     这一页两段教育结构完全相同,标签故意用规则认不出的写法(就读学府 / 所修方向 / 入读年月 / 层次),
+     第三段档案里没有对应记录。断言在 test/manual-learning.cjs 里(要可信的键盘与点击)。 -->
+<style>input,select{display:block;width:220px;height:26px}.blk{border:1px solid #ccc;margin:6px;padding:6px}</style>
+<h2>基本信息</h2>
+<label>常用联系方式<input id="contact"></label>
+<h2>教育背景</h2>
+<div id="edu">
+  <div class="blk"><label>就读学府<input class="school"></label><label>所修方向<input class="major"></label>
+    <label>入读年月<input class="start"></label>
+    <label>层次<select class="level"><option value="">请选择</option><option>本科</option><option>硕士研究生</option><option>博士研究生</option></select></label></div>
+  <div class="blk"><label>就读学府<input class="school"></label><label>所修方向<input class="major"></label>
+    <label>入读年月<input class="start"></label>
+    <label>层次<select class="level"><option value="">请选择</option><option>本科</option><option>硕士研究生</option><option>博士研究生</option></select></label></div>
+  <div class="blk"><label>就读学府<input class="school"></label><label>所修方向<input class="major"></label>
+    <label>入读年月<input class="start"></label>
+    <label>层次<select class="level"><option value="">请选择</option><option>本科</option><option>硕士研究生</option><option>博士研究生</option></select></label></div>
+</div>
+<script>
+const memory={};window.chrome={storage:{local:{async get(k){return {[k]:structuredClone(memory[k])}},async set(v){Object.assign(memory,structuredClone(v))}}}};
+memory.rqfV2LearnSites={[location.hostname]:Date.now()};
+window.profile={basic:{fullName:'示例本人',phone:'13000000000'},
+  education:[{school:'示例大学',major:'示例专业甲',degree:'硕士',startTime:'2024-09'},
+             {school:'示例学院',major:'示例专业乙',degree:'本科',startTime:'2020-09'}]};
+if(location.search.includes('run=1'))parent.postMessage({__rqf:true,page:'learn-sibling-v2.html',pass:true,total:0,fails:[],note:'由 test/manual-learning.cjs 驱动(需要可信输入事件)'},'*');
+</script>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/learning.js"></script><script src="../engine-v2/runtime.js"></script>

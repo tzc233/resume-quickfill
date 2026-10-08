@@ -39,6 +39,10 @@
         ? await window.__RQF.fill(profile, resumeFile, { keepProgress: true })
         : { filled: [], skipped: [], unmatched: [] };
       if (legacy.awardRouting === 'merged') profile = {...profile, awards: window.__RQF.mergeAwardEntries(profile.awards, profile.competitions)};
+      /* 这一页之后的手填要拿「这次用的那份简历」反查栏目(见 learning.js 的填一段学一段);
+       * 学过的「标签 = 栏目」在解析前载入 */
+      V2.lastProfile = profile;
+      if (V2.loadSemRows) await V2.loadSemRows();
       await new Promise((resolve) => setTimeout(resolve, 180));
       const fields = V2.discover(), resolutions = V2.resolveAll(fields);
       for (let fieldIndex = 0; fieldIndex < fields.length; fieldIndex++) {
@@ -65,7 +69,9 @@
         const learnedText = !isSelection && V2.learnedTextFor
           ? await V2.learnedTextFor(field, fields, hit) : null;
         if (!hit && !learned && !learnedText) continue;
-        const fromProfile = hit ? V2.valueFor(profile, hit.spec) : null;
+        let fromProfile = hit ? V2.valueFor(profile, hit.spec) : null;
+        // 学过这个网站的日期写法(「2024.09」),照着写
+        if (hit?.spec?.fmt && typeof fromProfile === 'string') fromProfile = V2.applyDateFormat(hit.spec.fmt, fromProfile);
         const value = learned || (fromProfile == null || fromProfile === '' ? learnedText : fromProfile);
         if (value == null || value === '') continue;
         const adapter = V2.adapters.find((a) => a.supports(field)); if (!adapter) continue;
@@ -73,6 +79,12 @@
         let ok = false;
         try { ok = await adapter.write(field, adapter.id === 'phoenix-calendar' && learned ? learned.text : value, hit?.spec || {}); }
         catch { field.failure = '控件操作异常，已继续其他字段'; }
+        // 学来的栏目:原值配不上选项时,按用户当时的例子换算一次(硕士 → 硕士研究生、09 → 9月)
+        if (!ok && hit?.spec?.ex && typeof value === 'string') {
+          for (const alt of V2.variants(value, hit.spec.ex)) {
+            try { if ((ok = await adapter.write(field, alt, {}))) break; } catch { /* 换下一个 */ }
+          }
+        }
         if (adapter.id === 'native-text' || adapter.id === 'native-select') {
           const expected = String(field.el.value);
           await new Promise((resolve) => setTimeout(resolve, 700));

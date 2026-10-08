@@ -44,6 +44,7 @@ const open = async (browser, state) => {
         window.__log.creates++;
         window.__log.gesture.push(navigator.userActivation ? navigator.userActivation.isActive : null);
         window.__log.system = opts.initialPrompts && opts.initialPrompts[0].content;
+        (window.__log.systems ||= []).push(window.__log.system);
         if (opts.monitor) opts.monitor({ addEventListener(_, fn) { fn({ loaded: 1 }); } });
         return session;
       },
@@ -84,11 +85,17 @@ const open = async (browser, state) => {
     await page.locator('#run').click();
     await page.waitForFunction(() => document.querySelector('#summary').dataset.done === '1', null, { timeout: 30000 });
     const total = await page.evaluate(() => window.rqfAIEval.reduce((n, f) => n + f.cases.length, 0));
-    const sum = await page.evaluate(() => JSON.parse(document.querySelector('#summary').dataset.result));
-    ok('覆盖全部评测字段', sum.total === total, sum);
-    ok('错填计数对(所在单位被答成工作单位)', sum.wrong === 1, sum);
-    ok('非法键当 none、none 记漏答', sum.missed === 2, sum);
-    ok('其余全对', sum.right === total - 3, sum);
+    const both = await page.evaluate(() => JSON.parse(document.querySelector('#summary').dataset.result));
+    ok('中文提示与英文提示各跑一遍', !!both.zh && !!both.en, both);
+    for (const lang of ['zh', 'en']) {
+      const sum = both[lang];
+      ok(`${lang}:覆盖全部评测字段`, sum.total === total, sum);
+      ok(`${lang}:错填计数对(所在单位被答成工作单位)`, sum.wrong === 1, sum);
+      ok(`${lang}:非法键当 none、none 记漏答`, sum.missed === 2, sum);
+      ok(`${lang}:其余全对`, sum.right === total - 3, sum);
+    }
+    const systems = await page.evaluate(() => window.__log.systems);
+    ok('两次会话分别用中文与英文系统提示', systems.some((x) => /绝不要猜/.test(x)) && systems.some((x) => /Never guess/.test(x)), systems.map((x) => x.slice(0, 20)));
     const wrongRow = await page.locator('tr.wrong').first().innerText();
     ok('错填一行写清标签与两边答案', /所在单位/.test(wrongRow) && /work\.company/.test(wrongRow) && /none/.test(wrongRow), wrongRow);
 
@@ -102,12 +109,13 @@ const open = async (browser, state) => {
     ok('输出被 JSON Schema 锁定到档案栏目', log.prompts.every((p) => p.schema
       && p.schema.properties.answers.items.properties.key.enum.includes('none')
       && p.schema.properties.answers.items.properties.key.enum.includes('awards.name')));
-    ok('系统提示要求拿不准就答 none', /none/.test(log.system) && /Never guess/.test(log.system));
+    ok('系统提示要求拿不准就答 none', log.systems.every((x) => /none/.test(x)));
 
     // 4. 复制结果:给维护者看的摘要,不含任何值
     await page.locator('#copy').click();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     ok('复制结果含准确率与错填清单', /准确/.test(copied) && /错填/.test(copied) && /所在单位/.test(copied), copied.slice(0, 200));
+    ok('复制结果分中文提示与英文提示两节', /## 中文提示/.test(copied) && /## 英文提示/.test(copied));
     ok('复制结果附有问题批次的原始输出', /原始输出/.test(copied) && /work\.company/.test(copied.split('原始输出')[1] || ''));
     await page.close();
 
