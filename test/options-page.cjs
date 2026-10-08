@@ -188,6 +188,18 @@ const SITES = { 'jobs.example.com': T };
     ok('一键清理只清无关站点', !keys.some((k) => k.includes('search.example.org')) && keys.some((k) => k.includes('jobs.example.com')), keys);
     ok('清理后列表刷新', (await page.locator('.mem-site').count()) === 1);
 
+    /* 9b. 家庭成员:称谓 + 姓名,保存落盘 */
+    await page.locator('[data-list="family"] .add-btn').click();
+    const fam = page.locator('[data-list="family"] .entry').last();
+    await fam.locator('[data-k="relation"]').selectOption('父亲');
+    await fam.locator('[data-k="name"]').fill('示例父亲');
+    await fam.locator('[data-k="company"]').fill('示例单位');
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+s' : 'Control+s');
+    await page.waitForTimeout(250);
+    db = await page.evaluate(() => window.__db);
+    ok('家庭成员按称谓落盘', (db.profile.family || []).some((m) => m.relation === '父亲' && m.name === '示例父亲' && m.company === '示例单位'), db.profile.family);
+    ok('家庭成员段头显示称谓', /父亲/.test(await fam.locator('.entry-title').innerText()));
+
     /* 10. 多份简历:各自独立维护(央国企一份、私企一份) */
     const saveKey = process.platform === 'darwin' ? 'Meta+s' : 'Control+s';
     const intro = page.locator('[data-path="intro"]');

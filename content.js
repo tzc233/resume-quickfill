@@ -1180,6 +1180,61 @@
     return out;
   };
 
+  /* ---------- 家庭成员 ----------
+   * 工商银行那页每位家人一组:「父亲」(姓名框)+「是否为本行员工」+「工作单位」+「工作职务」。
+   * 这组字段没有区块标题可依,标签又是通用词:姓名框的占位是「请输入姓名」→ 本人姓名,
+   * 「工作单位 / 工作职务」→ 本人第 1、2 段实习 —— 父母被填成了本人和本人的实习。
+   * 判据:自下而上找最小的一组(控件不多),组里有一个节点的「自身文字」恰好是称谓
+   * (「父亲」「母亲姓名」「配偶信息」…)。认出来就只按档案里的家庭成员对号入座,
+   * 没有就留空 —— 绝不拿本人信息去顶。 */
+  const FAMILY_REL = [
+    [/^(父亲|爸爸|父)$/, '父亲'], [/^(母亲|妈妈|母)$/, '母亲'], [/^(配偶|丈夫|妻子|爱人)$/, '配偶'],
+    [/^(兄弟姐妹|兄弟|姐妹|哥哥|弟弟|姐姐|妹妹)$/, '兄弟姐妹'], [/^(子女|儿子|女儿)$/, '子女'],
+  ];
+  const familyRel = (t) => {
+    const x = clean(t || '').replace(/[:：*\s]/g, '').replace(/的?(姓名|信息|情况)$/, '');
+    const hit = x && x.length <= 4 && FAMILY_REL.find(([re]) => re.test(x));
+    return hit ? hit[1] : '';
+  };
+  const ownText = (n) => [...n.childNodes].filter((c) => c.nodeType === 3).map((c) => c.textContent).join('');
+  const familyOf = (el) => {
+    let node = el;
+    for (let d = 0; d < 6 && node.parentElement && node.parentElement !== document.body; d++) {
+      node = node.parentElement;
+      // 一位家人的一组控件不会太多;单选组按一组算
+      const ctrls = [...node.querySelectorAll('input:not([type=hidden]), textarea, select')];
+      const radioNames = new Set(ctrls.filter((c) => c.type === 'radio').map((c) => c.name || c));
+      if (ctrls.filter((c) => c.type !== 'radio').length + radioNames.size > 10) break;
+      for (const t of [node, ...node.querySelectorAll('*')]) {
+        const rel = familyRel(ownText(t));
+        if (rel) return { relation: rel, group: node };
+      }
+    }
+    return null;
+  };
+  // 家人这一组里,每一栏对应档案 family 条目的哪个字段;认不出(如「是否为本行员工」)就不填
+  const FAMILY_ROLE = [
+    [/工作单位|单位名称|所在单位|工作地点|单位/, 'company'],
+    [/职务|职位|岗位|职业|职称/, 'title'],
+    [/电话|手机|联系方式/, 'phone'],
+    [/政治面貌/, 'politicalStatus'],
+    [/姓名|名字|^(父亲|母亲|配偶|爸爸|妈妈|爱人)$/, 'name'],
+  ];
+  const familyHit = (el, cands) => {
+    const fam = familyOf(el);
+    if (!fam) return null;
+    const type = (el.type || '').toLowerCase();
+    let role = '';
+    if (type !== 'radio' && type !== 'checkbox') {
+      for (const c of cands) {
+        const hit = FAMILY_ROLE.find(([re]) => re.test(c.t.replace(/\s+/g, '')));
+        if (hit) { role = hit[1]; break; }
+      }
+    }
+    const label = (cands[0] && cands[0].t) || fam.relation;
+    return { fam: fam.relation, role, label: String(label).slice(0, 30) };
+  };
+
   /** 某元素落在哪个区块下:取 DOM 顺序上最近的一个前置标题 */
   const sectionDomOf = (el, sections) => {
     let dom = null;
@@ -1375,12 +1430,12 @@
         // 被自定义组件包住的原生输入框交给组件本身处理,避免往搜索框里打字
         if (ws.some((w) => w.contains(el))) continue;
         const cands = labelCands(el);
-        out.push({ el, tag, type, cands, hit: matchRules(cands, customs, sectionDomOf(el, sections)), sec: sectionDomOf(el, sections) });
+        out.push({ el, tag, type, cands, hit: familyHit(el, cands) || matchRules(cands, customs, sectionDomOf(el, sections)), sec: sectionDomOf(el, sections) });
       }
       for (const el of ws) {
         const cands = widgetCands(el);
         const kind = widgetKind(el);
-        let hit = matchRules(cands, customs, sectionDomOf(el, sections));
+        let hit = familyHit(el, cands) || matchRules(cands, customs, sectionDomOf(el, sections));
         /* 日期控件只接受日期类字段。网易的获奖区块里,日期框的上下文文字把
          * 「奖项说明 某某大学二等奖学金」整段卷了进来,于是日期框命中 award.name,
          * 拿奖项名字去填日历 —— 写不进去还白占一个段位。
@@ -1716,9 +1771,20 @@
         continue;
       }
 
-      /* --- 取值:自定义问答 / 经历类 / 基本信息 --- */
+      /* --- 取值:家庭成员 / 自定义问答 / 经历类 / 基本信息 --- */
       let v, semKey = hit.field || '';
-      if (hit.custom) {
+      if (hit.fam) {
+        const rel = (x) => familyRel(x && x.relation);
+        const member = (P.family || []).find((m) => rel(m) === hit.fam);
+        v = member && hit.role ? String(member[hit.role] || '').trim() : '';
+        if (!v) {
+          if (!hit.occupied) report.skipped.push({ label: hit.label,
+            reason: !hit.role ? `${hit.fam}一栏里的这道题不代答`
+              : member ? `档案里${hit.fam}的这一栏为空` : `${hit.fam}的信息档案里没有 —— 不拿本人信息去顶` });
+          continue;
+        }
+        semKey = 'family';
+      } else if (hit.custom) {
         v = hit.value;
       } else if (hit.dom) {
         /* 年/月对出现在任何已识别区块之外(预计毕业时间、出生日期这类独立日期)时,
@@ -2941,5 +3007,5 @@
    * 是不是「自有标签」—— 光看最终命中的规则,分不清是候选没生成还是被过滤掉了。 */
   const debugCands = (el) => (el ? { cands: (el.tagName ? labelCands(el) : []), widget: widgetCands(el) } : null);
 
-  window.__RQF = { version: VERSION, fill, scan, deepDiagnose, addButtonDomain, debugCands, mergeAwardEntries, ui };
+  window.__RQF = { version: VERSION, fill, scan, deepDiagnose, addButtonDomain, debugCands, mergeAwardEntries, familyOf, ui };
 })();

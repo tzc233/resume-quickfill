@@ -189,8 +189,12 @@
     }
     return expanded;
   };
+  /* 家人那一组(父亲 / 母亲 / 配偶…)交给 1.x 按档案的家庭成员对号入座,2.x 不碰 ——
+   * 工商银行那页,「请输入姓名」占位的父亲姓名框曾被当成本人姓名写入。 */
+  V2.isFamily = (el) => !!(window.__RQF && window.__RQF.familyOf && window.__RQF.familyOf(el));
   V2.resolve = (field) => {
     if (['checkbox','radio','file'].includes(field.el.type)) return null;
+    if (V2.isFamily(field.el)) return null;
     const autocomplete = field.el.autocomplete?.split(/\s+/).pop();
     const standard = { name: 'basic.fullName', email: 'basic.email', tel: 'basic.phone', 'tel-national': 'basic.phone' };
     if (standard[autocomplete]) return { spec: { key: standard[autocomplete] }, score: 100 };

@@ -39,6 +39,7 @@
   const BASIC_FACTS = ['fullName', 'gender', 'birthday', 'idNumber', 'phone', 'email',
     'politicalStatus', 'ethnicity', 'hometown', 'nationality', 'gradYear'];
   const LIST_FACTS = {
+    family: ['relation', ['name', 'company', 'title', 'phone', 'politicalStatus']],
     education: ['school', ['degree', 'major', 'college', 'startTime', 'endTime', 'eduType', 'studyForm', 'rank', 'gpaScore', 'gpaTotal']],
     work: ['company', ['title', 'type', 'startTime', 'endTime']],
     projects: ['name', ['startTime', 'endTime']],

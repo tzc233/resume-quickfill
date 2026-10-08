@@ -37,6 +37,25 @@
       "highestSchoolCity": "上海",
       "lastMajor": "计算机科学与技术"
     },
+    "_家庭成员": "国企、银行表单的「父亲 / 母亲」一组按 relation(称谓)对号入座;没有的家人那一组留空。",
+    "family": [
+      {
+        "relation": "父亲",
+        "name": "",
+        "company": "",
+        "title": "",
+        "phone": "",
+        "politicalStatus": ""
+      },
+      {
+        "relation": "母亲",
+        "name": "",
+        "company": "",
+        "title": "",
+        "phone": "",
+        "politicalStatus": ""
+      }
+    ],
     "_教育": "时间倒序,第一条即最高学历。「本科院校」类字段会按 degree 自动定位到对应那条。",
     "education": [
       {

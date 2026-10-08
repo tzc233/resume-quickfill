@@ -1,0 +1,72 @@
+<!doctype html><meta charset="utf-8"><title>家庭成员:不拿本人信息去顶</title>
+<!-- 工商银行(用户 2026-10-08 贴的页面文字):「父亲 / 母亲」两组字段被填成了本人 ——
+     姓名框写进本人姓名,「工作单位 / 工作职务」写进本人第 1、2 段实习的公司与职位,
+     等于把父母当成了第 1、2 段工作经历。这是要别人的信息,填成本人就是实打实的错。
+     结构照贴出的文字复刻:每位家人一组 =「父亲」(姓名框)+「是否为工商银行员工」是/否
+     +「工作单位」+「工作职务」;页面另有本人的基本信息与实习经历,它们必须照常填。
+     第二轮在档案里加上家庭成员,按称谓对号入座。 -->
+<style>input,textarea{display:block;width:240px;min-height:24px}</style>
+<main id="form"></main>
+<script src="../content.js"></script>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script>
+<script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+const item = (label, inner) => `<div class="form-item"><label class="item-label">${label}</label>${inner}</div>`;
+const member = (rel, key) => `<div class="member-card">`
+  + item(rel, `<input data-f="${key}-name" placeholder="请输入姓名">`)
+  + item('是否为工商银行员工', `<label><input type="radio" name="${key}-emp" data-f="${key}-yes">是</label>`
+    + `<label><input type="radio" name="${key}-emp" data-f="${key}-no">否</label>`)
+  + item('工作单位', `<input data-f="${key}-org">`)
+  + item('工作职务', `<input data-f="${key}-post">`) + `</div>`;
+const render = () => {
+  form.innerHTML = '<h2>基本信息</h2>' + item('姓名', '<input data-f="me">')
+    + '<h2>实习经历</h2>'
+    + item('公司名称', '<input data-f="w0-org">') + item('职位名称', '<input data-f="w0-post">')
+    + item('公司名称', '<input data-f="w1-org">') + item('职位名称', '<input data-f="w1-post">')
+    + '<h2>家庭信息</h2>' + member('父亲', 'fa') + member('母亲', 'mo');
+};
+const base = { basic: { fullName: '示例本人' },
+  work: [{ company: '示例科技', title: '示例实习生' }, { company: '示例游戏', title: '示例算法实习生' }] };
+const v = (k) => document.querySelector(`[data-f="${k}"]`).value;
+const ck = (k) => document.querySelector(`[data-f="${k}"]`).checked;
+
+(async () => {
+  // 第零轮:页面上没有本人的实习栏 —— 档案里的两段工作没处去,原来就被灌进了父亲、母亲两组
+  form.innerHTML = '<h2>基本信息</h2>' + item('姓名', '<input data-f="me">')
+    + '<h2>家庭信息</h2>' + member('父亲', 'fa') + member('母亲', 'mo');
+  await __RQF_V2.fill(base);
+  const r0 = { fa: [v('fa-name'), v('fa-org'), v('fa-post')], mo: [v('mo-name'), v('mo-org'), v('mo-post')] };
+
+  // 第一轮:档案里没有家庭成员
+  render();
+  await __RQF_V2.fill(base);
+  const r1 = { me: v('me'), w0: v('w0-org'), w1: v('w1-org'),
+    fa: [v('fa-name'), v('fa-org'), v('fa-post')], mo: [v('mo-name'), v('mo-org'), v('mo-post')],
+    radios: ['fa-yes', 'fa-no', 'mo-yes', 'mo-no'].some(ck) };
+
+  // 第二轮:档案里有父亲、母亲
+  render();
+  await __RQF_V2.fill({ ...base, family: [
+    { relation: '父亲', name: '示例父亲', company: '示例单位甲', title: '示例职务甲' },
+    { relation: '母亲', name: '示例母亲', company: '示例单位乙', title: '示例职务乙' },
+  ] });
+  const r2 = { me: v('me'), w0: v('w0-org'),
+    fa: [v('fa-name'), v('fa-org'), v('fa-post')], mo: [v('mo-name'), v('mo-org'), v('mo-post')],
+    radios: ['fa-yes', 'fa-no', 'mo-yes', 'mo-no'].some(ck) };
+
+  const checks = {
+    没有本人实习栏时父母栏也不吃工作经历: r0.fa.every((x) => x === '') && r0.mo.every((x) => x === ''),
+    本人信息照常填: r1.me === '示例本人' && r1.w0 === '示例科技' && r1.w1 === '示例游戏',
+    // 这一页的要点
+    父亲栏不填本人: r1.fa.every((x) => x === ''),
+    母亲栏不填本人: r1.mo.every((x) => x === ''),
+    是否为本行员工不代选: !r1.radios && !r2.radios,
+    有家庭成员时父亲对号入座: r2.fa.join('|') === '示例父亲|示例单位甲|示例职务甲',
+    有家庭成员时母亲对号入座: r2.mo.join('|') === '示例母亲|示例单位乙|示例职务乙',
+    有家庭成员时本人不受影响: r2.me === '示例本人' && r2.w0 === '示例科技',
+  };
+  const fails = Object.keys(checks).filter((k) => !checks[k]);
+  parent.postMessage({ __rqf: true, page: 'family-members.html', version: __RQF_V2.version,
+    pass: !fails.length, total: Object.keys(checks).length, fails, snapshot: { r0, r1, r2 } }, '*');
+})();
+</script>

@@ -39,6 +39,17 @@ function toast(msg, isErr) {
 
 /* ============ 多段经历(教育 / 工作 / 项目)============ */
 const LIST_SPEC = {
+  // 称谓是对号入座的依据:表单上的「父亲」一组只会拿称谓为「父亲」的这一条
+  family: {
+    fields: [
+      { k: 'relation', l: '称谓', type: 'select', opts: ['', '父亲', '母亲', '配偶', '兄弟姐妹', '子女'] },
+      { k: 'name', l: '姓名' },
+      { k: 'company', l: '工作单位' },
+      { k: 'title', l: '职务 / 职业' },
+      { k: 'phone', l: '联系电话' },
+      { k: 'politicalStatus', l: '政治面貌' },
+    ],
+  },
   education: {
     fields: [
       { k: 'school', l: '学校名称', ph: '某某大学' },
@@ -169,7 +180,7 @@ const rankPercent = (v) => {
 };
 
 // 段头显示这一段是什么,挪顺序时才认得出谁是谁
-const TITLE_KEY = { education: 'school', work: 'company', projects: 'name', papers: 'name',
+const TITLE_KEY = { family: 'relation', education: 'school', work: 'company', projects: 'name', papers: 'name',
   competitions: 'name', awards: 'name', languages: 'name', progLangs: 'name', patents: 'name', softwares: 'name' };
 
 function entryRow(listKey, data = {}, idx = 0) {
@@ -772,7 +783,7 @@ function fillForm(profile) {
   }
   renderList('education', asList(profile.education).map((e) => ({ ...e, endTime: e.endTime || e.eduTime || '' })));
   renderList('work', asList(profile.work).map((w) => ({ ...w, desc: w.desc || w.workDesc || '' })));
-  for (const k of ['projects', 'papers', 'competitions', 'awards', 'languages', 'progLangs', 'patents', 'softwares']) {
+  for (const k of ['family', 'projects', 'papers', 'competitions', 'awards', 'languages', 'progLangs', 'patents', 'softwares']) {
     renderList(k, asList(profile[k]));
   }
   renderCustom(profile.custom || []);
