@@ -57,6 +57,15 @@
     'Answer "none" when: unsure; the field asks about another person (emergency contact, referrer, relatives other than father/mother); it is a captcha, password, agreement or consent; it is a yes/no question about the applicant\'s relation to the employer; or no key fits.',
     'A field inside a project module that asks for the organization/company of the project has no key: answer "none".',
     'Never guess. A wrong key is worse than "none".',
+    'Always return one answer for every field id you are given.',
+    'Examples (field -> answer):',
+    '{"id":1,"label":"户口所在地","section":"基本信息","group":""} -> {"id":1,"key":"basic.hometown","record":-1}',
+    '{"id":2,"label":"个人简介","section":"其他","group":""} -> {"id":2,"key":"intro","record":-1}',
+    '{"id":3,"label":"公司","section":"实践经历","group":"实践经历 2"} -> {"id":3,"key":"work.company","record":1}',
+    '{"id":4,"label":"就读院校","section":"学习经历","group":"学习经历 1"} -> {"id":4,"key":"education.school","record":0}',
+    '{"id":5,"label":"所获荣誉","section":"荣誉","group":"荣誉 3"} -> {"id":5,"key":"awards.name","record":2}',
+    '{"id":6,"label":"联系人与本人关系","section":"紧急联系人","group":""} -> {"id":6,"key":"none","record":-1}',
+    '{"id":7,"label":"民族","section":"基本信息","group":""} -> {"id":7,"key":"basic.ethnicity","record":-1}',
     'Profile keys:',
     ...Object.entries(KEYS).map(([k, d]) => `${k}: ${d}`),
   ].join('\n');
@@ -124,17 +133,34 @@
   };
 
   /** 一批字段 → Map(id → {key, record})。每批从带系统提示的基础会话克隆,互不串话。 */
-  const resolveFields = async (base, fields, { chunk = 8 } = {}) => {
+  /* 硬规则先拦,不交给模型:验证码 / 密码 / 协议 / 隐私 / 紧急联系人 / 推荐人,
+   * 以及只有「是 / 否」的单选题。插件本来就保证不填这些 —— 接入填表时也不会问模型,
+   * 自测里照样不问,量的才是真实会发生的情况。 */
+  const GUARD = /验证码|校验码|captcha|密码|password|同意|协议|隐私|声明|承诺|紧急联系人|推荐人|内推/i;
+  const YES_NO = /^(是|否|yes|no|有|无)$/i;
+  const guarded = (f) => GUARD.test(String(f.label || '') + ' ' + String(f.section || ''))
+    || (Array.isArray(f.options) && f.options.length > 0 && f.options.length <= 3 && f.options.every((o) => YES_NO.test(String(o).trim())));
+
+  /* 每批 4 个:第一次实测(Chrome 154)里漏答几乎都落在「一整批 8 个列表栏」的批次上,
+   * 后面的小批反而全对 —— 像是长输出被截断、剩下的默认成了 none。trace 收原始输出备查。 */
+  const resolveFields = async (base, fields, { chunk = 4, trace = null } = {}) => {
     const all = new Map();
-    for (let i = 0; i < fields.length; i += chunk) {
-      const part = fields.slice(i, i + chunk);
+    const ask = [];
+    for (const f of fields) {
+      if (guarded(f)) all.set(f.id, { key: 'none', record: -1, guarded: true });
+      else ask.push(f);
+    }
+    for (let i = 0; i < ask.length; i += chunk) {
+      const part = ask.slice(i, i + chunk);
       const s = base.clone ? await base.clone() : base;
       let raw = '';
       try {
         raw = await s.prompt(buildPrompt(part), { responseConstraint: schema(part) });
       } catch { raw = ''; }
       finally { if (s !== base && s.destroy) s.destroy(); }
-      for (const [id, ans] of validate(raw, part)) all.set(id, ans);
+      const got = validate(raw, part);
+      if (trace) trace.push({ ids: part.map((f) => f.id), raw: String(raw || '').slice(0, 600) });
+      for (const [id, ans] of got) all.set(id, ans);
     }
     return all;
   };
@@ -156,5 +182,5 @@
     return { rows, right, wrong, missed, total: cases.length };
   };
 
-  g.rqfAI = { KEYS, SYSTEM, buildPrompt, schema, validate, availability, createSession, resolveFields, score };
+  g.rqfAI = { KEYS, SYSTEM, buildPrompt, schema, validate, guarded, availability, createSession, resolveFields, score };
 })();

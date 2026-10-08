@@ -93,8 +93,11 @@ const open = async (browser, state) => {
     ok('错填一行写清标签与两边答案', /所在单位/.test(wrongRow) && /work\.company/.test(wrongRow) && /none/.test(wrongRow), wrongRow);
 
     const log = await page.evaluate(() => window.__log);
-    ok('分批提问,每批不超过 8 个字段', log.prompts.length >= Math.ceil(total / 8)
-      && log.prompts.every((p) => p.text.split('\n').length - 1 <= 8));
+    ok('分批提问,每批不超过 4 个字段', log.prompts.every((p) => p.text.split('\n').length - 1 <= 4));
+    // 硬规则先拦:这些字段插件本来就不填,不许交给模型
+    const sent = log.prompts.map((p) => p.text).join('\n');
+    ok('验证码 / 协议 / 紧急联系人 / 是否题不交给模型', !/短信验证码|隐私政策|紧急联系人|是否为工商银行员工|内推人/.test(sent));
+    ok('被拦下的字段计为不填且标出来', /硬规则直接判为不填/.test(await page.locator('#summary').innerText()));
     ok('每批从基础会话克隆,互不串话', log.clones === log.prompts.length);
     ok('输出被 JSON Schema 锁定到档案栏目', log.prompts.every((p) => p.schema
       && p.schema.properties.answers.items.properties.key.enum.includes('none')
@@ -105,6 +108,7 @@ const open = async (browser, state) => {
     await page.locator('#copy').click();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     ok('复制结果含准确率与错填清单', /准确/.test(copied) && /错填/.test(copied) && /所在单位/.test(copied), copied.slice(0, 200));
+    ok('复制结果附有问题批次的原始输出', /原始输出/.test(copied) && /work\.company/.test(copied.split('原始输出')[1] || ''));
     await page.close();
 
     // 5. 发给模型的只有标签结构:字段带了值也不许出现在提示里

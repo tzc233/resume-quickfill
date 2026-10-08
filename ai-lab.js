@@ -55,9 +55,10 @@ $('#run').addEventListener('click', async () => {
     const t0 = performance.now();
     const all = [];
     const byForm = [];
+    const trace = [];
     for (const [i, f] of window.rqfAIEval.entries()) {
       $('#summary').textContent = `正在识别第 ${i + 1}/${window.rqfAIEval.length} 组:${f.form}…`;
-      const answers = await AI.resolveFields(SESSION, f.cases);
+      const answers = await AI.resolveFields(SESSION, f.cases, { trace });
       const sc = AI.score(f.cases, answers);
       byForm.push({ form: f.form, right: sc.right, total: sc.total });
       for (const r of sc.rows) all.push({ ...r, form: f.form });
@@ -70,13 +71,15 @@ $('#run').addEventListener('click', async () => {
       missed: all.filter((r) => r.verdict === 'missed').length,
       ms,
     };
-    LAST = { res, rows: all, byForm };
+    res.guarded = all.filter((r) => r.got && r.got.guarded).length;
+    LAST = { res, rows: all, byForm, trace };
     $('#rows').innerHTML = all.map((r) => `<tr class="${r.verdict}"><td>${esc(r.form)}</td><td>${esc(r.label)}</td>`
       + `<td>${esc([r.section, r.group].filter(Boolean).join(' / '))}</td><td>${esc(show(r.expect, r.record === undefined ? -1 : r.record))}</td>`
       + `<td>${esc(show(r.got.key, r.got.record))}</td><td>${VERDICT[r.verdict]}</td></tr>`).join('');
     const pct = res.total ? Math.round((100 * res.right) / res.total) : 0;
     $('#summary').innerHTML = `<b>准确率 ${pct}%</b>(对 ${res.right} / 共 ${res.total})`
-      + ` · <span class="lab-wrong">错填 ${res.wrong}</span> · 漏答 ${res.missed} · 用时 ${(ms / 1000).toFixed(1)} 秒`;
+      + ` · <span class="lab-wrong">错填 ${res.wrong}</span> · 漏答 ${res.missed} · 用时 ${(ms / 1000).toFixed(1)} 秒`
+      + `<br><span class="hint">其中 ${res.guarded} 个字段由硬规则直接判为不填(验证码 / 协议 / 是否题等),没有交给模型</span>`;
     $('#summary').dataset.result = JSON.stringify(res);
     $('#summary').dataset.done = '1';
     $('#copy').disabled = false;
@@ -90,16 +93,21 @@ $('#run').addEventListener('click', async () => {
 /* 给维护者的摘要:只有评测集里的标签和模型答案,不含任何个人信息 */
 $('#copy').addEventListener('click', async () => {
   if (!LAST) return;
-  const { res, rows, byForm } = LAST;
+  const { res, rows, byForm, trace } = LAST;
+  // 有漏答或错填的那几批,附上模型原始输出:分得清是截断还是理解错
+  const badIds = new Set(rows.filter((r) => r.verdict !== 'right').map((r) => r.id));
+  const raws = (trace || []).filter((t) => t.ids.some((i) => badIds.has(i))).slice(0, 8)
+    .map((t) => `- 字段 ${t.ids.join(',')}:${t.raw || '(空)'}`);
   const line = (r) => `- [${r.form}] ${r.label}(${[r.section, r.group].filter(Boolean).join(' / ')}):`
     + `应为 ${show(r.expect, r.record === undefined ? -1 : r.record)},模型答 ${show(r.got.key, r.got.record)}`;
   const text = [
     '# 本机模型自测结果',
     navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0] || '',
-    `准确率 ${res.total ? Math.round((100 * res.right) / res.total) : 0}%(对 ${res.right} / 共 ${res.total})· 错填 ${res.wrong} · 漏答 ${res.missed} · 用时 ${(res.ms / 1000).toFixed(1)} 秒`,
+    `准确率 ${res.total ? Math.round((100 * res.right) / res.total) : 0}%(对 ${res.right} / 共 ${res.total})· 错填 ${res.wrong} · 漏答 ${res.missed} · 用时 ${(res.ms / 1000).toFixed(1)} 秒 · 硬规则直接判不填 ${res.guarded}`,
     '', '## 分组', ...byForm.map((f) => `- ${f.form}:${f.right}/${f.total}`),
     '', '## 错填', ...(rows.filter((r) => r.verdict === 'wrong').map(line).concat(['(无)']).slice(0, Math.max(1, rows.filter((r) => r.verdict === 'wrong').length))),
     '', '## 漏答', ...(rows.filter((r) => r.verdict === 'missed').map(line).concat(['(无)']).slice(0, Math.max(1, rows.filter((r) => r.verdict === 'missed').length))),
+    ...(raws.length ? ['', '## 有问题批次的原始输出', ...raws] : []),
   ].join('\n');
   try {
     await navigator.clipboard.writeText(text);
