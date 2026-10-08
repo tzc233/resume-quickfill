@@ -582,12 +582,19 @@
     }).map(c => ({name:c.name, type:c.type || '', result:c.result, desc:c.desc || '',
       date:c.awardDate || c.date || '', category:c.category || '',
       level:c.level || '', grade:c.grade || c.result || ''}));
-    const out = asList(awards).map(a => ({...a}));
+    /* 竞赛在前、奖项在后(用户要求):竞赛名次比校内奖学金更有分量,
+     * 而页面的奖项块常放不下全部条目,排在后面的会因「页面只有 N 段」被截掉。
+     * 档案里同一条既记在奖项、又记在竞赛时,保留竞赛那条(信息更全)。 */
     const norm = v => String(v || '').trim().toLowerCase().replace(/\s+/g, '');
+    const out = [];
     for (const entry of eligible) {
-      const duplicate = out.find(a => norm(a.name) === norm(entry.name) && norm(a.result) === norm(entry.result)
-        && (!a.date || !entry.date || norm(a.date) === norm(entry.date)));
+      const duplicate = out.find(a => norm(a.name) === norm(entry.name) && norm(a.result) === norm(entry.result));
       if (!duplicate) out.push(entry);
+    }
+    for (const a of asList(awards)) {
+      const duplicate = out.find(c => norm(c.name) === norm(a.name) && norm(c.result) === norm(a.result)
+        && (!a.date || !c.date || norm(a.date) === norm(c.date)));
+      if (!duplicate) out.push({...a});
     }
     return out;
   };
@@ -672,7 +679,8 @@
       : (typeof P.publications === 'string' ? P.publications
         : join(out.papers, (p) => [p.name, p.type, p.date, p.authorOrder].filter(Boolean).join(',')));
     out.awardsText = typeof P.awards === 'string' ? P.awards
-      : join([...out.awards, ...out.competitions],
+      // 不单列竞赛的汇总框:竞赛在前,同 mergeAwardEntries
+      : join([...out.competitions, ...out.awards],
         (a) => [a.date || period(a), a.name, a.type, a.result].filter(Boolean).join(' '));
     out.competitionsText = typeof P.competitions === 'string' ? P.competitions
       : join(out.competitions,

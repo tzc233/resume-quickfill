@@ -6,7 +6,8 @@ const profile={basic:{},awards:[{name:'荣誉甲',result:'一等奖',date:'2024-
 const row=()=>'<div><label>奖项名称<input></label><label>奖项等级<input></label><label>获奖时间<input></label></div>';
 form.innerHTML='<section><h2>获奖经历</h2>'+row()+row()+'</section>';
 const r=await __RQF.fill(profile);let v=[...form.querySelectorAll('input')].map(x=>x.value);
-const checks={merge:r.awardRouting==='merged',entries:v[0]==='荣誉甲'&&v[3]==='赛事乙',noInventedDate:v[5]==='',dedupe:__RQF.mergeAwardEntries(profile.awards,profile.competitions).length===2};
+// 2.24.0:竞赛在前 —— 第 1 块是赛事乙(只有起止时间,不许编出获奖日期),第 2 块是荣誉甲
+const checks={merge:r.awardRouting==='merged',entries:v[0]==='赛事乙'&&v[3]==='荣誉甲',noInventedDate:v[2]==='',dedupe:__RQF.mergeAwardEntries(profile.awards,profile.competitions).length===2};
 form.innerHTML='<section><h2>获奖经历</h2>'+row()+'</section><section><h2>竞赛经历</h2><label>竞赛名称<input></label><label>竞赛成绩<input></label></section>';
 const split=await __RQF.fill(profile);checks.separate=split.awardRouting!=='merged';
 form.innerHTML='<section><h2>奖学金</h2>'+row()+'</section>';

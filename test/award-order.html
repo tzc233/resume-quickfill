@@ -1,0 +1,46 @@
+<!doctype html><meta charset="utf-8"><title>荣誉与竞赛不分时,竞赛在前</title>
+<!-- 页面只有一个「获奖」列表(或一个获奖汇总框)、不单列竞赛时,档案里的竞赛要并进去 ——
+     用户要求竞赛排在前面:竞赛名次(国赛/美赛)比校内奖学金更有分量,
+     而页面上的奖项块常常不够放下全部条目,排在后面的会因为「页面只有 N 段」被截掉。
+     原来是奖项在前、竞赛追加在后。 -->
+<style>input,textarea{display:block;width:240px;min-height:24px}</style>
+<main id="form"></main>
+<script src="../content.js"></script>
+<script>
+const profile = { basic: {},
+  awards: [
+    { name: '示例一等奖学金', type: '校级', result: '一等', date: '2023-12' },
+    { name: '示例优秀学生', type: '校级', result: '优秀学生' },
+  ],
+  competitions: [
+    { name: '示例数学建模竞赛', type: '省级', result: '省级二等奖', awardDate: '2023-09' },
+    { name: '示例美国数学建模竞赛', type: '国际级', result: 'Honorable Mention', awardDate: '2023-05' },
+    { name: '示例程序设计竞赛', type: '校级', result: '仅参赛' },
+  ],
+};
+(async () => {
+  // A:只有一个获奖列表,四个块
+  form.innerHTML = '<h2>获奖经历</h2>' + [0, 1, 2, 3].map((i) =>
+    `<div class="blk"><label>获奖名称<input data-f="n${i}"></label></div>`).join('');
+  await __RQF.fill(profile);
+  const names = [0, 1, 2, 3].map((i) => document.querySelector(`[data-f="n${i}"]`).value);
+
+  // B:只有一个获奖汇总框
+  form.innerHTML = '<label>获奖情况<textarea data-f="sum"></textarea></label>';
+  await __RQF.fill(profile);
+  const sum = document.querySelector('[data-f="sum"]').value;
+  const at = (s) => sum.indexOf(s);
+
+  const checks = {
+    列表里竞赛在前: names[0] === '示例数学建模竞赛' && names[1] === '示例美国数学建模竞赛',
+    列表里奖项随后: names[2] === '示例一等奖学金' && names[3] === '示例优秀学生',
+    // 没获奖的参赛不算奖项 —— 原有规则不变
+    仅参赛不进获奖列表: !names.includes('示例程序设计竞赛'),
+    汇总框里竞赛在前: at('示例数学建模竞赛') >= 0 && at('示例一等奖学金') > at('示例美国数学建模竞赛'),
+    汇总框不漏奖项: at('示例优秀学生') >= 0,
+  };
+  const fails = Object.keys(checks).filter((k) => !checks[k]);
+  parent.postMessage({ __rqf: true, page: 'award-order.html', version: __RQF.version,
+    pass: !fails.length, total: Object.keys(checks).length, fails, snapshot: { names, sum } }, '*');
+})();
+</script>
