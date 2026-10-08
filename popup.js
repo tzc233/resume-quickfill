@@ -191,6 +191,7 @@ async function doScan() {
 
   const rows = [];
   const sections = [];
+  const sectionMisses = [];
   const lastSkips = [];
   let lastFilled = 0;
   let ver = '';
@@ -203,6 +204,7 @@ async function doScan() {
     privateValues.push(...(r.result.redactions || []));
     rows.push(...r.result.rows);
     sections.push(...(r.result.sections || []));
+    sectionMisses.push(...(r.result.sectionMisses || []));
     if (r.result.lastFill) {
       lastSkips.push(...(r.result.lastFill.skipped || []));
       lastFilled += (r.result.lastFill.filled || []).length;
@@ -237,6 +239,7 @@ async function doScan() {
     sections.length
       ? `识别到的区块标题:${sections.map((x) => `${x.text}→${x.dom}`).join(' · ')}`
       : '未识别到任何区块标题(泛化标签将只能靠前后邻居猜归属)',
+    sectionMisses.length ? `未认出的标题候选:${[...new Set(sectionMisses)].join(' · ')}` : '',
     `共 ${rows.length} 个字段:${miss.length} 个未命中规则,${warns} 个标签定位可疑`,
     `深度探测:${probed} 个代表性空白控件（仅打开并关闭，未选择、未写值）`,
     v2Inventory ? `2.x 页面能力图:探测前 ${v2Inventory.beforeTotal} 个、展开后 ${v2Inventory.total} 个控件（可见 ${v2Inventory.visible} / 隐藏 ${v2Inventory.hidden}），${v2Inventory.ariaLinked} 个 ARIA 弹层关联；临时展开 ${v2Inventory.expandedForDiagnosis.length} 个空区块` : '',

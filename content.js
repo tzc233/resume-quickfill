@@ -183,9 +183,10 @@
     /* 「获奖名称」原来一条规则都不收 —— 它掉进最后的整段兜底 awards,
      * 于是荣耀那页 8 个奖项块的名称栏全被灌进同一段汇总文字。
      * 「获奖类型 / 获奖级别 / 获奖等级」同理:一条奖项的三个维度必须各归各位。 */
-    { k: 'award.name', a: 1, re: /奖项名称|奖学金名称|荣誉名称|获奖名称|奖项说明|获奖说明|荣誉说明/i },
+    // 「奖励名称」(建设银行)原来不收:它掉下去命中了记录头「奖励荣誉 1」,整段奖项汇总被灌进单条名称栏
+    { k: 'award.name', a: 1, re: /奖项名称|奖学金名称|荣誉名称|获奖名称|奖励名称|奖项说明|获奖说明|荣誉说明/i },
     { k: 'award.type', re: /奖项类型|荣誉类型|获奖类型|获奖类别|奖项类别/i },
-    { k: 'award.level', re: /获奖级别|奖项级别|荣誉级别|奖学金级别/i },
+    { k: 'award.level', re: /获奖级别|奖项级别|荣誉级别|奖学金级别|奖励级别/i },
     { k: 'award.result', re: /奖项成绩|奖项等级|获奖等级|荣誉等级/i },
     { k: 'award.desc', re: /奖项描述|荣誉描述|获奖描述/i },
     { k: 'award.date', re: /获奖时间|获奖日期/i },
@@ -278,7 +279,8 @@
     [/竞赛.{0,2}获奖|竞赛.{0,2}奖学金|获奖.{0,2}竞赛/, 'honor'],
     [/赛事|竞赛|比赛/, 'comp'],
     [/项目经验|项目经历|科研项目/, 'proj'],
-    [/获奖经历|获奖情况|荣誉奖项|荣誉与奖项|荣誉奖励|奖励情况|奖学金/, 'award'],
+    // 建设银行的模块名是「奖励荣誉」
+    [/获奖经历|获奖情况|荣誉奖项|荣誉与奖项|荣誉奖励|奖励荣誉|奖励情况|奖学金/, 'award'],
     [/论文|期刊|学术成果|发表情况/, 'paper'],
 
     // prog 必须排在 lang 之前:「编程语言能力」同时含「语言能力」
@@ -288,6 +290,25 @@
     [/专利/, 'patent'],
     [/软件著作/, 'soft'],
   ];
+
+  /* 模块名对不上上面的别名表时的兜底。建设银行的实习、项目两个模块名都不在表里,
+   * 1.x 于是只认出了「教育经历」,项目模块的「经历描述」被当成工作描述分到不存在的
+   * 「工作#3」—— 而 v2 用更宽的别名在同一页认出了三个模块。
+   * 宽别名不能直接套在所有候选上:「期望工作城市」这种带 title 类名的字段标签也含「工作」。
+   * 所以只认「像模块头」的文字:2~8 字的名称后面紧跟记录序号(「奖励荣誉 1」)
+   * 或新增按钮(「实习实践 新增实习实践」)—— 字段标签两样都没有。 */
+  const MODULE_HEAD = /^([\u4e00-\u9fa5/／、&与和及]{2,8})\s*(?:\d{1,2}(?!\d)|新增|添加|\+)/;
+  const MODULE_DOMAIN = [
+    [/实习.*工作|工作.*实习/, 'work'],   // 合并型照旧归 work,同 SECTION_DOMAIN
+    [/实习/, 'intern'], [/工作|职业|从业/, 'work'], [/项目/, 'proj'],
+    [/荣誉|奖励|获奖|奖项/, 'award'], [/竞赛|比赛|赛事/, 'comp'], [/论文|著作|成果/, 'paper'],
+    [/语言|外语/, 'lang'], [/教育|学历|学习/, 'edu'],
+  ];
+  const moduleDomain = (t) => {
+    const m = String(t || '').match(MODULE_HEAD);
+    const hit = m && MODULE_DOMAIN.find(([re]) => re.test(m[1]));
+    return hit ? hit[1] : null;
+  };
 
   /* 这些区块里的字段一律不填 —— 它们要的是别人的信息,填成本人就是实打实的错误。
    * 排除词只能拦住标签里带「紧急」的字段;区块里若只写「姓名」「电话」就拦不住。 */
@@ -1098,8 +1119,16 @@
    * 「专利成果」因此成了区块标题,紧随其后的「获得荣誉」被划进专利区块,
    * 再往后的「补充说明」被 genericHit 认成专利描述位。
    * 区块标题从不使用 <label>:候选本身是、包着、或落在 <label> 里,就是字段标签。 */
-  const isFieldLabel = (el) => el.tagName === 'LABEL' || !!el.closest('label')
-    || !!el.querySelector('label');
+  /* 但只当这个 <label> 就是候选的全部文字时才算:建行这类选填模块的模块头里挂着
+   * 「暂无实习经历」勾选框,一碰到 <label> 就排除,会把整个模块头一起丢掉。 */
+  const isFieldLabel = (el) => {
+    if (el.tagName === 'LABEL' || el.closest('label')) return true;
+    const labels = el.querySelectorAll('label');
+    if (!labels.length) return false;
+    let rest = clean(el.textContent || '');
+    for (const l of labels) rest = rest.replace(clean(l.textContent || ''), '');
+    return !rest.trim();
+  };
 
   const scanSections = () => {
     const out = [];
@@ -1112,13 +1141,35 @@
       const isRealHeading = /^(H[1-6]|LEGEND)$/.test(el.tagName);
       if (!t || t.length > (isRealHeading ? 40 : 20)) continue;
       if (BLOCK_SECTION.test(t)) { out.push({ el, dom: 'blocked', text: t }); continue; }
-      const hit = SECTION_DOMAIN.find(([re]) => re.test(t));
+      const hit = SECTION_DOMAIN.find(([re]) => re.test(t))
+        || (moduleDomain(t) ? [null, moduleDomain(t)] : null);
       if (!hit) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 2 && r.height < 2) continue;
       out.push({ el, dom: hit[1], text: t });
     }
     return out.filter((x) => !isNavList(x.el, out));
+  };
+
+  /* 诊断用:像模块头、却没被认成区块标题的候选。建设银行那份报告只列出了认出的
+   * 「教育经历」,实习、项目两个模块叫什么只能靠猜 —— 把没认出的也带上,下次一眼可见。
+   * 只收含模块字眼或「名称 + 序号 / 新增」形状的短文字,免得被字段标题刷屏。 */
+  const MODULE_WORD = /经历|经验|实践|信息|荣誉|奖励|获奖|奖项|成果|能力|情况|背景|证书|技能/;
+  const scanSectionMisses = (sections) => {
+    const known = new Set(sections.map((x) => x.el));
+    const seen = new Set(), out = [];
+    for (const el of document.querySelectorAll(HEADING_SEL)) {
+      if (known.has(el) || isFieldLabel(el) || el.querySelector('input, textarea, select')) continue;
+      const t = headingText(el);
+      if (!t || t.length > 20 || seen.has(t)) continue;
+      if (!MODULE_WORD.test(t) && !MODULE_HEAD.test(t)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 2 && r.height < 2) continue;
+      seen.add(t);
+      out.push(t.slice(0, 24));
+      if (out.length >= 12) break;
+    }
+    return out;
   };
 
   /** 某元素落在哪个区块下:取 DOM 顺序上最近的一个前置标题 */
@@ -1667,6 +1718,13 @@
          * 差点被填成第一段教育的入学年月。猜错是脏数据,留空只是留空。 */
         if (hit.ym && hit.dom === '*' && !items[idx].sec) {
           if (!hit.occupied) report.skipped.push({ label: hit.label, reason: '这组年/月不在任何经历区块内,无法确定归属,请手动填' });
+          continue;
+        }
+        /* 项目块里的「所在单位 / 岗位」说的是项目在哪儿做的,档案的项目没有这一栏。
+         * 建设银行的项目模块就有「所在单位」:按规则它是工作单位,区块认对之后
+         * 反而会被灌进实习公司名 —— 那是实打实的错,留空并说明。描述位照旧改判成项目描述。 */
+        if (items[idx].sec === 'proj' && (hit.dom === 'work' || hit.dom === 'intern') && hit.field !== 'desc') {
+          if (!hit.occupied) report.skipped.push({ label: hit.label, reason: '项目经历里的这一栏,档案的项目没有对应内容,留空' });
           continue;
         }
         const dom = Number.isInteger(hit.explicitIndex) ? hit.dom : hit.dom === '*' ? (ambiguousDom(idx, hit) || ctx.domain)
@@ -2784,6 +2842,7 @@
         .filter(v => typeof v === 'string' && v.trim().length >= 2),
       customWidgets: wRows.length,
       sections: sections.map((x) => ({ text: x.text.slice(0, 24), dom: secName(x.dom) })),
+      sectionMisses: scanSectionMisses(sections),
       lastFill: (typeof window !== 'undefined' && window.__RQF_LAST
         && window.__RQF_LAST.url === location.href) ? window.__RQF_LAST : null,
     };

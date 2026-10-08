@@ -1,0 +1,82 @@
+<!doctype html><meta charset="utf-8"><title>建设银行:实习 / 项目 / 奖励荣誉区块</title>
+<!-- 建设银行(job2.ccb.com)2.23.0 那份报告:1.x 只认出了「教育经历」的区块标题,
+     实习、项目、奖励荣誉三个模块的字段全挂在「教育」下 ——
+       · 项目模块的「经历描述」被当成工作描述,分到不存在的「工作#3」,整栏没填;
+       · 同块的「所在单位」也分到「工作#3」;
+       · 「奖励荣誉 1」这个记录头对不上 1.x 的获奖别名,「奖励名称」一条规则都不收。
+     v2 在同一页把三个模块认成 work / projects / awards(它的别名更宽),说明标题就在页面上。
+     结构照报告里的祖先链与片段复刻:模块头(名称 + 新增按钮 + 收起)、记录头(名称 + 序号 + 取消/保存)、
+     li.floor_view_editor_item > .left_text 标签 + .fieldValueBox 输入框。
+     报告没带出实习、项目两个模块的标题原文,这里用「实习实践」「项目实践」—— 对不上旧别名表、
+     但 v2 认得的写法;实习模块头里放一个「暂无实习经历」勾选框(选填模块常见),
+     它的 <label> 曾让 2.18.0 的「字段标签不算标题」把整个模块头排除掉。 -->
+<style>input,textarea{display:block;width:240px;min-height:24px}</style>
+<div id="root"></div>
+<script src="../content.js"></script>
+<script>
+const field = (label, id, tag = 'input') =>
+  `<li class="floor_view_editor_item"><div class="RTop floor_view_editor_box">`
+  + `<div class="left"><span class="left_text"><i class="require red"></i>${label}</span></div>`
+  + `<div class="right fieldValueBox"><${tag} class="input edit_field_value" id="${id}"></${tag}><div class="error_wrapper"></div></div></div></li>`;
+const record = (name, n, fields) =>
+  `<form class="record_view"><div class="record_header">${name} ${n}<a>取消</a><a>保存</a></div>`
+  + `<ul class="appear floor_view_editor">${fields}</ul></form>`;
+const module = (name, records, extra = '') =>
+  `<div class="Newly"><div class="Newlyin"><div class="NewlyR"><div class="Rr floor_view">`
+  + `<div class="floor_view_header">${name}<a>新增${name}</a><span>收起</span>${extra}</div>`
+  + `<div class="floor_view_body">${records}</div></div></div></div></div>`;
+
+root.innerHTML =
+  // 基本信息:「期望工作城市」的外壳类名带 title、文字里有「工作」—— 不许被当成工作区块的标题
+  `<div class="basic_box"><ul>`
+  + `<li><span class="left_title">期望工作城市</span><input id="expCity"></li>`
+  + field('现居城市', 'city') + `</ul></div>`
+  + module('教育经历', record('教育经历', 1, field('学校', 'school0')))
+  + module('实习实践',
+    record('实习实践', 1, field('单位名称', 'unit0') + field('部门及岗位', 'post0') + field('工作描述', 'wdesc0', 'textarea'))
+    + record('实习实践', 2, field('单位名称', 'unit1') + field('部门及岗位', 'post1') + field('工作描述', 'wdesc1', 'textarea')),
+    '<label class="label_checkbox"><input type="checkbox">暂无实习经历</label>')
+  + module('项目实践', record('项目实践', 1,
+    field('所在单位', 'porg0') + field('项目名称', 'pname0') + field('经历描述', 'pdesc0', 'textarea')))
+  + module('奖励荣誉', record('奖励荣誉', 1, field('奖励名称', 'award0')) + record('奖励荣誉', 2, field('奖励名称', 'award1')))
+  // 档案没有证书列表:这个模块认不出是对的,但诊断报告里要能看见它叫什么
+  + module('资格证书', record('资格证书', 1, field('证书名称', 'cert0')));
+
+(async () => {
+  const profile = { basic: { city: '示例城市' },
+    education: [{ school: '示例大学', degree: '硕士' }],
+    work: [{ company: '示例科技', title: '示例实习生', desc: '示例实习描述一' },
+      { company: '示例游戏', title: '示例算法实习生', desc: '示例实习描述二' }],
+    projects: [{ name: '示例项目', role: '负责人', desc: '示例项目描述' }],
+    awards: [{ name: '示例一等奖学金', type: '校级' }, { name: '示例优秀学生', type: '校级' }],
+  };
+  await __RQF.fill(profile);
+  const scanned = __RQF.scan();
+  const rows = scanned.rows || scanned;
+  const secOf = (label) => (rows.find((r) => r.label === label) || {}).sec || '';
+  const v = (id) => document.getElementById(id).value;
+  const checks = {
+    教育区块仍认得: secOf('学校') === '教育' && v('school0') === '示例大学',
+    // 关键:模块头带勾选框也要认得,对不上旧别名的「实习实践」也要认得
+    实习模块认得: secOf('单位名称') === '实习',
+    实习两段按序: v('unit0') === '示例科技' && v('unit1') === '示例游戏' && v('wdesc1') === '示例实习描述二',
+    项目模块认得: secOf('项目名称') === '项目' && v('pname0') === '示例项目',
+    // 原来:被当成工作描述分到「工作#3」,整栏留空
+    项目的经历描述填项目描述: v('pdesc0') === '示例项目描述',
+    // 项目所在单位档案里没有 —— 宁可留空,不拿实习公司去顶
+    项目所在单位留空: v('porg0') === '',
+    奖励荣誉模块认得: secOf('奖励名称') === '奖项',
+    奖励名称逐条填: v('award0') === '示例一等奖学金' && v('award1') === '示例优秀学生',
+    // 防误伤:带 title 类名的字段标签「期望工作城市」不是工作区块的标题
+    字段标签不成区块标题: secOf('现居城市') === '' && v('city') === '示例城市',
+    // 诊断:没认出的模块名进报告,下次不用再猜
+    报告列出未认出的模块: (scanned.sectionMisses || []).some((t) => t.includes('资格证书'))
+      && !(scanned.sectionMisses || []).some((t) => /实习实践|奖励荣誉/.test(t)),
+    证书栏不乱填: v('cert0') === '',
+  };
+  const fails = Object.keys(checks).filter((k) => !checks[k]);
+  parent.postMessage({ __rqf: true, page: 'ccb-sections.html', version: __RQF.version,
+    pass: !fails.length, total: Object.keys(checks).length, fails,
+    snapshot: { secs: rows.map((r) => `${r.label}→${r.sec}`), pdesc: v('pdesc0'), porg: v('porg0'), award0: v('award0') } }, '*');
+})();
+</script>
