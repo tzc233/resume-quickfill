@@ -39,7 +39,7 @@ root.innerHTML =
   + module('项目实践', record('项目实践', 1,
     field('所在单位', 'porg0') + field('项目名称', 'pname0') + field('经历描述', 'pdesc0', 'textarea')))
   + module('奖励荣誉', record('奖励荣誉', 1, field('奖励名称', 'award0')) + record('奖励荣誉', 2, field('奖励名称', 'award1')))
-  // 档案没有证书列表:这个模块认不出是对的,但诊断报告里要能看见它叫什么
+  // 档案没有证书列表:认作中性的「证书」区块 —— 截断上一个区块的作用域,块里不填
   + module('资格证书', record('资格证书', 1, field('证书名称', 'cert0')));
 
 (async () => {
@@ -69,9 +69,10 @@ root.innerHTML =
     奖励名称逐条填: v('award0') === '示例一等奖学金' && v('award1') === '示例优秀学生',
     // 防误伤:带 title 类名的字段标签「期望工作城市」不是工作区块的标题
     字段标签不成区块标题: secOf('现居城市') === '' && v('city') === '示例城市',
-    // 诊断:没认出的模块名进报告,下次不用再猜
-    报告列出未认出的模块: (scanned.sectionMisses || []).some((t) => t.includes('资格证书'))
-      && !(scanned.sectionMisses || []).some((t) => /实习实践|奖励荣誉/.test(t)),
+    // 诊断:认出的模块不进「未认出」名单。2.30.0 起「资格证书」认作证书区块(牛客那页它后面紧跟家庭情况,
+    // 认不出时整块挂在上一个区块下),不再出现在未认出名单里
+    报告不列已认出的模块: !(scanned.sectionMisses || []).some((t) => /实习实践|奖励荣誉|资格证书/.test(t)),
+    证书模块认得: secOf('证书名称') === '证书',
     证书栏不乱填: v('cert0') === '',
   };
   const fails = Object.keys(checks).filter((k) => !checks[k]);

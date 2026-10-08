@@ -1,6 +1,6 @@
 (() => {
   const V2 = window.__RQF_V2_PARTS = window.__RQF_V2_PARTS || {};
-  V2.VERSION = '2.29.0';
+  V2.VERSION = '2.30.0';
   V2.schema = [
     { key: 'basic.fullName', terms: ['姓名', '中文名', 'full name', 'candidate name'], exclude: ['导师', '联系人', '推荐人'] },
     { key: 'basic.phone', terms: ['手机', '手机号', '联系电话', 'mobile', 'phone'], exclude: ['紧急', '验证码'] },
@@ -29,7 +29,8 @@
      * 排名下拉里写「计算机科学与技术」。档案里本来就有 rank,单列一条。 */
     { domain: 'education', field: 'rank', terms: ['专业排名', '成绩排名', '年级排名', '排名', 'rank'] },
     { domain: 'education', field: 'major', terms: ['专业名称', '专业', 'field of study', 'major'],
-      exclude: ['排名', 'rank', '类别', '方向'] },
+      // 「辅修/双学位专业」不是本段的专业(牛客教育块),档案没有这一栏
+      exclude: ['排名', 'rank', '类别', '方向', '辅修', '双学位', '第二专业'] },
     { domain: 'education', field: 'college', terms: ['学院', '院系', 'department', 'faculty'] },
     { domain: 'education', field: 'startTime', terms: ['入学时间', '入学日期', '开始就读', 'enrollment date'] },
     { domain: 'education', field: 'endTime', terms: ['毕业时间', '毕业日期', '预计毕业', 'graduation date'] },

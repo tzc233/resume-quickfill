@@ -1,0 +1,140 @@
+<!doctype html><meta charset="utf-8"><title>牛客简历页:证明人 / 家庭 / 身高体重 / 辅修 / 刊物层级</title>
+<!-- 牛客(nowcoder.com/my/resume-plugin)2.29.0 那份报告,Element UI 表单,结构照报告的祖先链复刻:
+     section.module-card > 模块头 + array-group > array-group__fields > el-form-item(label + content)。
+     报告里的错:
+       · 工作经历「证明人姓名 / 证明人联系方式」被填成本人姓名、本人手机号(两段都中招);
+       · 「家庭情况」模块认不出,被当成「外语」区块的延续,家人「姓名」填成了本人;
+         关系下拉的选项(父亲…儿子 女儿)藏在 DOM 里,被当成称谓,后面几栏全判成「子女」;
+       · 基本信息「体重」的占位是「单位是kg」,命中工作单位规则 —— 白占工作第 1 段,
+         真正的工作块整体后移一格,第 2 块越界到「工作#3」;
+       · 「辅修/双学位专业」被当成专业、「刊物名称 / 刊物层级」两栏都当成刊物 —— 同块重复字段推进段号,
+         教育的导师、论文第 1 块整体错位;
+       · 「毕业论文」被灌进整段论文汇总,又被页面截断;
+       · 「在校经历」认不出,沿用上一个「项目」区块;
+       · 外语区的「英语水平」下拉拿整段语言汇总去配选项,配不上 CET-6;
+       · 2.x 把整条记录的外壳 array-group__fields 当成表单项,每栏标签都拼上了本块第一栏
+         (「颁奖机构 获奖时间」),于是颁奖机构被当成获奖时间、家人「关系」被当成本人姓名。 -->
+<style>input,textarea{display:block;width:240px;height:24px}.el-select-dropdown__item{padding:2px 6px;cursor:pointer}.el-select{display:block;width:240px}</style>
+<div class="resume-plugin"><div class="resume-form"><form class="el-form el-form--label-top" id="form"></form></div></div>
+<script>
+const memory = {};
+window.chrome = { storage: { local: { async get(k) { return { [k]: structuredClone(memory[k]) }; }, async set(v) { Object.assign(memory, structuredClone(v)); } } } };
+let seq = 0;
+const item = (label, id, ph, tag = 'input', type = 'text') =>
+  `<div class="el-form-item resume-form-item${tag === 'textarea' ? ' resume-form-item--textarea' : ''}"><label class="el-form-item__label">${label}</label>`
+  + `<div class="el-form-item__content"><div class="input-wrapper"><div class="${tag === 'textarea' ? 'el-textarea' : 'el-input el-input--l el-input--suffix'}">`
+  + `<${tag} ${tag === 'input' ? `type="${type}" ` : ''}class="${tag === 'textarea' ? 'el-textarea__inner' : 'el-input__inner'}" id="${id}" placeholder="${ph || '请输入' + label}"></${tag}></div></div></div></div>`;
+// el-select:下拉层挂在组件内部、默认隐藏 —— 选项文字一直在 DOM 里(报告里 D097 的候选就带着选项)
+const select = (label, id, options) =>
+  `<div class="el-form-item resume-form-item"><label class="el-form-item__label">${label}</label><div class="el-form-item__content"><div class="input-wrapper">`
+  + `<div class="el-select el-select--l" id="${id}"><div class="el-input el-input--l el-input--suffix"><input type="text" readonly class="el-input__inner" placeholder="请选择${label}"></div>`
+  + `<div class="el-select-dropdown el-popper is-l" style="display:none"><div class="el-scrollbar"><ul class="el-scrollbar__view el-select-dropdown__list">`
+  + options.map((o) => `<li class="el-tooltip el-select-dropdown__item item"><span>${o}</span></li>`).join('')
+  + `</ul></div></div></div></div></div></div>`;
+const group = (inner) => `<div class="array-group"><div class="array-group__index">0${++seq}</div><div class="array-group__fields">${inner}</div></div>`;
+const card = (title, body) => `<section class="module-card"><div class="module-card__header"><span class="module-card__title">${title}</span></div><div class="module-card__body">${body}</div></section>`;
+
+form.innerHTML =
+  card('基本信息', item('姓名', 'name') + item('电话', 'phone') + item('身高', 'height', '单位是cm', 'input', 'number')
+    + item('体重', 'weight', '单位是kg', 'input', 'number') + item('紧急联系人姓名', 'emName'))
+  + card('教育经历', [0, 1].map((k) => group(item('开始时间', `es${k}`) + item('学校', `school${k}`) + item('专业', `major${k}`)
+      + select('学历', `deg${k}`, ['大专', '本科', '硕士研究生', '博士研究生']) + item('毕业论文', `thesis${k}`)
+      + item('辅修/双学位专业', `minor${k}`) + item('导师姓名', `adv${k}`))).join(''))
+  + card('工作经历', [0, 1].map((k) => group(item('开始时间', `ws${k}`) + item('公司', `co${k}`) + item('职位', `ti${k}`)
+      + item('工作内容', `wd${k}`, '', 'textarea') + item('证明人姓名', `refName${k}`) + item('证明人职位', `refTitle${k}`)
+      + item('证明人联系方式', `refPhone${k}`))).join(''))
+  + card('项目经历', group(item('开始时间', 'ps0') + item('项目名称', 'pn0') + item('项目内容', 'pd0', '', 'textarea')))
+  + card('在校经历', group(select('经历类型', 'campusType', ['社团组织', '社会实践']) + item('职位', 'campusTitle')
+      + item('工作内容', 'campusDesc', '', 'textarea')))
+  + card('获奖情况', group(item('获奖时间', 'ad0') + item('奖励名称', 'an0') + item('颁奖机构', 'aorg0')
+      + select('奖励等级', 'alv0', ['国家级', '省级', '市级', '校级', '院级', '其他'])))
+  + card('外语能力', group(select('外语语种', 'langName', ['英语', '日语', '法语'])
+      + select('英语水平', 'langLevel', ['cet 4（四级）', 'cet 6（六级）', 'tem 4（专业四级）', 'ielts（雅思）'])
+      + item('成绩', 'langScore') + select('掌握程度', 'langMaster', ['入门', '日常会话', '商务会话', '母语'])))
+  + card('计算机技能', group(select('技能类型', 'skillType', ['编程语言', '办公软件']) + select('掌握程度', 'skillLevel', ['一般', '良好', '熟练', '精通'])))
+  + card('资格证书', group(item('获得时间', 'certDate') + item('证书名称', 'certName') + item('证书编号', 'certNo')))
+  + card('家庭情况', group(item('姓名', 'famName') + select('关系', 'famRel', ['父亲', '母亲', '哥哥', '姐姐', '弟弟', '妹妹', '儿子', '女儿', '其他'])
+      + item('电话', 'famPhone') + item('公司', 'famCo') + item('职位', 'famTitle')))
+  + card('论文期刊', [0, 1].map((k) => group(item('发表时间', `pdate${k}`) + item('刊物名称', `jname${k}`)
+      + select('刊物层级', `jlevel${k}`, ['无发表论文', 'sci一区', 'sci二区', 'sci三区', '中文核心刊物', '其他刊物'])
+      + item('论文名称', `ptitle${k}`))).join(''));
+
+/* el-select 的行为:点组件开关下拉,点选项写值并收起 */
+document.addEventListener('click', (e) => {
+  const li = e.target.closest('.el-select-dropdown__item');
+  const sel = e.target.closest('.el-select');
+  if (li && sel) {
+    const inp = sel.querySelector('input');
+    inp.value = li.textContent.trim();
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+    sel.querySelector('.el-select-dropdown').style.display = 'none';
+    return;
+  }
+  for (const d of document.querySelectorAll('.el-select-dropdown')) if (!sel || !sel.contains(d)) d.style.display = 'none';
+  if (sel) { const d = sel.querySelector('.el-select-dropdown'); d.style.display = d.style.display === 'none' ? 'block' : 'none'; }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.el-select-dropdown').forEach((d) => { d.style.display = 'none'; }); });
+</script>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/learning.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+(async () => {
+  const profile = {
+    basic: { fullName: '示例本人', phone: '13000000000' },
+    education: [{ school: '示例大学', major: '示例专业甲', degree: '硕士', startTime: '2024-09', advisor: '示例导师' },
+      { school: '示例学院', major: '示例专业乙', degree: '本科', startTime: '2020-09' }],
+    work: [{ company: '示例科技', title: '示例实习生', desc: '示例描述一', startTime: '2025-06' },
+      { company: '示例游戏', title: '示例算法实习生', desc: '示例描述二', startTime: '2025-01' }],
+    projects: [{ name: '示例项目', desc: '示例项目描述', startTime: '2024-10' }],
+    awards: [{ name: '示例奖学金', date: '2023-10' }],
+    languages: [{ name: '英语', cert: 'CET-6', score: '500' }],
+    family: [{ relation: '父亲', name: '示例父亲', company: '示例银行', title: '示例职员', phone: '13100000000' },
+      { relation: '母亲', name: '示例母亲', company: '示例公司', title: '示例经理', phone: '13200000000' }],
+    papers: [{ name: '示例论文甲', type: '示例期刊(SCI 一区)', date: '2025-01' },
+      { name: '示例论文乙', type: '示例会议(CCF A)', date: '2024-05' }],
+  };
+  let err = '';
+  try { await __RQF_V2.fill(profile); } catch (e) { err = String(e && e.message || e); }
+  const v = (id) => { const n = document.getElementById(id); return (n.matches('input,textarea') ? n : n.querySelector('input')).value; };
+  const v2text = (id) => (__RQF_V2_PARTS.discover().find((f) => f.el.id === id || document.getElementById(id).contains(f.el)) || {}).text || '';
+  const checks = {
+    运行无异常: !err,
+    // 他人的信息:证明人一栏都不许填成本人
+    证明人姓名留空: v('refName0') === '' && v('refName1') === '',
+    证明人联系方式留空: v('refPhone0') === '' && v('refPhone1') === '',
+    证明人职位留空: v('refTitle0') === '' && v('refTitle1') === '',
+    紧急联系人留空: v('emName') === '',
+    // 身高体重不是工作单位,也不许占工作的段号
+    身高体重留空: v('height') === '' && v('weight') === '',
+    工作第1块是第1段: v('co0') === '示例科技' && v('ti0') === '示例实习生' && v('wd0') === '示例描述一',
+    工作第2块是第2段: v('co1') === '示例游戏' && v('wd1') === '示例描述二',
+    // 辅修不是专业:不填、也不推进段号,导师留在第 1 段
+    辅修留空: v('minor0') === '' && v('minor1') === '',
+    导师在第1段: v('adv0') === '示例导师' && v('adv1') === '',
+    教育两块按序: v('school0') === '示例大学' && v('school1') === '示例学院' && v('deg1') === '本科',
+    毕业论文不拿论文汇总顶: v('thesis0') === '' && v('thesis1') === '',
+    在校经历不填工作: v('campusTitle') === '' && v('campusDesc') === '' && v('campusType') === '',
+    // 家庭情况:按档案家人逐条对号,绝不填本人
+    家人姓名: v('famName') === '示例父亲',
+    家人关系: v('famRel') === '父亲',
+    家人电话公司职位: v('famPhone') === '13100000000' && v('famCo') === '示例银行' && v('famTitle') === '示例职员',
+    英语水平配上CET6: v('langLevel') === 'cet 6（六级）',
+    外语掌握程度不乱选: v('langMaster') === '',
+    计算机技能不乱选: v('skillLevel') === '',
+    证书区不乱填: v('certDate') === '' && v('certName') === '' && v('certNo') === '',
+    论文第1块: v('jname0') === '示例期刊(SCI 一区)' && v('ptitle0') === '示例论文甲' && v('jlevel0') === 'sci一区',
+    论文第2块: v('ptitle1') === '示例论文乙' && v('jname1') === '示例会议(CCF A)',
+    CCF配不上层级就留空: v('jlevel1') === '',
+    奖项按段: v('an0') === '示例奖学金',
+    颁奖机构留空: v('aorg0') === '',
+    奖励等级留空: v('alv0') === '',
+    // 2.x 的标签只取本栏,不拼本块第一栏
+    v2标签只取本栏: !/获奖时间/.test(v2text('aorg0')) && !/开始时间/.test(v2text('co0')) && /颁奖机构/.test(v2text('aorg0')),
+  };
+  const fails = Object.keys(checks).filter((k) => !checks[k]);
+  const ids = ['refName0', 'refPhone0', 'height', 'weight', 'co0', 'co1', 'minor0', 'adv0', 'thesis0', 'campusTitle', 'campusDesc',
+    'famName', 'famRel', 'famPhone', 'famCo', 'langLevel', 'jname0', 'jlevel0', 'ptitle0', 'ptitle1', 'jlevel1', 'aorg0', 'alv0'];
+  parent.postMessage({ __rqf: true, page: 'nowcoder-plugin.html', pass: !fails.length, total: Object.keys(checks).length, fails,
+    snapshot: { err, values: Object.fromEntries(ids.map((id) => [id, v(id)])), v2aorg: v2text('aorg0') } }, '*');
+})();
+</script>

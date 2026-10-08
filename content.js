@@ -81,6 +81,9 @@
       ex: /高中|初中|小学|middle school|high school|primary/i },
     // 「专业排名」含「专业」二字,排名必须排在专业之前,否则排名栏会被填成专业名
     { k: 'edu.rank',     re: /成绩排名|专业排名|年级排名|排名|\brank\b/i },
+    /* 「辅修/双学位专业」不是本段的专业。牛客教育块里它排在专业之后,命中专业规则后
+     * 「同块重复字段」把段号推进一格 —— 同块的导师被分到不存在的第 3 段。档案没有这一栏,留空。 */
+    { k: 'edu.minor', re: /辅修|双学位|第二专业|\bminor\b/i },
     { k: 'edu.major',  re: /专业名称|所学专业|专业|major|field of study|discipline/i,
       ex: /专业技能|专业证书|专业能力|专业类别|专业门类|学科门类/i },
     { k: 'edu.isHighest', re: /是否最高学历|最高学历\s*[??]/i },
@@ -106,6 +109,9 @@
     { k: 'edu.labLevel', re: /实验室级别|实验室层次/i },
     { k: 'edu.lab',      re: /实验室(全称|名称)?/i },
     { k: 'edu.advisor',  re: /导师|指导教师|指导老师|负责老师|supervisor|advisor/i },
+    /* 毕业论文是这一段学历的学位论文,不是发表论文列表。原来掉进 publications,
+     * 牛客两段教育的「毕业论文」都被灌进整段论文汇总、又被页面截断。档案没有这一栏,留空。 */
+    { k: 'edu.thesis', re: /毕业论文|学位论文|毕业设计/i },
     { k: 'edu.research', re: /研究方向|研究领域|research (interest|direction)/i },
     // Shopee 把绩点和总分并成一栏「绩点/绩点总分」,拼成 3.63/4.00 整体填入
     { k: 'edu.gpaCombined', re: /绩点.{0,3}绩点总分|绩点\s*\/\s*总分/i },
@@ -145,6 +151,9 @@
 
     /* ---- 论文(锚点:论文名称) ---- */
     { k: 'paper.name', a: 1, re: /论文名称|文章名称|paper title/i },
+    /* 「刊物层级」(SCI 一区 / 中文核心…)和「刊物名称」是两栏:原来都命中 paper.type,
+     * 同块重复字段推进段号,牛客论文第 1 块的名称取到了第 2 篇。层级从刊物名里的标注取(见 COMPUTED)。 */
+    { k: 'paper.level', re: /刊物层级|刊物级别|期刊级别|期刊等级|期刊分区|收录级别|论文级别/i },
     { k: 'paper.type', re: /论文类型|会议.?期刊|期刊名称|会议名称|发表(期刊|会议)|刊物|journal|conference/i },
     { k: 'paper.authorOrder', re: /作者顺序|作者排序|署名顺序/i },
     { k: 'paper.url',  re: /论文链接|文章链接/i },
@@ -175,6 +184,8 @@
     { k: 'comp.type', re: /竞赛类型|比赛类型|赛事类型/i },
     { k: 'comp.result', re: /竞赛成绩|比赛成绩|竞赛结果|赛事成绩/i },
     { k: 'comp.desc', re: /竞赛描述|比赛描述|赛事描述|获奖项目概述/i },
+    // 牛客的竞赛块只有一个日期框「参与时间」—— 单框,不能按起止区间配对
+    { k: 'comp.startTime', re: /^参与时间$/ },
     { k: 'comp.timeRange', r: 1, re: /参赛时间|比赛时间|竞赛时间|赛事时间/i },
 
     /* ---- 荣誉奖项(锚点:奖项名称) ---- */
@@ -186,7 +197,8 @@
     // 「奖励名称」(建设银行)原来不收:它掉下去命中了记录头「奖励荣誉 1」,整段奖项汇总被灌进单条名称栏
     { k: 'award.name', a: 1, re: /奖项名称|奖学金名称|荣誉名称|获奖名称|奖励名称|奖项说明|获奖说明|荣誉说明/i },
     { k: 'award.type', re: /奖项类型|荣誉类型|获奖类型|获奖类别|奖项类别/i },
-    { k: 'award.level', re: /获奖级别|奖项级别|荣誉级别|奖学金级别|奖励级别/i },
+    // 牛客的「奖励等级」选项是 国家级 / 省级 / 校级 —— 说的是级别,不是一等二等
+    { k: 'award.level', re: /获奖级别|奖项级别|荣誉级别|奖学金级别|奖励级别|奖励等级/i },
     { k: 'award.result', re: /奖项成绩|奖项等级|获奖等级|荣誉等级/i },
     { k: 'award.desc', re: /奖项描述|荣誉描述|获奖描述/i },
     { k: 'award.date', re: /获奖时间|获奖日期/i },
@@ -208,6 +220,9 @@
 
     /* ---- 外语能力(锚点:语言种类) ---- */
     { k: 'lang.name', a: 1, re: /语言种类|语言类型|语种|外语语言/i },
+    /* 外语区块里的「英语水平」下拉,选项是「cet 6(六级)」这种证书名 —— 拿整段语言汇总
+     * (「英语 CET-6 …」)去配必然配不上。只在外语区块内这样认(s:),区块外照旧是整段汇总。 */
+    { k: 'lang.cert', s: 'lang', re: /英语水平|外语水平|英语等级|外语等级|语言等级|语言水平/i },
     { k: 'lang.certScore', re: /语言证书及成绩|证书及成绩|证书与成绩/i },
     /* Shopee 的英语水平列表每段只有一栏「英语等级证书」:作为锚点分段后,
      * 档案只有一门语言时第二段会明确报「没有第 2 段」,而不是重复填同一本证书 */
@@ -263,6 +278,9 @@
    * 只有区块标题能区分它属于哪一类 —— 靠前后邻居猜必然出错。
    */
   const SECTION_DOMAIN = [
+    /* 家庭区块:有称谓的(工商银行「父亲」「母亲」)走 familyOf 对号入座;
+     * 只有「姓名 / 关系下拉 / 电话」的(牛客)按档案家人的顺序逐条填 —— 绝不填本人。 */
+    [/家庭情况|家庭信息|家庭成员|家庭关系|家庭主要成员|主要社会关系/, 'family'],
     [/教育背景|教育经历|学习经历|院校信息/, 'edu'],
     /* 实习经历与工作经历是两个独立区块时,必须分开投放 —— 学生的实习被填进
      * 「工作经历」是实打实的错。合并型标题(「实习与工作经历」)仍归 work,
@@ -271,7 +289,10 @@
      * 不是工作经历列表 —— 映射成空域,既不归 work,也顺带结束上一个区块的作用域。
      * 不拦掉的话它会被下面的「工作经历」命中,凭空多出一个 work 区块,
      * 把「同时存在实习与工作区块」的分流条件误触发。 */
-    [/校园工作|学生工作|社团经历|校内活动|校园经历|社会实践/, ''],
+    /* 牛客的「在校经历」原来不收,沿用上一个「项目」区块;它块里的「职位 / 工作内容」
+     * 差点被当成工作经历。这几类区块档案里没有对应列表(校园经历只有一段自述 campusWork),
+     * 一律归中性域:块内的经历类字段不填,非经历字段(如整段 campusWork)照常。 */
+    [/校园工作|学生工作|社团经历|校内活动|校园经历|社会实践|在校经历|校园活动/, 'campus'],
     [/实习与工作|工作与实习|工作.?实习经历/, 'work'],
     [/实习经历|实习信息|实习情况/, 'intern'],
     [/工作经历|职业经历|工作信息|从业经历/, 'work'],
@@ -286,6 +307,11 @@
     // prog 必须排在 lang 之前:「编程语言能力」同时含「语言能力」
     [/编程语言/, 'prog'],
     [/语言能力|语言情况|外语能力|语言水平|英语水平|外语水平/, 'lang'],
+    /* 牛客「外语能力」之后紧跟「计算机技能 / 资格证书 / 家庭情况」,三个都认不出时
+     * 全挂在外语区块下。档案没有技能、证书列表:中性域,只截断上一个区块的作用域。 */
+    [/计算机技能|专业技能|技能特长|职业技能|计算机能力|技能水平/, 'skill'],
+    [/资格证书|证书信息|获得证书|职业资格|技能证书|^证书$/, 'cert'],
+    [/作品集|作品展示|个人作品/, 'works'],
     [/自我描述|自我评价|个人描述|个人陈述/, 'self'],
     [/专利/, 'patent'],
     [/软件著作/, 'soft'],
@@ -299,6 +325,7 @@
    * 或新增按钮(「实习实践 新增实习实践」)—— 字段标签两样都没有。 */
   const MODULE_HEAD = /^([\u4e00-\u9fa5/／、&与和及]{2,8})\s*(?:\d{1,2}(?!\d)|新增|添加|\+)/;
   const MODULE_DOMAIN = [
+    [/家庭|亲属/, 'family'], [/在校|校园|社团/, 'campus'],
     [/实习.*工作|工作.*实习/, 'work'],   // 合并型照旧归 work,同 SECTION_DOMAIN
     [/实习/, 'intern'], [/工作|职业|从业/, 'work'], [/项目/, 'proj'],
     [/荣誉|奖励|获奖|奖项/, 'award'], [/竞赛|比赛|赛事/, 'comp'], [/论文|著作|成果/, 'paper'],
@@ -312,7 +339,9 @@
 
   /* 这些区块里的字段一律不填 —— 它们要的是别人的信息,填成本人就是实打实的错误。
    * 排除词只能拦住标签里带「紧急」的字段;区块里若只写「姓名」「电话」就拦不住。 */
-  const BLOCK_SECTION = /紧急联系人|亲属信息|担保人|监护人|推荐人信息|家庭成员/;
+  const BLOCK_SECTION = /紧急联系人|亲属信息|担保人|监护人|推荐人信息/;
+  // 这些区块档案里没有对应的经历列表,块内的经历类字段一律不填(见填写循环)
+  const NEUTRAL_SEC = new Set(['campus', 'skill', 'cert', 'works']);
 
   /* 泛化标签 → 该域的规范字段。「描述」在获奖区块是 award.desc,在论文区块是 paper.desc。
    * 「类别 / 级别 / 等级」是三个不同维度:类别=竞赛还是奖学金,级别=国家级还是校级,
@@ -342,6 +371,11 @@
     /* 每条奖项都有自己的描述位、档案里却只给第一条写了描述时,用这一条奖项
      * 自己的字段拼一句 —— 总比把整页汇总重复灌进每一块好,也不是瞎填。 */
     'award.desc': (e) => [e.name, e.type, e.result, e.date].filter(Boolean).join(' '),
+    /* 刊物层级:档案按模板把分区写在刊物名里(「某期刊(SCI 一区)」),取出那段标注;
+     * 没标注就留空 —— 不拿刊物名去配「其他刊物」。 */
+    'paper.level': (e) => (String(e.type || '').match(/SCI\s*[一二三四1-4]\s*区|中科院\s*[一二三四1-4]\s*区|JCR\s*Q[1-4]|CCF[\s-]*[ABC]|中文核心|北大核心|CSSCI|\bEI\b/i) || [''])[0],
+    // 奖项级别:竞赛并入的条目和奖学金常把「国家级 / 校级」写在 type 里
+    'award.level': (e) => (String(e.type || '').match(/(国际|国家|省|市|县|校|院)级/) || [''])[0],
   };
   /* 取到值之后、写进控件之前的用词换算 —— 与 COMPUTED 不同,这个在有值时也要跑 */
   const TRANSFORM = {
@@ -363,6 +397,7 @@
     edu: '教育', work: '工作', intern: '实习', proj: '项目', paper: '论文', comp: '竞赛',
     award: '奖项', lang: '外语', prog: '编程语言', patent: '专利', soft: '软件著作权',
     honor: '竞赛/获奖',
+    family: '家庭', campus: '在校经历', skill: '技能', cert: '证书', works: '作品集',
   };
 
   /* ---------- 采集标签候选文本(带权重,权重高者优先) ---------- */
@@ -406,7 +441,9 @@
 
   /* 占位提示的可信度:短词(「姓名」「年」)基本就是字段名;
    * 一长串或带指令口吻的(请…/点击…/格式/or)是操作说明,压到兄弟文本之下。 */
-  const PH_NOISE = /请|点击|格式|例如|如:|支持|填写|选择|输入|or\b/i;
+  /* 「单位是kg」「单位:元」是单位说明,不是字段名。牛客「体重」框的占位就是「单位是kg」——
+   * 被当成标签后命中工作单位规则,白占工作第 1 段,真正的两块工作整体后移一格。 */
+  const PH_NOISE = /请|点击|格式|例如|如:|支持|填写|选择|输入|or\b|单位\s*(是|为|[:：])|单位\s*(cm|kg|mm|元|万|岁)/i;
   const phWeight = (raw) => {
     const t = clean(raw || '');
     if (!t) return 4;
@@ -493,6 +530,7 @@
   /* 页面上的 AI 助手 / 在线客服 / 意见反馈输入框不是申请表字段,但它们常是
    * textarea,会被通配规则(*.desc)当成「描述」填掉 —— 内容还明晃晃显示在页面上。
    * 靠免责声明这类固定话术识别,比靠位置可靠。 */
+  const OTHERS_FIELD = /证明人|推荐人|介绍人|内推人|担保人|见证人|紧急联系|监护人|referee/i;
   const SKIP_FIELD = /回答由.{0,6}ai.{0,6}生成|仅供参考.{0,10}甄别|智能(助手|客服|问答)|在线客服|意见反馈|问题反馈/i;
 
   const matchRules = (cands, customs, section = null) => {
@@ -531,8 +569,12 @@
      * 「期望薪资」旁边就是「当前薪资」,邻居拼接文本里出现「当前」,
      * 会把 expectedSalary 整条规则作废,期望薪资就永远填不上。 */
     const EX_MAX = 12;
+    /* 证明人 / 推荐人这类栏要的是别人的信息。牛客工作块的「证明人姓名 / 证明人联系方式」
+     * 命中姓名、电话规则,两段都被填成了本人 —— 宁可留空。 */
+    const others = pool.find((c) => c.t.length <= 16 && OTHERS_FIELD.test(c.t));
+    if (others) return { others: true, label: others.t };
     const active = RULES.filter((r) => !(r.ex
-      && pool.some((c) => c.t.length <= EX_MAX && r.ex.test(c.t))));
+      && pool.some((c) => c.t.length <= EX_MAX && r.ex.test(c.t))) && !(r.s && r.s !== section));
     // 候选权重优先于规则顺序 —— 字段自身的精确标签必须压过祖先容器的整块文本,
     // 否则区块内每个字段都会被块首的「学校名称/公司名称」锚点抢先命中。
     for (const c of pool) {
@@ -1204,6 +1246,7 @@
    * 平铺时防越界 —— 称谓到本字段之间隔着别的区块标题(家庭区后紧跟「实习经历」),
    * 或隔了一位家人装不下的控件数,就不算家人的。 */
   const CTRL_SEL = 'input:not([type=hidden]), textarea, select';
+  const FAMILY_OPTION = 'option,[role=option],[role=listbox],[class*="dropdown"],[class*="popper"],[class*="select-option"],[class*="select-item"]';
   const isAfter = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
   let familyPage = { at: 0, yes: false };
   const familyOf = (el) => {
@@ -1218,6 +1261,9 @@
       node = node.parentElement;
       const markers = [];
       for (const t of [node, ...node.querySelectorAll('*')]) {
+        /* 下拉选项不是称谓。牛客家庭区的「关系」下拉把 父亲…儿子 女儿 的选项一直挂在 DOM 里,
+         * 被当成称谓后,关系之后的电话 / 公司 / 职位全判成「子女」。 */
+        if (t.closest(FAMILY_OPTION)) continue;
         const rel = familyRel(ownText(t));
         if (rel) markers.push({ t, rel });
       }
@@ -1246,10 +1292,12 @@
   };
   // 家人这一组里,每一栏对应档案 family 条目的哪个字段;认不出(如「是否为本行员工」)就不填
   const FAMILY_ROLE = [
-    [/工作单位|单位名称|所在单位|工作地点|单位/, 'company'],
+    [/工作单位|单位名称|所在单位|工作地点|单位|公司/, 'company'],
     [/职务|职位|岗位|职业|职称/, 'title'],
     [/电话|手机|联系方式/, 'phone'],
     [/政治面貌/, 'politicalStatus'],
+    // 牛客家庭区每人一个「关系」下拉,值取档案家人的称谓
+    [/^关系$|与本人关系|家庭关系|亲属关系|^称谓$/, 'relation'],
     [/姓名|名字|^(父亲|母亲|配偶|爸爸|妈妈|爱人)$/, 'name'],
   ];
   const familyHit = (el, cands) => {
@@ -1787,6 +1835,20 @@
         const domains = {education:'edu',work:'work',projects:'proj',awards:'award',languages:'lang'};
         hit = {dom:domains[explicit[1]], field:explicit[3], label:hit?.label || cands[0]?.t || explicit[3], explicitIndex:Number(explicit[2])};
       }
+      /* 家庭区块里没有称谓可依的栏(牛客:姓名 / 关系下拉 / 电话 / 公司 / 职位 —— 关系是下拉,
+       * 页面上没有「父亲」字样):按档案家人的顺序逐条对号,同一栏第二次出现就是下一位家人。
+       * 原来这几栏按通用规则走:姓名被填成本人。 */
+      if (items[idx].sec === 'family' && !(hit && (hit.fam || hit.custom))) {
+        let role = '';
+        if (type !== 'radio') {
+          for (const c of cands) {
+            if (c.t.length > 12) continue;
+            const r = FAMILY_ROLE.find(([re]) => re.test(c.t.replace(/\s+/g, '')));
+            if (r) { role = r[1]; break; }
+          }
+        }
+        hit = { famSec: true, role, label: (cands[0] && cands[0].t) || '家庭成员' };
+      }
       if (!hit) {
         if (cands.length && cands[0].w >= 3 && (tag === 'TEXTAREA' || tag === 'SELECT' || TEXTLIKE.has(type) || type === 'radio')) {
           report.unmatched.push({ label: cands[0].t.slice(0, 30) });
@@ -1800,6 +1862,16 @@
       // 「紧急联系人」这类区块要的是别人的信息,整段不碰
       if (items[idx].sec === 'blocked') {
         report.skipped.push({ label: hit.label, reason: '属于紧急联系人/亲属区块,不自动填写' });
+        continue;
+      }
+      if (hit.others) {
+        report.skipped.push({ label: hit.label, reason: '证明人 / 推荐人这类栏要的是别人的信息,不拿本人的填' });
+        continue;
+      }
+      // 在校经历 / 技能 / 证书 / 作品集:档案没有这类列表,块里的「职位 / 工作内容」不是工作经历
+      if (NEUTRAL_SEC.has(items[idx].sec) && hit.dom && !hit.custom) {
+        if (!hit.occupied) report.skipped.push({ label: hit.label,
+          reason: `「${DOM_CN[items[idx].sec]}」区块里的这一栏,档案没有对应内容,留空` });
         continue;
       }
 
@@ -1816,6 +1888,23 @@
           continue;
         }
         semKey = 'family';
+      } else if (hit.famSec) {
+        const fs = ctx.famSec || (ctx.famSec = { i: 0, used: new Set() });
+        if (!hit.role) {
+          report.skipped.push({ label: hit.label, reason: '家庭成员区块里的这道题不代答' });
+          continue;
+        }
+        if (fs.used.has(hit.role)) { fs.i++; fs.used.clear(); }
+        fs.used.add(hit.role);
+        cur.slot = `家庭#${fs.i + 1}`;
+        const member = (P.family || [])[fs.i];
+        v = member ? String(member[hit.role] || '').trim() : '';
+        if (!v) {
+          report.skipped.push({ label: hit.label, reason: member ? `档案里第 ${fs.i + 1} 位家庭成员的这一栏为空`
+            : `档案只有 ${(P.family || []).length} 位家庭成员,这一栏是第 ${fs.i + 1} 位 —— 不拿本人信息去顶` });
+          continue;
+        }
+        semKey = hit.role === 'relation' ? 'relation' : 'family';
       } else if (hit.custom) {
         v = hit.value;
       } else if (hit.dom) {
@@ -2301,8 +2390,11 @@
       }
     }
     const nv = clean(v);
+    const tight = (t) => t.replace(/\s+/g, '');
     return opts.find((o) => txt(o) === nv)
       || opts.find((o) => { const t = txt(o); return t && (t.includes(nv) || nv.includes(t)); })
+      // 牛客「刊物层级」的选项是「sci一区」,档案写「SCI 一区」—— 空格之差
+      || opts.find((o) => { const t = tight(txt(o)); return t.length >= 2 && (t.includes(tight(nv)) || tight(nv).includes(t)); })
       || null;
   };
 
@@ -3039,5 +3131,13 @@
    * 是不是「自有标签」—— 光看最终命中的规则,分不清是候选没生成还是被过滤掉了。 */
   const debugCands = (el) => (el ? { cands: (el.tagName ? labelCands(el) : []), widget: widgetCands(el) } : null);
 
-  window.__RQF = { version: VERSION, fill, scan, deepDiagnose, addButtonDomain, debugCands, mergeAwardEntries, familyOf, ui };
+  /* 给 2.x 用:这个控件落在哪个区块。2.x 自己的区块识别只认经历列表,认不出家庭 / 在校经历 /
+   * 证书这几类,于是牛客家庭区的「姓名」在 2.x 眼里就是本人姓名。区块扫描要量布局,缓存 2 秒。 */
+  let secCache = { at: 0, list: [] };
+  const sectionAt = (el) => {
+    const now = Date.now();
+    if (now - secCache.at > 2000) secCache = { at: now, list: scanSections() };
+    return sectionDomOf(el, secCache.list) || null;
+  };
+  window.__RQF = { version: VERSION, fill, scan, deepDiagnose, addButtonDomain, debugCands, mergeAwardEntries, familyOf, sectionAt, ui };
 })();

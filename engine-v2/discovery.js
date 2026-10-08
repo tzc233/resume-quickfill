@@ -74,7 +74,11 @@
 
   const labelText = (el) => {
     const id = el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-    const box = el.closest('.ant-form-item,.aui-form-item,.form-item,.field,[class*="formItem"],[class*="field"]');
+    /* 表单项要取最近的那一层。牛客(Element UI)每条经历的外壳叫 array-group__fields,
+     * 只认 [class*="field"] 时它比 .el-form-item 先被当成「表单项」,于是每栏标签都拼上
+     * 本条第一栏的标签(「颁奖机构 获奖时间」「公司 开始时间」)—— 颁奖机构被当成获奖时间、
+     * 公司栏被写进开始时间。closest 取最近祖先,把真正的表单项类名列进来即可。 */
+    const box = el.closest('.el-form-item,.arco-form-item,.ivu-form-item,.n-form-item,.ant-form-item,.aui-form-item,.form-item,.field,[class*="formItem"],[class*="field"]');
     const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
       .map((key) => document.getElementById(key)?.textContent).filter(Boolean).join(' ');
     const wrapped = el.closest('label');
@@ -107,6 +111,8 @@
        * 改成三条一起卡:文字短、能对上别名表、且该层只有这一个。 */
       const titles = Array.from(node.children).filter((child) => {
         if (child.contains(el) || child.querySelector('input,textarea,select')) return false;
+        // 字段自己的标签不是区块标题:牛客在校经历里的「工作内容」曾因此被认成工作区块
+        if (child.matches('label,[class*="form-item__label"],[class*="form-item-label"]')) return false;
         const t = clean(child.textContent);
         return t && t.length <= 10 && V2.sectionAliases.some(([re]) => re.test(t));
       });
@@ -192,9 +198,15 @@
   /* 家人那一组(父亲 / 母亲 / 配偶…)交给 1.x 按档案的家庭成员对号入座,2.x 不碰 ——
    * 工商银行那页,「请输入姓名」占位的父亲姓名框曾被当成本人姓名写入。 */
   V2.isFamily = (el) => !!(window.__RQF && window.__RQF.familyOf && window.__RQF.familyOf(el));
+  /* 这几类区块要么是别人的信息(家庭、紧急联系人),要么档案里没有对应列表(在校经历 / 技能 /
+   * 证书 / 作品集)。2.x 自己认不出这些区块,借 1.x 的区块判断;证明人这类栏按标签直接排除。 */
+  const OFF_LIMITS = new Set(['family', 'blocked', 'campus', 'skill', 'cert', 'works']);
+  const OTHERS = /证明人|推荐人|介绍人|内推人|担保人|见证人|紧急联系|监护人|referee/i;
+  V2.offLimits = (field) => OTHERS.test(field.text)
+    || OFF_LIMITS.has(window.__RQF && window.__RQF.sectionAt ? window.__RQF.sectionAt(field.el) : null);
   V2.resolve = (field) => {
     if (['checkbox','radio','file'].includes(field.el.type)) return null;
-    if (V2.isFamily(field.el)) return null;
+    if (V2.isFamily(field.el) || V2.offLimits(field)) return null;
     const autocomplete = field.el.autocomplete?.split(/\s+/).pop();
     const standard = { name: 'basic.fullName', email: 'basic.email', tel: 'basic.phone', 'tel-national': 'basic.phone' };
     if (standard[autocomplete]) return { spec: { key: standard[autocomplete] }, score: 100 };
@@ -313,7 +325,7 @@
   /* 下次填充:规则认不出的字段,按学会的「标签 + 记录块形状」认,段号按块的位置换算 */
   V2.semRows = [];
   V2.learnedSemHit = (field, fields) => {
-    if (!V2.semRows.length || V2.isFamily(field.el)) return null;
+    if (!V2.semRows.length || V2.isFamily(field.el) || V2.offLimits(field)) return null;
     const label = clean(field.text);
     const block = V2.recordBlock(field, fields);
     const row = V2.semRows.find((r) => r.label === label && r.sig === (block ? block.sig : ''));
