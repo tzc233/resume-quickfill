@@ -1197,18 +1197,50 @@
     return hit ? hit[1] : '';
   };
   const ownText = (n) => [...n.childNodes].filter((c) => c.nodeType === 3).map((c) => c.textContent).join('');
+  /* 工商银行的真实页面不是「每人一个外壳」,而是父亲、母亲两人的各栏平铺在同一个容器里,
+   * 每人还有出生日期、电话、政治面貌 —— 2.26.0 按「最小的一组、控件 ≤ 10」去找,
+   * 整个家庭区超限就收手,工作单位 / 职务 / 政治面貌又落回本人。
+   * 现在:沿祖先链找到第一个含称谓的容器,取「本字段之前最近的那个称谓」;
+   * 平铺时防越界 —— 称谓到本字段之间隔着别的区块标题(家庭区后紧跟「实习经历」),
+   * 或隔了一位家人装不下的控件数,就不算家人的。 */
+  const CTRL_SEL = 'input:not([type=hidden]), textarea, select';
+  const isAfter = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  let familyPage = { at: 0, yes: false };
   const familyOf = (el) => {
+    // 整页没有称谓字眼就不用找了:这条路在学习监听里也会走,不能让每个页面白付上溯的代价
+    const now = Date.now();
+    if (now - familyPage.at > 2000) {
+      familyPage = { at: now, yes: /父亲|母亲|配偶|爱人|兄弟|姐妹|子女|爸爸|妈妈|丈夫|妻子/.test(document.body ? document.body.textContent : '') };
+    }
+    if (!familyPage.yes) return null;
     let node = el;
-    for (let d = 0; d < 6 && node.parentElement && node.parentElement !== document.body; d++) {
+    for (let d = 0; d < 10 && node.parentElement && node.parentElement !== document.body; d++) {
       node = node.parentElement;
-      // 一位家人的一组控件不会太多;单选组按一组算
-      const ctrls = [...node.querySelectorAll('input:not([type=hidden]), textarea, select')];
-      const radioNames = new Set(ctrls.filter((c) => c.type === 'radio').map((c) => c.name || c));
-      if (ctrls.filter((c) => c.type !== 'radio').length + radioNames.size > 10) break;
+      const markers = [];
       for (const t of [node, ...node.querySelectorAll('*')]) {
         const rel = familyRel(ownText(t));
-        if (rel) return { relation: rel, group: node };
+        if (rel) markers.push({ t, rel });
       }
+      if (!markers.length) {
+        if (node.querySelectorAll(CTRL_SEL).length > 60) break;
+        continue;
+      }
+      const before = markers.filter((m) => m.t.contains(el) || isAfter(m.t, el));
+      const m = before[before.length - 1];
+      if (!m) return null;   // 称谓都在本字段之后:本字段在家庭区前面
+      if (m.t.contains(el)) return { relation: m.rel, group: node };
+      // 越界一:中间隔着别的区块标题
+      for (const t of node.querySelectorAll('*')) {
+        if (!isAfter(m.t, t) || !isAfter(t, el) || t.contains(el)) continue;
+        if (t.querySelector(CTRL_SEL)) continue;
+        const txt = clean(t.textContent || '');
+        if (txt && txt.length <= 20 && (SECTION_DOMAIN.some(([re]) => re.test(txt)) || moduleDomain(txt))) return null;
+      }
+      // 越界二:中间的控件一位家人装不下(单选组按一个算)
+      const between = [...node.querySelectorAll(CTRL_SEL)].filter((c) => isAfter(m.t, c) && isAfter(c, el) && !el.contains(c));
+      const radios = new Set(between.filter((c) => c.type === 'radio').map((c) => c.name || c));
+      if (between.filter((c) => c.type !== 'radio').length + radios.size > 10) return null;
+      return { relation: m.rel, group: node };
     }
     return null;
   };

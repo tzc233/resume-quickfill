@@ -25,6 +25,23 @@ const render = () => {
     + item('公司名称', '<input data-f="w1-org">') + item('职位名称', '<input data-f="w1-post">')
     + '<h2>家庭信息</h2>' + member('父亲', 'fa') + member('母亲', 'mo');
 };
+/* 平铺版:一位家人的各栏和下一位家人在同一个容器里排成一列,没有每人一个外壳;
+   每人还多出生日期、联系电话、政治面貌 —— 整个家庭区控件超过 10 个。
+   2.26.0 自下而上找「一组」时控件数超限就收手,工作单位 / 职务又落回本人实习。
+   家庭区之后紧跟本人的实习经历(同一个容器),那几栏必须照常算本人的。 */
+const flatMember = (rel, key) => item(rel, `<input data-f="${key}-name" placeholder="请输入姓名">`)
+  + item('出生日期', `<input data-f="${key}-birth">`)
+  + item('是否为工商银行员工', `<label><input type="radio" name="${key}-emp" data-f="${key}-yes">是</label>`
+    + `<label><input type="radio" name="${key}-emp" data-f="${key}-no">否</label>`)
+  + item('政治面貌', `<input data-f="${key}-pol">`)
+  + item('工作单位', `<input data-f="${key}-org">`)
+  + item('工作职务', `<input data-f="${key}-post">`)
+  + item('联系电话', `<input data-f="${key}-tel">`);
+const renderFlat = () => {
+  form.innerHTML = '<h2>基本信息</h2>' + item('姓名', '<input data-f="me">') + item('政治面貌', '<input data-f="mypol">')
+    + '<div class="flat"><h3>家庭信息</h3>' + flatMember('父亲', 'fa') + flatMember('母亲', 'mo')
+    + '<h3>实习经历</h3>' + item('公司名称', '<input data-f="w0-org">') + item('职位名称', '<input data-f="w0-post">') + '</div>';
+};
 const base = { basic: { fullName: '示例本人' },
   work: [{ company: '示例科技', title: '示例实习生' }, { company: '示例游戏', title: '示例算法实习生' }] };
 const v = (k) => document.querySelector(`[data-f="${k}"]`).value;
@@ -54,7 +71,27 @@ const ck = (k) => document.querySelector(`[data-f="${k}"]`).checked;
     fa: [v('fa-name'), v('fa-org'), v('fa-post')], mo: [v('mo-name'), v('mo-org'), v('mo-post')],
     radios: ['fa-yes', 'fa-no', 'mo-yes', 'mo-no'].some(ck) };
 
+  // 第三轮:平铺版,档案里没有家庭成员
+  renderFlat();
+  await __RQF_V2.fill({ ...base, basic: { ...base.basic, politicalStatus: '示例面貌' } });
+  const fl = (k) => ['name', 'birth', 'pol', 'org', 'post', 'tel'].map((x) => v(`${k}-${x}`));
+  const r3 = { me: v('me'), mypol: v('mypol'), fa: fl('fa'), mo: fl('mo'), w0: v('w0-org'), w0post: v('w0-post') };
+  // 第四轮:平铺版,档案里有父母
+  renderFlat();
+  await __RQF_V2.fill({ ...base, family: [
+    { relation: '父亲', name: '示例父亲', company: '示例单位甲', title: '示例职务甲', phone: '示例电话甲' },
+    { relation: '母亲', name: '示例母亲', company: '示例单位乙', title: '示例职务乙' },
+  ] });
+  const r4 = { fa: fl('fa'), mo: fl('mo'), w0: v('w0-org') };
+
   const checks = {
+    平铺版父母栏全空: r3.fa.every((x) => x === '') && r3.mo.every((x) => x === ''),
+    平铺版本人照常: r3.me === '示例本人' && r3.mypol === '示例面貌',
+    平铺版家庭区之后的本人实习照常: r3.w0 === '示例科技' && r3.w0post === '示例实习生',
+    平铺版父亲对号入座: r4.fa[0] === '示例父亲' && r4.fa[3] === '示例单位甲' && r4.fa[4] === '示例职务甲' && r4.fa[5] === '示例电话甲',
+    // 母亲那几栏不许吃到父亲的值 —— 平铺时按「最近的前一个称谓」归属
+    平铺版母亲对号入座: r4.mo[0] === '示例母亲' && r4.mo[3] === '示例单位乙' && r4.mo[4] === '示例职务乙' && r4.mo[5] === '',
+    平铺版有家人时本人实习照常: r4.w0 === '示例科技',
     没有本人实习栏时父母栏也不吃工作经历: r0.fa.every((x) => x === '') && r0.mo.every((x) => x === ''),
     本人信息照常填: r1.me === '示例本人' && r1.w0 === '示例科技' && r1.w1 === '示例游戏',
     // 这一页的要点
@@ -67,6 +104,6 @@ const ck = (k) => document.querySelector(`[data-f="${k}"]`).checked;
   };
   const fails = Object.keys(checks).filter((k) => !checks[k]);
   parent.postMessage({ __rqf: true, page: 'family-members.html', version: __RQF_V2.version,
-    pass: !fails.length, total: Object.keys(checks).length, fails, snapshot: { r0, r1, r2 } }, '*');
+    pass: !fails.length, total: Object.keys(checks).length, fails, snapshot: { r0, r1, r2, r3, r4 } }, '*');
 })();
 </script>
