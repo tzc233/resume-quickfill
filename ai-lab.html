@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>简历快填 · 本机模型自测</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="options">
+  <main class="wrap">
+    <h1>🧪 本机模型自测(实验)</h1>
+    <p class="sub">用 Chrome 内置的 Gemini Nano 在本机识别表单字段,零网络请求。这里用一组真实踩过坑的表单字段(只有标签,没有任何个人信息)量一下它认得准不准 —— 量完再决定要不要接进填表。</p>
+
+    <section class="card">
+      <h2>1. 准备模型</h2>
+      <div id="status" class="hint">检查中…</div>
+      <div class="row-btns">
+        <button id="prepare" class="ghost" hidden>准备模型</button>
+        <span id="progress" class="hint"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. 运行自测</h2>
+      <p class="hint">逐组把字段交给模型,和人工标注的答案比对。<strong>错填</strong>最要紧:它对应真实填表时把内容写进错的栏。</p>
+      <div class="row-btns">
+        <button id="run" class="primary" disabled>运行自测</button>
+        <button id="copy" class="ghost" disabled>复制结果(发给维护者)</button>
+      </div>
+      <div id="summary" class="lab-summary" data-done="0"></div>
+    </section>
+
+    <section class="card">
+      <h2>逐字段结果</h2>
+      <table class="lab-table">
+        <thead><tr><th>表单</th><th>标签</th><th>模块 / 组</th><th>正确答案</th><th>模型答案</th><th>判定</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </main>
+  <script src="ai.js"></script>
+  <script src="ai-eval.js"></script>
+  <script src="ai-lab.js"></script>
+</body>
+</html>

@@ -14,7 +14,7 @@ trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/$NAME"
 
 # 只带运行必需的文件:测试页、打包脚本本身都不发
-for f in manifest.json content.js api.js backup.js versions.js \
+for f in manifest.json content.js api.js backup.js versions.js ai.js ai-eval.js ai-lab.html ai-lab.js \
          popup.html popup.js options.html options.js styles.css \
          profile-template.json README.md; do
   cp "$SRC/$f" "$STAGE/$NAME/$f"

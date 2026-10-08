@@ -288,3 +288,12 @@ section.card { scroll-margin-top: 56px; }
 .ver-row [hidden] { display: none; }
 #ver-hint { margin: 8px 0 0; }
 
+
+/* 本机模型自测页 */
+.lab-summary { margin-top: 10px; font-size: 13.5px; }
+.lab-wrong { color: var(--err); font-weight: 600; }
+.lab-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.lab-table th, .lab-table td { text-align: left; padding: 5px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+.lab-table tr.wrong td { background: #fef2f2; }
+.lab-table tr.missed td { color: var(--muted); }
+.card:has(.lab-table) { overflow-x: auto; }
