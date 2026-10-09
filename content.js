@@ -1248,25 +1248,46 @@
   const CTRL_SEL = 'input:not([type=hidden]), textarea, select';
   const FAMILY_OPTION = 'option,[role=option],[role=listbox],[class*="dropdown"],[class*="popper"],[class*="select-option"],[class*="select-item"]';
   const isAfter = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-  let familyPage = { at: 0, yes: false };
-  const familyOf = (el) => {
-    // 整页没有称谓字眼就不用找了:这条路在学习监听里也会走,不能让每个页面白付上溯的代价
+  /* 称谓索引:整页所有「自身文字是称谓」的节点,按文档顺序排好,一次建好、逐字段查。
+   * 原来逐字段上溯 10 层、每层 querySelectorAll('*') 再逐个判称谓 —— 牛客那种关系下拉的
+   * 选项(父亲 / 母亲)常驻 DOM 的页面上,整页识别一次要 300ms,而手动填写时每次点下拉、
+   * 每段打字停顿都要识别一遍:点一个下拉主线程被占 1.6 秒,这就是「网页变卡」。
+   * 索引在页面元素数变化、索引里有节点被移除、或超过 2 秒时重建 —— 新加的家人块不会被漏掉。 */
+  let familyIndex = { at: 0, count: -1, markers: [] };
+  const allEls = document.getElementsByTagName('*');
+  const familyMarkers = () => {
     const now = Date.now();
-    if (now - familyPage.at > 2000) {
-      familyPage = { at: now, yes: /父亲|母亲|配偶|爱人|兄弟|姐妹|子女|爸爸|妈妈|丈夫|妻子/.test(document.body ? document.body.textContent : '') };
-    }
-    if (!familyPage.yes) return null;
-    let node = el;
-    for (let d = 0; d < 10 && node.parentElement && node.parentElement !== document.body; d++) {
-      node = node.parentElement;
-      const markers = [];
-      for (const t of [node, ...node.querySelectorAll('*')]) {
+    const fresh = now - familyIndex.at <= 2000 && allEls.length === familyIndex.count
+      && familyIndex.markers.every((m) => m.t.isConnected);
+    if (fresh) return familyIndex.markers;
+    const markers = [];
+    const body = document.body;
+    // 整页没有称谓字眼就不用找了
+    if (body && /父亲|母亲|配偶|爱人|兄弟|姐妹|子女|爸爸|妈妈|丈夫|妻子|儿子|女儿|哥哥|弟弟|姐姐|妹妹/.test(body.textContent || '')) {
+      const seen = new Set();
+      const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+      for (let tn = walker.nextNode(); tn; tn = walker.nextNode()) {
+        const t = tn.parentElement;
+        if (!t || seen.has(t) || !/[父母配爱兄弟姐妹子女爸妈丈妻儿哥]/.test(tn.data)) continue;
+        seen.add(t);
         /* 下拉选项不是称谓。牛客家庭区的「关系」下拉把 父亲…儿子 女儿 的选项一直挂在 DOM 里,
          * 被当成称谓后,关系之后的电话 / 公司 / 职位全判成「子女」。 */
         if (t.closest(FAMILY_OPTION)) continue;
         const rel = familyRel(ownText(t));
         if (rel) markers.push({ t, rel });
       }
+      markers.sort((a, b) => (isAfter(a.t, b.t) ? -1 : isAfter(b.t, a.t) ? 1 : 0));
+    }
+    familyIndex = { at: now, count: allEls.length, markers };
+    return markers;
+  };
+  const familyOf = (el) => {
+    const all = familyMarkers();
+    if (!all.length) return null;
+    let node = el;
+    for (let d = 0; d < 10 && node.parentElement && node.parentElement !== document.body; d++) {
+      node = node.parentElement;
+      const markers = all.filter((m) => node.contains(m.t));
       if (!markers.length) {
         if (node.querySelectorAll(CTRL_SEL).length > 60) break;
         continue;

@@ -1,0 +1,53 @@
+<!doctype html><meta charset="utf-8"><title>性能:用过插件的招聘页上手动填写不卡</title>
+<!-- 用户反馈「还是会让网页变卡」。点过一键填充的站点会挂上填写记忆的监听;
+     原来每次聚焦 / 点开下拉、每段打字停顿都要整页 discover + resolveAll ——
+     resolve 里逐字段走 familyOf(每层祖先 querySelectorAll('*'))、discover 里逐字段上溯 40 层找区块标题。
+     这页照牛客的结构铺到 ~200 个控件(真实页面 190 个),再挂一个「父亲 / 母亲」选项常驻 DOM 的关系下拉,
+     断言在 test/perf-armed.cjs(要可信的键盘与点击,并量主线程长任务)。 -->
+<style>input,textarea{display:block;width:240px;height:22px}.el-select-dropdown__item{padding:2px 6px}.el-select{display:block;width:240px}nav a{margin:2px}</style>
+<nav id="nav"></nav>
+<div class="resume-plugin"><div class="resume-form"><form class="el-form el-form--label-top" id="form"></form></div></div>
+<script>
+const memory = { rqfV2LearnSites: { [location.hostname]: Date.now() } };
+window.chrome = { storage: { local: { async get(k) { return { [k]: structuredClone(memory[k]) }; }, async set(v) { Object.assign(memory, structuredClone(v)); } } } };
+let seq = 0, n = 0;
+const item = (label, tag = 'input') => { const id = `f${n++}`;
+  return `<div class="el-form-item resume-form-item"><label class="el-form-item__label">${label}</label><div class="el-form-item__content"><div class="input-wrapper"><div class="el-input">`
+  + `<${tag} class="el-input__inner" id="${id}" placeholder="请输入${label}"></${tag}></div></div></div></div>`; };
+const select = (label, options) => { const id = `f${n++}`;
+  return `<div class="el-form-item resume-form-item"><label class="el-form-item__label">${label}</label><div class="el-form-item__content"><div class="input-wrapper">`
+  + `<div class="el-select el-select--l" id="${id}"><div class="el-input"><input type="text" readonly class="el-input__inner" placeholder="请选择${label}"></div>`
+  + `<div class="el-select-dropdown el-popper" style="display:none"><ul class="el-select-dropdown__list">`
+  + options.map((o) => `<li class="el-select-dropdown__item"><span>${o}</span></li>`).join('') + `</ul></div></div></div></div></div>`; };
+const group = (inner) => `<div class="array-group"><div class="array-group__index">0${++seq}</div><div class="array-group__fields">${inner}</div></div>`;
+const card = (title, body) => `<section class="module-card"><div class="module-card__header"><span class="module-card__title">${title}</span></div><div class="module-card__body">${body}</div></section>`;
+const rep = (k, f) => Array.from({ length: k }, (_, i) => f(i)).join('');
+const YEARS = Array.from({ length: 30 }, (_, i) => String(1996 + i));
+form.innerHTML =
+  card('基本信息', rep(1, () => item('姓名') + item('电话') + item('邮箱') + item('微信号') + item('qq') + item('户籍') + item('身高') + item('体重')
+    + select('民族', ['汉族', '回族', '满族', '壮族']) + select('政治面貌', ['中共党员', '共青团员', '群众']) + select('婚姻状况', ['未婚', '已婚'])
+    + item('现居住地') + item('通信地址') + item('期望薪资') + item('预计入职时间')))
+  + card('教育经历', rep(3, () => group(item('开始时间') + item('结束时间') + select('学历', ['本科', '硕士研究生', '博士研究生']) + item('学校') + item('学院（院系）')
+    + item('专业') + select('学位', ['学士', '硕士', '博士']) + select('学习形式', ['全日制', '非全日制']) + item('专业课程') + item('研究方向') + item('毕业论文')
+    + item('成绩（GPA）') + select('专业排名', ['前5%', '前10%', '前20%']) + item('辅修/双学位专业') + item('导师姓名'))))
+  + card('工作经历', rep(3, () => group(item('开始时间') + item('结束时间') + select('工作类型', ['实习', '正式工作']) + item('公司') + item('部门') + item('薪资')
+    + item('职位') + item('工作内容', 'textarea') + item('工作成果', 'textarea') + item('证明人姓名') + item('证明人职位') + item('证明人联系方式') + item('离职原因'))))
+  + card('项目经历', rep(2, () => group(item('开始时间') + item('结束时间') + item('职位') + item('项目名称') + item('项目内容', 'textarea') + item('本人职责', 'textarea'))))
+  + card('获奖情况', rep(4, () => group(select('获奖年份', YEARS) + item('奖励名称') + item('颁奖机构') + select('奖励等级', ['国家级', '省级', '市级', '校级']) + item('奖励描述', 'textarea'))))
+  + card('外语能力', group(select('外语语种', ['英语', '日语']) + item('证书名称') + select('英语水平', ['cet 4（四级）', 'cet 6（六级）']) + item('成绩')))
+  + card('家庭情况', rep(2, () => group(item('姓名') + select('关系', ['父亲', '母亲', '哥哥', '姐姐', '弟弟', '妹妹', '儿子', '女儿', '其他']) + item('电话') + item('公司') + item('职位'))))
+  + card('论文期刊', rep(3, () => group(item('发表时间') + item('刊物名称') + select('刊物层级', ['sci一区', 'sci二区', '其他刊物']) + item('论文名称') + item('论文描述', 'textarea'))));
+// 页面其它部分:导航、页脚等装饰节点,让 DOM 规模接近真实站点
+nav.innerHTML = rep(400, (i) => `<a href="#"><span>链接${i}</span></a>`);
+document.addEventListener('click', (e) => {
+  const li = e.target.closest('.el-select-dropdown__item'), sel = e.target.closest('.el-select');
+  if (li && sel) { const inp = sel.querySelector('input'); inp.value = li.textContent.trim();
+    inp.dispatchEvent(new Event('change', { bubbles: true })); sel.querySelector('.el-select-dropdown').style.display = 'none'; return; }
+  for (const d of document.querySelectorAll('.el-select-dropdown')) if (!sel || !sel.contains(d)) d.style.display = 'none';
+  if (sel) { const d = sel.querySelector('.el-select-dropdown'); d.style.display = d.style.display === 'none' ? 'block' : 'none'; }
+});
+window.__longTasks = [];
+new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__longTasks.push(e.duration); }).observe({ entryTypes: ['longtask'] });
+if (location.search.includes('run=1')) parent.postMessage({ __rqf: true, page: 'perf-armed.html', pass: true, total: 0, fails: [], note: '由 test/perf-armed.cjs 驱动(需要可信输入事件)' }, '*');
+</script>
+<script src="../content.js"></script><script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/learning.js"></script><script src="../engine-v2/runtime.js"></script>
