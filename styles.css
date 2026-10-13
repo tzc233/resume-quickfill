@@ -307,3 +307,9 @@ section.card { scroll-margin-top: 56px; }
 .lab-check input { margin-right: 6px; }
 .lab-fail { margin: 0 0 10px; padding: 8px 10px; border-radius: 6px;
   background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 13px; }
+.lab-adv { margin: 10px 0; font-size: 13px; }
+.lab-adv summary { cursor: pointer; color: #475569; }
+.lab-matrix { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+.lab-matrix th, .lab-matrix td { padding: 5px 8px; border-top: 1px solid var(--line); text-align: left; }
+.lab-matrix td.pass { color: #15803d; font-weight: 600; }
+.lab-matrix td.fail { color: #b91c1c; }

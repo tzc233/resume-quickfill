@@ -12,41 +12,39 @@
     <p class="sub">让模型只回答一件事:每个字段对应档案的哪一栏、第几段。这里用一组真实踩过坑的表单字段(<b>只有标签,没有任何个人信息</b>)量一下它认得准不准 —— 量完再决定要不要接进填表。门槛:<b>错填 0 且准确率 ≥85%</b>。</p>
 
     <section class="card">
-      <h2>0. 选模型</h2>
-      <label class="lab-field">用哪个模型
-        <select id="provider">
-          <option value="local">本机 Gemini Nano(零网络请求)</option>
-          <option value="sjtu">上海交大模型网关(deepseek-chat / qwen3.8-27b)</option>
-          <option value="custom">OpenAI 兼容端点(自填)</option>
-          <option value="deepseek">DeepSeek 官方</option>
-          <option value="qwen">阿里云百炼(兼容模式)</option>
-        </select>
+      <h2>1. 填 API Key</h2>
+      <label class="lab-field">上海交大模型网关的 Key
+        <input id="api-key" type="password" autocomplete="off" placeholder="粘贴进来就行,会自动存在本机">
       </label>
-      <div id="api-box" hidden>
-        <label class="lab-field">端点 URL
-          <input id="api-endpoint" type="text" autocomplete="off"
-                 placeholder="https://你的网关/api/v1/chat/completions">
+      <div class="row-btns">
+        <button id="api-ping" class="ghost">连通性自检</button>
+        <button id="api-clear" class="ghost">清除 Key</button>
+        <span id="api-state" class="hint"></span>
+      </div>
+      <details class="lab-adv">
+        <summary>高级设置(一般不用动)</summary>
+        <label class="lab-field">用哪个
+          <select id="provider">
+            <option value="sjtu">上海交大模型网关</option>
+            <option value="local">本机 Gemini Nano(零网络请求)</option>
+            <option value="deepseek">DeepSeek 官方</option>
+            <option value="qwen">阿里云百炼(兼容模式)</option>
+            <option value="custom">其它 OpenAI 兼容端点</option>
+          </select>
         </label>
-        <label class="lab-field">API Key
-          <input id="api-key" type="password" autocomplete="off" placeholder="只存在本机浏览器里">
-        </label>
-        <label class="lab-field">模型名
+        <label class="lab-field">端点 URL <input id="api-endpoint" type="text" autocomplete="off"></label>
+        <label class="lab-field">模型名(只跑单轮时用)
           <input id="api-model" type="text" autocomplete="off" list="api-models">
           <datalist id="api-models"></datalist>
         </label>
-        <div class="row-btns">
-          <button id="api-ping" class="ghost">连通性自检</button>
-          <button id="api-save" class="ghost">保存</button>
-          <button id="api-clear" class="ghost">清除 Key</button>
-          <span id="api-state" class="hint"></span>
-        </div>
-        <p class="hint">先点「连通性自检」—— 只发一个字段,成功会显示模型原话,失败会显示服务商的真实错误(401 = Key 不对,402 = 余额不足,404 = 端点写错)。<b>通了再跑整套评测</b>。</p>
-        <p class="hint">⚠️ 选 API 就会产生网络请求:把<b>你正在填的那张表的字段标签、模块标题、下拉选项</b>发给服务商。页面上已有的值和你的档案内容一概不发。Key 只存在本机浏览器,不随备份导出。默认是本机模式,不填 Key 不会联网。</p>
-      </div>
+        <label class="lab-field">每批几个字段 <input id="chunk" type="number" min="1" max="24" value="8"></label>
+        <label class="lab-check"><input id="ignore-record" type="checkbox"> 只跑单轮时:段号交给引擎算</label>
+      </details>
+      <p class="hint">⚠️ 会把<b>当前表单的字段标签、模块标题、下拉选项</b>发给网关。页面上已有的值和你的档案内容一概不发。Key 只存在本机浏览器,不随备份导出;不填 Key 不产生任何网络请求。</p>
     </section>
 
     <section class="card" id="local-card">
-      <h2>1. 准备模型</h2>
+      <h2>1b. 准备本机模型(只在选了 Nano 时需要)</h2>
       <div id="status" class="hint">检查中…</div>
       <div class="row-btns">
         <button id="prepare" class="ghost" hidden>准备模型</button>
@@ -56,13 +54,16 @@
 
     <section class="card">
       <h2>2. 运行自测</h2>
-      <p class="hint">逐组把字段交给模型,和人工标注的答案比对;中文提示、英文提示各跑一遍,并排比较。<strong>错填</strong>最要紧:它对应真实填表时把内容写进错的栏。</p>
+      <p class="hint">逐组把字段交给模型,和人工标注的答案比对。<strong>错填</strong>最要紧:它对应真实填表时把内容写进错的栏。门槛是<b>错填 0 且准确率 ≥85%</b>。</p>
       <label class="lab-field">每批几个字段 <input id="chunk" type="number" min="1" max="24" value="4"></label>
       <label class="lab-check"><input id="ignore-record" type="checkbox"> 段号交给引擎算,只看栏位认得对不对</label>
       <div class="row-btns">
-        <button id="run" class="primary" disabled>运行自测</button>
+        <button id="run-matrix" class="primary" disabled>一键跑完整套对比</button>
+        <button id="run" class="ghost" disabled>只跑当前设置(单轮)</button>
         <button id="copy" class="ghost" disabled>复制结果(发给维护者)</button>
       </div>
+      <p class="hint">「一键跑完整套」= <b>deepseek-chat 与 qwen3.8-27b</b> × <b>中文与英文提示</b>,每种都同时按「含段号」和「段号交给引擎算」两种方式计分(同一批回答算两遍,不多花调用)。共 4 轮。</p>
+      <div id="matrix"></div>
       <div id="summary" class="lab-summary" data-done="0"></div>
     </section>
 
