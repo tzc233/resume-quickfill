@@ -105,7 +105,9 @@ const line1 = (name, r) => `${name}:准确率 ${pct(r)}%(对 ${r.right} / 共 ${
 /* 中文提示和英文提示各跑一遍 —— 官方没声明支持中文,能不能用直接量 */
 async function makeSession(lang, first, model) {
   if (!isApi()) return first && SESSION ? SESSION : AI.createSession(null, lang);
-  return AI.createApiSession({ ...apiCfg(model), lang });
+  return AI.createApiSession({ ...apiCfg(model), lang,
+    onWait: ({ attempt, ms }) => { $('#summary').textContent =
+      `被网关限流(配额 10 次/窗口),第 ${attempt} 次等待 ${Math.round(ms / 1000)} 秒后重试…`; } });
 }
 
 /* 跑一遍 = 把 71 题问一轮。同一批回答按两种方式各算一次分:
@@ -179,6 +181,23 @@ $('#run').addEventListener('click', async () => {
 });
 
 const MATRIX_MODELS = ['deepseek-chat', 'qwen3.8-27b'];
+const LANGS_OF = () => ($('#zh-only').checked ? ['zh'] : ['zh', 'en']);
+/* 配额只有 10 次请求,得让用户跑之前就知道要花多少 */
+function budget() {
+  /* 请求是按【表单分组】发的(每组一次 resolveFields),不是把 71 个字段整体切批 ——
+   * 所以每轮至少 7 次(7 组),调大批量只能减少组内的切分,减不到 7 以下。
+   * 第一版按 ceil(总字段/批量) 估成 3 次,实际 7 次,差了一倍多。 */
+  const chunk = Math.max(1, Math.min(40, Number($('#chunk').value) || 24));
+  const per = window.rqfAIEval.reduce((n, f) =>
+    n + Math.ceil(Math.max(1, f.cases.filter((c) => !AI.guarded(c)).length) / chunk), 0);
+  const n = per * MATRIX_MODELS.length * LANGS_OF().length + 1;   // +1 = 连通性自检
+  $('#budget').textContent = `按当前设置:每轮 ${per} 次请求(按表单分 ${window.rqfAIEval.length} 组发)`
+    + ` × ${MATRIX_MODELS.length} 个模型 × ${LANGS_OF().length} 种提示 + 1 次自检 = 共 ${n} 次请求。`
+    + (n > 10 ? ` 网关配额 10 次/窗口,超出部分会自动等配额重置后继续 —— 预计要等 ${Math.ceil(n / 10) - 1} 轮配额。`
+      : ' 在配额内,一次跑完。');
+}
+$('#chunk').addEventListener('input', budget);
+$('#zh-only').addEventListener('change', budget);
 let MATRIX = null;
 const BAR = (r) => r.wrong === 0 && pct(r) >= 85;   // 门槛:错填 0 且准确率 ≥85%
 
@@ -192,7 +211,7 @@ $('#run-matrix').addEventListener('click', async () => {
 
     const passes = [];
     for (const model of MATRIX_MODELS) {
-      for (const lang of ['zh', 'en']) passes.push(await runPass(lang, { model }));
+      for (const lang of LANGS_OF()) passes.push(await runPass(lang, { model }));
     }
     MATRIX = passes;
     const cell = (r) => `<td class="${BAR(r) ? 'pass' : 'fail'}">${pct(r)}% · 错填 ${r.wrong}${r.failed ? ` · 失败 ${r.failed}` : ''}</td>`;
@@ -283,4 +302,5 @@ $('#copy').addEventListener('click', async () => {
     if (cfg.apiKey) $('#api-key').value = cfg.apiKey;
   }
   await check();
+  budget();
 })();

@@ -37,7 +37,7 @@
           <input id="api-model" type="text" autocomplete="off" list="api-models">
           <datalist id="api-models"></datalist>
         </label>
-        <label class="lab-field">每批几个字段 <input id="chunk" type="number" min="1" max="24" value="8"></label>
+        <label class="lab-field">每批几个字段 <input id="chunk" type="number" min="1" max="40" value="24"></label>
         <label class="lab-check"><input id="ignore-record" type="checkbox"> 只跑单轮时:段号交给引擎算</label>
       </details>
       <p class="hint">⚠️ 会把<b>当前表单的字段标签、模块标题、下拉选项</b>发给网关。页面上已有的值和你的档案内容一概不发。Key 只存在本机浏览器,不随备份导出;不填 Key 不产生任何网络请求。</p>
@@ -63,6 +63,8 @@
         <button id="copy" class="ghost" disabled>复制结果(发给维护者)</button>
       </div>
       <p class="hint">「一键跑完整套」= <b>deepseek-chat 与 qwen3.8-27b</b> × <b>中文与英文提示</b>,每种都同时按「含段号」和「段号交给引擎算」两种方式计分(同一批回答算两遍,不多花调用)。共 4 轮。</p>
+      <p class="hint" id="budget"></p>
+      <label class="lab-check"><input id="zh-only" type="checkbox" checked> 省配额:只跑中文提示(请求数减半;上一轮 deepseek 中文 89%,英文整轮被限流没数据)</label>
       <div id="matrix"></div>
       <div id="summary" class="lab-summary" data-done="0"></div>
     </section>

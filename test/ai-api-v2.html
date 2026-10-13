@@ -93,6 +93,39 @@ window.rqfRun=async()=>{
   checks['真不是JSON就按none']=AI.validate('我拒绝回答',[{id:5}]).get(5).key==='none';
 
   // 交大网关的预设要和官方文档一致
+  /* ---- 限流。交大网关配额 10 次请求,第一次整套对比 4 轮有 3 轮整轮被 429 打掉,
+     报告却照样算出「13% 错填 0」。429 必须等配额重置后重试,而不是当成模型答 none。
+     另外 429 文案里网关会把密钥裸串回显出来 —— 必须打码。 ---- */
+  const RESET=new Date(Date.now()+1500).toISOString().replace('T',' ').replace(/\..+/,'')+' UTC';
+  // 伪造的 64 位十六进制,形状照抄网关回显的样子。绝不能把真实密钥写进夹具 ——
+  // 这个仓库是公开的。
+  const HEXKEY='deadbeef'.repeat(8);
+  let hits=0; const waits=[];
+  window.fetch=async(url,init)=>{hits++;
+    if(hits<=2) return {status:429,ok:false,headers:{get:()=>null},
+      clone:()=>({text:async()=>'Rate limit exceeded for api_key: '+HEXKEY+'. Limit resets at: '+RESET}),
+      text:async()=>'Rate limit exceeded for api_key: '+HEXKEY+'. Limit resets at: '+RESET};
+    const ids=JSON.parse(init.body).messages[1].content.match(/"id":(\d+)/g).map(x=>+x.split(':')[1]);
+    return reply(ids.map(id=>({id,key:'basic.phone',record:-1})));};
+  const s3=AI.createApiSession({provider:'custom',endpoint:EP,apiKey:'sk-whatever',lang:'zh',
+    onWait:(w)=>waits.push(w)});
+  const t0=Date.now();
+  const limited=await AI.resolveFields(s3,[{id:21,label:'手机号码',section:'基本信息',group:''}],{chunk:4});
+  checks['被限流会等待后重试']=hits===3 && limited.get(21).key==='basic.phone' && !limited.get(21).failed;
+  checks['等待过程有回调可提示']=waits.length===2 && waits[0].ms>=1000;
+  checks['确实等了而不是空转']=Date.now()-t0>=1000;
+
+  // 重试次数用尽后才算失败,且错误里的裸密钥被打码
+  let always=0;
+  window.fetch=async()=>{always++;return {status:429,ok:false,headers:{get:()=>null},
+    clone:()=>({text:async()=>'Rate limit exceeded for api_key: '+HEXKEY}),
+    text:async()=>'Rate limit exceeded for api_key: '+HEXKEY};};
+  const s4=AI.createApiSession({provider:'custom',endpoint:EP,apiKey:'sk-whatever',lang:'zh'});
+  const dead2=await AI.resolveFields(s4,[{id:31,label:'手机号码',section:'基本信息',group:''}],{chunk:4});
+  checks['一直限流最终报失败']=!!dead2.get(31).failed && /429/.test(dead2.get(31).failed);
+  checks['网关回显的裸密钥被打码']=!dead2.get(31).failed.includes(HEXKEY)
+    && dead2.get(31).failed.includes('***');
+
   checks['交大网关预设正确']=AI.API_PROVIDERS.sjtu.endpoint==='https://models.sjtu.edu.cn/api/v1/chat/completions'
     && AI.API_PROVIDERS.sjtu.models.includes('deepseek-chat')
     && AI.API_PROVIDERS.sjtu.models.includes('qwen3.8-27b');

@@ -34,6 +34,10 @@ const ROOT = process.cwd();
   await p.waitForSelector('#api-key');
   const beforeDisabled = await p.$eval('#run-matrix', e => e.disabled);
   await p.fill('#api-key', 'sk-fake-smoke-key');
+  // 省配额默认勾上(只跑中文);这里取消掉,好把完整矩阵这条路也走一遍
+  const budgetSaving = await p.$eval('#budget', e => e.innerText);
+  await p.uncheck('#zh-only');
+  const budgetFull = await p.$eval('#budget', e => e.innerText);
   await p.waitForTimeout(800);                       // 等自动保存
   const saved = await p.evaluate(async () => (await window.rqfAI.loadApiConfig())?.apiKey);
   const endpoint = await p.$eval('#api-endpoint', e => e.value);
@@ -57,6 +61,10 @@ const ROOT = process.cwd();
     逐字段表格有内容: fieldRows === 71,
     复制按钮已启用: copyEnabled === true,
     没有页面报错: errs.length === 0,
+    // 请求是按表单分组发的(7 组),预算行必须报真实次数而不是按总字段估
+    预算按分组算得对: /共 15 次请求/.test(budgetSaving) && /共 29 次请求/.test(budgetFull),
+    超配额时提示要等几轮: /等 \d+ 轮配额/.test(budgetFull),
+    实际请求数与预算一致: calls === 29,
   };
   const fails = Object.keys(checks).filter(k => !checks[k]);
   console.log(JSON.stringify({ pass: !fails.length, fails, matrix: rows, apiCalls: calls, errs }, null, 1));

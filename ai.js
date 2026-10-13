@@ -178,8 +178,32 @@
     'One entry per given id. No prose, no markdown fence.',
   ].join('\n');
 
+  /* 节流闸是模块级的:整套对比每一轮都新建一次会话,配额却是整个 Key 共用的,
+   * 闸门必须跨会话共享,否则换一轮就把限速忘了。 */
+  const RATE = { lastAt: 0, gapMs: 0 };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const gate = async () => {
+    const wait = RATE.lastAt + RATE.gapMs - Date.now();
+    if (wait > 0) await sleep(wait);
+    RATE.lastAt = Date.now();
+  };
+  /** 该等多久:优先用 Retry-After,其次用文案里的「Limit resets at」,都没有就退避。 */
+  const waitHintMs = async (res) => {
+    const after = Number(res.headers?.get?.('retry-after'));
+    if (Number.isFinite(after) && after > 0) return Math.min(after * 1000 + 500, 90000);
+    try {
+      const body = await res.clone().text();
+      const m = body.match(/resets? at[:\s]+([0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9:]+)\s*(UTC)?/i);
+      if (m) {
+        const t = Date.parse(m[1].replace(' ', 'T') + (m[2] ? 'Z' : ''));
+        if (Number.isFinite(t)) return Math.min(Math.max(t - Date.now() + 1000, 1000), 90000);
+      }
+    } catch { /* 读不到就退避 */ }
+    return 8000;
+  };
+
   /** 造一个和 Prompt API 会话同形的对象:只需要 prompt(text)。 */
-  const createApiSession = ({ provider = 'custom', endpoint, model, apiKey, lang = 'zh' } = {}) => {
+  const createApiSession = ({ provider = 'custom', endpoint, model, apiKey, lang = 'zh', onWait } = {}) => {
     const def = API_PROVIDERS[provider] || API_PROVIDERS.custom;
     const url = String(endpoint || def.endpoint || '').trim();
     if (!url) throw new Error('没有填端点 URL');
@@ -201,15 +225,31 @@
         /* 显式给上限:Nano 那一轮的漏答几乎都是长输出被截断,换成云端代理
          * 更不能让它用一个小默认值把 JSON 截一半(截断的 JSON 会被
          * validate 整批判成 none,看起来就像模型集体保守)。 */
-        max_tokens: 1024,
+        max_tokens: 4096,
         ...(json ? { response_format: { type: 'json_object' } } : {}),
       }),
     });
     return {
       provider, endpoint: url, model: model || def.model,
       async prompt(text) {
-        let res = await call(text, useJsonMode);
-        if (!res.ok && res.status === 400 && useJsonMode) { useJsonMode = false; res = await call(text, false); }
+        let res = null;
+        /* 交大网关是 10 次请求的配额(429 文案里写明 Current limit: 10)。
+         * 第一次整套对比里 4 轮有 3 轮整轮被限流、一个字都没问出去,
+         * 报告却照样算出「13% 错填 0」。这里自己排队 + 撞上 429 就等它重置。 */
+        for (let attempt = 0; attempt < 5; attempt++) {
+          await gate();
+          res = await call(text, useJsonMode);
+          if (res.status === 429) {
+            const ms = await waitHintMs(res);
+            RATE.gapMs = Math.max(RATE.gapMs, 7000);   // 之后的请求自己放慢
+            if (attempt === 4) break;
+            onWait && onWait({ attempt: attempt + 1, ms });
+            await sleep(ms);
+            continue;
+          }
+          if (!res.ok && res.status === 400 && useJsonMode) { useJsonMode = false; continue; }
+          break;
+        }
         if (!res.ok) {
           /* 原来只抛状态码,结果 DeepSeek 那一轮 18 批全失败、报告却显示
            * 「错填 0 / 漏答 62」,看不出是调用没通 —— 服务商的 message 才是
@@ -221,7 +261,13 @@
             const j = (() => { try { return JSON.parse(body); } catch { return null; } })();
             detail = String(j?.error?.message || j?.message || body || '').slice(0, 200);
           } catch { /* 读不到正文就只报状态码 */ }
+          /* 只按「和填进来的 Key 精确相同」打码是不够的:交大网关把密钥裸串回显在
+           * 429 文案里(Rate limit exceeded for api_key: <64 位十六进制>),用户填的
+           * 可能带前缀或空格,精确匹配就漏了 —— 那串密钥于是进了可复制的报告。
+           * 改成:精确匹配之外,凡 24 位以上的十六进制 / sk- 开头的长串一律打码。 */
           if (apiKey) detail = detail.split(apiKey).join('***');
+          detail = detail.replace(/\b[0-9a-f]{24,}\b/gi, '***')
+            .replace(/\bsk-[A-Za-z0-9_-]{8,}/g, 'sk-***');
           throw new Error(`${name} 返回 ${res.status}${detail ? ':' + detail : ''}`);
         }
         const data = await res.json();
