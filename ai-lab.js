@@ -20,14 +20,20 @@ function setReady(ready) {
 const provider = () => $('#provider').value;
 const isApi = () => provider() !== 'local';
 
+const apiCfg = () => ({ provider: provider(), endpoint: $('#api-endpoint').value.trim(),
+  model: $('#api-model').value.trim(), apiKey: $('#api-key').value.trim() });
+
 async function check() {
   $('#api-box').hidden = !isApi();
   $('#local-card').hidden = isApi();
   if (isApi()) {
     const def = AI.API_PROVIDERS[provider()];
     if (!$('#api-model').value) $('#api-model').value = def.model;
-    const ok = !!$('#api-key').value.trim();
-    $('#api-state').textContent = ok ? `已填 Key,将调用 ${def.name}` : '填入 Key 后才能运行';
+    if (!$('#api-endpoint').value && def.endpoint) $('#api-endpoint').value = def.endpoint;
+    $('#api-models').innerHTML = (def.models || []).map((m) => `<option value="${m}">`).join('');
+    const c = apiCfg();
+    const ok = !!(c.apiKey && c.endpoint);
+    $('#api-state').textContent = ok ? `准备调用 ${def.name}` : '端点 URL 和 Key 都要填';
     setReady(ok);
     return;
   }
@@ -39,10 +45,20 @@ async function check() {
 
 $('#provider').addEventListener('change', check);
 $('#api-key').addEventListener('input', check);
+$('#api-endpoint').addEventListener('input', check);
 
 /* Key 存在 chrome.storage.local,和档案分开放,导出备份时不带它 */
+/* 先自检再跑整套 —— 上一版 18 批全失败却照样汇报出一份「错填 0」的成绩单 */
+$('#api-ping').addEventListener('click', async () => {
+  $('#api-state').textContent = '自检中…';
+  try {
+    const r = await AI.pingApi({ ...apiCfg(), lang: 'zh' });
+    $('#api-state').textContent = `✓ 通了(${r.ms}ms),模型把「姓名」认成 ${r.key};原话:${r.raw.slice(0, 80)}`;
+  } catch (e) { $('#api-state').textContent = '✗ ' + ((e && e.message) || e); }
+});
+
 $('#api-save').addEventListener('click', async () => {
-  const cfg = { provider: provider(), model: $('#api-model').value.trim(), apiKey: $('#api-key').value.trim() };
+  const cfg = apiCfg();
   $('#api-state').textContent = (await AI.saveApiConfig(cfg)) ? '✓ 已保存到本机' : '保存失败';
 });
 $('#api-clear').addEventListener('click', async () => {
@@ -76,13 +92,13 @@ const VERDICT = { right: '✅ 对', wrong: '❌ 错填', missed: '⚪️ 漏答'
 
 const LANGS = [['zh', '中文提示'], ['en', '英文提示']];
 const pct = (r) => (r.total ? Math.round((100 * r.right) / r.total) : 0);
-const line1 = (name, r) => `${name}:准确率 ${pct(r)}%(对 ${r.right} / 共 ${r.total})· 错填 ${r.wrong} · 漏答 ${r.missed} · 用时 ${(r.ms / 1000).toFixed(1)} 秒`;
+const line1 = (name, r) => `${name}:准确率 ${pct(r)}%(对 ${r.right} / 共 ${r.total})· 错填 ${r.wrong} · 漏答 ${r.missed}`
+  + (r.failed ? ` · 调用失败 ${r.failed}` : '') + ` · 用时 ${(r.ms / 1000).toFixed(1)} 秒`;
 
 /* 中文提示和英文提示各跑一遍 —— 官方没声明支持中文,能不能用直接量 */
 async function makeSession(lang, first) {
   if (!isApi()) return first && SESSION ? SESSION : AI.createSession(null, lang);
-  return AI.createApiSession({ provider: provider(), model: $('#api-model').value.trim(),
-    apiKey: $('#api-key').value.trim(), lang });
+  return AI.createApiSession({ ...apiCfg(), lang });
 }
 
 async function runOnce(lang, first) {
@@ -98,7 +114,9 @@ async function runOnce(lang, first) {
     byForm.push({ form: f.form, right: sc.right, total: sc.total });
     for (const r of sc.rows) rows.push({ ...r, form: f.form });
   }
-  const res = { total: rows.length, right: rows.filter((r) => r.verdict === 'right').length,
+  const failed = rows.filter((r) => r.got && r.got.failed);
+  const res = { failed: failed.length, failedWhy: failed[0] ? failed[0].got.failed : '',
+    total: rows.length, right: rows.filter((r) => r.verdict === 'right').length,
     wrong: rows.filter((r) => r.verdict === 'wrong').length, missed: rows.filter((r) => r.verdict === 'missed').length,
     guarded: rows.filter((r) => r.got && r.got.guarded).length, ms: Math.round(performance.now() - t0) };
   return { res, rows, byForm, trace };
@@ -122,7 +140,9 @@ $('#run').addEventListener('click', async () => {
         + `<td>${esc([r.section, r.group].filter(Boolean).join(' / '))}</td><td>${esc(show(r.expect, r.record === undefined ? -1 : r.record))}</td>`
         + `<td>${VERDICT[r.verdict]} ${esc(show(r.got.key, r.got.record))}</td><td>${VERDICT[e.verdict]} ${esc(show(e.got.key, e.got.record))}</td></tr>`;
     }).join('');
-    $('#summary').innerHTML = LANGS.map(([lang, name]) => `<div><b>${esc(line1(name, out[lang].res))}</b></div>`).join('')
+    const bad = LANGS.map(([l]) => out[l].res).find((r) => r.failed);
+    $('#summary').innerHTML = (bad ? `<div class="lab-fail"><b>⚠️ ${bad.failed}/${bad.total} 个字段的调用失败了,这份成绩不代表模型水平。</b><br>第一个错误:${esc(bad.failedWhy)}</div>` : '')
+      + LANGS.map(([lang, name]) => `<div><b>${esc(line1(name, out[lang].res))}</b></div>`).join('')
       + `<div class="hint">两种提示各有 ${out.zh.res.guarded} 个字段由硬规则直接判为不填(验证码 / 协议 / 是否题等),没有交给模型</div>`;
     $('#summary').dataset.result = JSON.stringify({ zh: out.zh.res, en: out.en.res });
     $('#summary').dataset.done = '1';

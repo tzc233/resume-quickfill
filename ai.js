@@ -120,7 +120,16 @@
   const validate = (raw, fields) => {
     const out = new Map(fields.map((f) => [f.id, { key: 'none', record: -1 }]));
     let data = raw;
-    if (typeof raw === 'string') { try { data = JSON.parse(raw); } catch { return out; } }
+    if (typeof raw === 'string') {
+      try { data = JSON.parse(raw); } catch {
+        /* 思考模型(deepseek-reasoner)和部分代理会在 JSON 外面裹一层推理文字或
+         * ```json 围栏。把第一个到最后一个花括号之间的内容抠出来再试一次 ——
+         * 键的白名单校验在下面照旧,抠取不放宽任何东西。 */
+        const a = raw.indexOf('{'), b = raw.lastIndexOf('}');
+        if (a < 0 || b <= a) return out;
+        try { data = JSON.parse(raw.slice(a, b + 1)); } catch { return out; }
+      }
+    }
     for (const a of (data && Array.isArray(data.answers)) ? data.answers : []) {
       if (!a || !out.has(a.id)) continue;
       const key = typeof a.key === 'string' && (a.key in KEYS) ? a.key : 'none';
@@ -144,10 +153,19 @@
    * 调用必须发生在扩展自己的页面里(实验页 / 弹窗),绝不能放进内容脚本 ——
    * 那等于把 Key 交到招聘页的 JS 手上。
    * ---------------------------------------------------------------------- */
+  /* 端点必须由用户填 —— 第一版把 DeepSeek 官方和百炼的地址写死,而用户用的是
+   * 自建 OpenAI 兼容网关(/api/v1/chat/completions),Key 在那两个域名上直接被拒,
+   * 18 批全失败。预设只是省打字,真正起作用的是 endpoint 这一项。 */
   const API_PROVIDERS = {
-    deepseek: { name: 'DeepSeek', endpoint: 'https://api.deepseek.com/chat/completions', model: 'deepseek-chat' },
-    qwen: { name: '通义千问(百炼兼容模式)', model: 'qwen-plus',
-      endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions' },
+    sjtu: { name: '上海交大模型网关', endpoint: 'https://models.sjtu.edu.cn/api/v1/chat/completions',
+      model: 'deepseek-chat', models: ['deepseek-chat', 'deepseek-reasoner', 'qwen', 'qwen3.8-27b'] },
+    custom: { name: 'OpenAI 兼容端点(自填)', endpoint: '', model: 'deepseek-chat',
+      models: ['deepseek-chat', 'deepseek-reasoner', 'qwen', 'qwen3.8-27b'] },
+    deepseek: { name: 'DeepSeek 官方', endpoint: 'https://api.deepseek.com/chat/completions',
+      model: 'deepseek-chat', models: ['deepseek-chat', 'deepseek-reasoner'] },
+    qwen: { name: '阿里云百炼(兼容模式)', model: 'qwen-plus',
+      endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+      models: ['qwen-plus', 'qwen-max', 'qwen-turbo'] },
   };
 
   /* OpenAI 兼容端点收不了 Prompt API 的 responseConstraint,只能靠 json_object
@@ -161,32 +179,65 @@
   ].join('\n');
 
   /** 造一个和 Prompt API 会话同形的对象:只需要 prompt(text)。 */
-  const createApiSession = ({ provider, model, apiKey, lang = 'zh' } = {}) => {
-    const def = API_PROVIDERS[provider];
-    if (!def) throw new Error('不认识的服务商:' + provider);
+  const createApiSession = ({ provider = 'custom', endpoint, model, apiKey, lang = 'zh' } = {}) => {
+    const def = API_PROVIDERS[provider] || API_PROVIDERS.custom;
+    const url = String(endpoint || def.endpoint || '').trim();
+    if (!url) throw new Error('没有填端点 URL');
+    if (!/^https?:\/\//.test(url)) throw new Error('端点要写完整 URL(以 http(s):// 开头)');
     if (!apiKey) throw new Error('没有填 API Key');
     const system = (lang === 'zh' ? SYSTEM_ZH : SYSTEM) + API_FORMAT;
+    const name = def.name;
+    /* 不是每个兼容端点都认 response_format。先带上(输出更稳),被 400 顶回来
+     * 就去掉重试一次 —— 不然用户只会看到一句「返回 400」。 */
+    let useJsonMode = true;
+    const call = async (text, json) => fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: model || def.model,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: text }],
+        temperature: 0,
+        stream: false,
+        /* 显式给上限:Nano 那一轮的漏答几乎都是长输出被截断,换成云端代理
+         * 更不能让它用一个小默认值把 JSON 截一半(截断的 JSON 会被
+         * validate 整批判成 none,看起来就像模型集体保守)。 */
+        max_tokens: 1024,
+        ...(json ? { response_format: { type: 'json_object' } } : {}),
+      }),
+    });
     return {
-      provider, model: model || def.model,
+      provider, endpoint: url, model: model || def.model,
       async prompt(text) {
-        const res = await fetch(def.endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            model: model || def.model,
-            messages: [{ role: 'system', content: system }, { role: 'user', content: text }],
-            temperature: 0,
-            response_format: { type: 'json_object' },
-          }),
-        });
+        let res = await call(text, useJsonMode);
+        if (!res.ok && res.status === 400 && useJsonMode) { useJsonMode = false; res = await call(text, false); }
         if (!res.ok) {
-          // 别把响应体整个抛出去 —— 有些服务商会把请求头回显在错误里
-          throw new Error(`${def.name} 返回 ${res.status}`);
+          /* 原来只抛状态码,结果 DeepSeek 那一轮 18 批全失败、报告却显示
+           * 「错填 0 / 漏答 62」,看不出是调用没通 —— 服务商的 message 才是
+           * 唯一能分辨 401(Key 错)/ 402(余额不足)/ 400(参数)的信息。
+           * 只取 error.message 与 code,并把 Key 本身打码,不回显整个响应体。 */
+          let detail = '';
+          try {
+            const body = await res.text();
+            const j = (() => { try { return JSON.parse(body); } catch { return null; } })();
+            detail = String(j?.error?.message || j?.message || body || '').slice(0, 200);
+          } catch { /* 读不到正文就只报状态码 */ }
+          if (apiKey) detail = detail.split(apiKey).join('***');
+          throw new Error(`${name} 返回 ${res.status}${detail ? ':' + detail : ''}`);
         }
         const data = await res.json();
         return data?.choices?.[0]?.message?.content || '';
       },
     };
+  };
+
+  /** 连通性自检:只发一个最简单的字段,成功返回模型原话,失败把服务商的错误抛出来。
+   * 跑整套评测之前先用它确认通不通 —— 省掉「18 批全失败还得到一份报告」那种事。 */
+  const pingApi = async (cfg) => {
+    const s = createApiSession(cfg);
+    const t0 = Date.now();
+    const raw = await s.prompt(buildPrompt([{ id: 1, label: '姓名', section: '基本信息', group: '' }]));
+    const got = validate(raw, [{ id: 1 }]);
+    return { ms: Date.now() - t0, raw: String(raw || '').slice(0, 300), key: got.get(1)?.key || 'none' };
   };
 
   /* Key 的存取。单独放一个键,导出备份时不带它(备份是要发给别人看的)。 */
@@ -243,13 +294,16 @@
     for (let i = 0; i < ask.length; i += chunk) {
       const part = ask.slice(i, i + chunk);
       const s = base.clone ? await base.clone() : base;
-      let raw = '';
+      let raw = '', err = null;
       try {
         raw = await s.prompt(buildPrompt(part), { responseConstraint: schema(part) });
-      } catch { raw = ''; }
+      } catch (e) { raw = ''; err = (e && e.message) || String(e); }
       finally { if (s !== base && s.destroy) s.destroy(); }
       const got = validate(raw, part);
-      if (trace) trace.push({ ids: part.map((f) => f.id), raw: String(raw || '').slice(0, 600) });
+      /* 失败的批次要标出来。原来它和「模型答 none」长得一样,
+       * 于是一轮全军覆没也能汇报出一份「错填 0」的漂亮成绩单。 */
+      if (err) for (const [, ans] of got) ans.failed = err;
+      if (trace) trace.push({ ids: part.map((f) => f.id), raw: String(raw || '').slice(0, 600), error: err });
       for (const [id, ans] of got) all.set(id, ans);
     }
     return all;
@@ -276,5 +330,5 @@
   };
 
   g.rqfAI = { KEYS, SYSTEM, SYSTEM_ZH, buildPrompt, schema, validate, guarded, availability, createSession, resolveFields, score,
-    API_PROVIDERS, createApiSession, loadApiConfig, saveApiConfig, clearApiConfig };
+    API_PROVIDERS, createApiSession, pingApi, loadApiConfig, saveApiConfig, clearApiConfig };
 })();

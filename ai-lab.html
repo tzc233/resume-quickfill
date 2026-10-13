@@ -16,20 +16,31 @@
       <label class="lab-field">用哪个模型
         <select id="provider">
           <option value="local">本机 Gemini Nano(零网络请求)</option>
-          <option value="deepseek">DeepSeek API</option>
-          <option value="qwen">通义千问 API(百炼兼容模式)</option>
+          <option value="sjtu">上海交大模型网关(deepseek-chat / qwen3.8-27b)</option>
+          <option value="custom">OpenAI 兼容端点(自填)</option>
+          <option value="deepseek">DeepSeek 官方</option>
+          <option value="qwen">阿里云百炼(兼容模式)</option>
         </select>
       </label>
       <div id="api-box" hidden>
-        <label class="lab-field">API Key
-          <input id="api-key" type="password" autocomplete="off" placeholder="sk-…(只存在本机浏览器里)">
+        <label class="lab-field">端点 URL
+          <input id="api-endpoint" type="text" autocomplete="off"
+                 placeholder="https://你的网关/api/v1/chat/completions">
         </label>
-        <label class="lab-field">模型名 <input id="api-model" type="text" autocomplete="off"></label>
+        <label class="lab-field">API Key
+          <input id="api-key" type="password" autocomplete="off" placeholder="只存在本机浏览器里">
+        </label>
+        <label class="lab-field">模型名
+          <input id="api-model" type="text" autocomplete="off" list="api-models">
+          <datalist id="api-models"></datalist>
+        </label>
         <div class="row-btns">
+          <button id="api-ping" class="ghost">连通性自检</button>
           <button id="api-save" class="ghost">保存</button>
           <button id="api-clear" class="ghost">清除 Key</button>
           <span id="api-state" class="hint"></span>
         </div>
+        <p class="hint">先点「连通性自检」—— 只发一个字段,成功会显示模型原话,失败会显示服务商的真实错误(401 = Key 不对,402 = 余额不足,404 = 端点写错)。<b>通了再跑整套评测</b>。</p>
         <p class="hint">⚠️ 选 API 就会产生网络请求:把<b>你正在填的那张表的字段标签、模块标题、下拉选项</b>发给服务商。页面上已有的值和你的档案内容一概不发。Key 只存在本机浏览器,不随备份导出。默认是本机模式,不填 Key 不会联网。</p>
       </div>
     </section>

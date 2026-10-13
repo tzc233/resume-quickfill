@@ -18,7 +18,8 @@ window.rqfRun=async()=>{
   };
 
   const KEY='sk-test-DO-NOT-LEAK-0001';
-  const s=AI.createApiSession({provider:'deepseek',apiKey:KEY,lang:'zh'});
+  const EP='https://my-gateway.example/api/v1/chat/completions';
+  const s=AI.createApiSession({provider:'custom',endpoint:EP,apiKey:KEY,model:'deepseek-chat',lang:'zh'});
 
   // 刻意塞进「页面已有值」和「档案内容」,它们一个字都不该被发出去
   const fields=[
@@ -44,7 +45,7 @@ window.rqfRun=async()=>{
   const wrongRec=new Map([[1,{key:'education.school',record:3}]]);
 
   const checks={
-    打到了正确的端点: sent[0].url==='https://api.deepseek.com/chat/completions',
+    打到了自填的端点: sent[0].url===EP,
     Key走请求头不进提示词: sent[0].headers.Authorization==='Bearer '+KEY && !whole.includes(KEY),
     页面已有值不外发: !whole.includes('机密学校名'),
     档案内容不外发: !whole.includes('机密档案值'),
@@ -59,6 +60,42 @@ window.rqfRun=async()=>{
     忽略段号计分_段号错算正确: AI.score(cases,wrongRec,{ignoreRecord:true}).right===1,
     评测集仍是71题: window.rqfAIEval.reduce((n,f)=>n+f.cases.length,0)===71,
   };
+
+  /* ---- 错误路径。上一版把失败静默压成 none:用户的网关端点不对、18 批全失败,
+     报告却显示「错填 0 / 漏答 62 / 2.1 秒」,看不出一个字都没答上。 ---- */
+  window.fetch=async(url,init)=>{sent.push({url,body:JSON.parse(init.body)});
+    return {ok:false,status:401,text:async()=>JSON.stringify(
+      {error:{message:'Invalid token: '+KEY}})};};
+  const dead=await AI.resolveFields(s,[{id:9,label:'学校',section:'教育经历',group:'教育经历 1'}],{chunk:4});
+  checks['调用失败要标出来不是答none']=dead.get(9).key==='none' && !!dead.get(9).failed;
+  checks['错误里带上服务商的原话']=/401/.test(dead.get(9).failed) && /Invalid token/.test(dead.get(9).failed);
+  checks['错误里的Key被打码']=!dead.get(9).failed.includes(KEY) && dead.get(9).failed.includes('***');
+
+  // 端点没填 / 写成相对路径都要当场拦住,而不是发出一个打不中的请求
+  const refuse=(cfg)=>{try{AI.createApiSession(cfg);return '';}catch(e){return e.message;}};
+  checks['端点没填当场拦住']=/端点/.test(refuse({provider:'custom',apiKey:KEY}));
+  checks['相对路径当场拦住']=/完整 URL/.test(refuse({provider:'custom',endpoint:'/api/v1/chat/completions',apiKey:KEY}));
+  checks['没有Key当场拦住']=/Key/.test(refuse({provider:'custom',endpoint:EP}));
+
+  // 端点不认 response_format 时去掉重试一次,而不是只报一句 400
+  let n=0;
+  window.fetch=async(url,init)=>{n++;const b=JSON.parse(init.body);
+    if(b.response_format) return {ok:false,status:400,text:async()=>'response_format not supported'};
+    return reply([{id:11,key:'education.school',record:0}]);};
+  const s2=AI.createApiSession({provider:'custom',endpoint:EP,apiKey:KEY,lang:'zh'});
+  const retried=await AI.resolveFields(s2,[{id:11,label:'学校',section:'教育经历',group:'教育经历 1'}],{chunk:4});
+  checks['json模式被拒就去掉重试']=n===2 && retried.get(11).key==='education.school' && !retried.get(11).failed;
+  checks['显式给了max_tokens']=sent[0].body.max_tokens>=512 && sent[0].body.stream===false;
+
+  // 思考模型会在 JSON 外面裹推理文字 / ```json 围栏
+  const wrapped=AI.validate('让我想想……\n```json\n{"answers":[{"id":5,"key":"basic.phone","record":-1}]}\n```\n以上。',[{id:5}]);
+  checks['推理文字里的JSON抠得出来']=wrapped.get(5).key==='basic.phone';
+  checks['真不是JSON就按none']=AI.validate('我拒绝回答',[{id:5}]).get(5).key==='none';
+
+  // 交大网关的预设要和官方文档一致
+  checks['交大网关预设正确']=AI.API_PROVIDERS.sjtu.endpoint==='https://models.sjtu.edu.cn/api/v1/chat/completions'
+    && AI.API_PROVIDERS.sjtu.models.includes('deepseek-chat')
+    && AI.API_PROVIDERS.sjtu.models.includes('qwen3.8-27b');
   const fails=Object.keys(checks).filter(k=>!checks[k]);
   return {page:'ai-api-v2.html',pass:!fails.length,total:Object.keys(checks).length,fails,
     requests:sent.length};
