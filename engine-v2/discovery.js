@@ -1,6 +1,6 @@
 (() => {
   const V2 = window.__RQF_V2_PARTS;
-  V2.selectionOwner = el => el.closest('.ant-select,.el-select,.aui-select,.phoenix-select,.ud__select,[class*="sd-Dropdown"],[class*="sd-Select"]') || el.closest('select,[role=combobox]');
+  V2.selectionOwner = el => el.closest('.ant-select,.el-select,.aui-select,.atsx-select,.phoenix-select,.ud__select,[class*="sd-Dropdown"],[class*="sd-Select"]') || el.closest('select,[role=combobox]');
   V2.isSelection = field => !!V2.selectionOwner(field.el);
   V2.readControlValue = ({el}) => {
     const valid = value => /^(请选择.*|请输入.*|please select.*|select an? .*|选择|证件)$/i.test(String(value).trim()) ? '' : String(value || '').trim();
@@ -11,12 +11,16 @@
     if (el.matches('input[type=radio],input[type=checkbox]')) return el.checked ? el.value || 'checked' : '';
     if (el.isContentEditable) return valid(el.textContent);
     const owner = V2.selectionOwner(el) || el;
-    const selectors = '.phoenix-select__tipEle,.ant-select-selection-item,.ant-select-selection-placeholder,.ant-select-selection-selected-value,.ant-select-selection__rendered > [title],.el-select__selected-item,.el-select__tags-text,.aui-select__tags-text,[class*="display-value"],[class*="selection-item"],[class*="selection-selected-value"],[class*="picker-label"]';
+    const selectors = '.phoenix-select__tipEle,.ant-select-selection-item,.ant-select-selection-placeholder,.ant-select-selection-selected-value,.ant-select-selection__rendered > [title],.el-select__selected-item,.el-select__tags-text,.aui-select__tags-text,[class*="display-value"],[class*="selection-item"],[class*="selection-selected-value"],[class*="picker-label"],[class*="selection__choice__content"],.select-item-label';
     const shown = Array.from(owner.querySelectorAll(selectors)).map(n => valid(n.textContent)).filter(Boolean);
     if (shown.length) return shown.join('、');
     const inputs = owner.matches('input,textarea') ? [owner] : Array.from(owner.querySelectorAll('input:not([type=hidden]),textarea'));
     // Search input text is not a committed selection, except read-only date/select displays.
-    const values = inputs.filter(n => !V2.selectionOwner(n) || n.readOnly || !/search/i.test(n.type + ' ' + n.className) && !n.matches('.phoenix-select__input,.ant-select-selection-search-input'))
+    /* combobox 模式(飞书 atsx-select-combobox、antd ant-select-combobox)没有单独的
+     * 已选值节点,输入框里那串字就是已提交的选择 —— 千寻的「学校名称」因此被读成
+     * 空的,引擎准备去重写它(只因为写入被组件拒绝才没真覆盖)。 */
+    const combobox = !!owner.matches?.('[class*="select-combobox"]');
+    const values = inputs.filter(n => !V2.selectionOwner(n) || n.readOnly || combobox || !/search/i.test(n.type + ' ' + n.className) && !n.matches('.phoenix-select__input,.ant-select-selection-search-input'))
       .map(n => valid(n.value)).filter(Boolean);
     return values.join('、') || valid(owner.getAttribute('aria-valuetext') || '');
   };
@@ -135,9 +139,13 @@
       [/id\s*number/, 'basic.idNumber'],
     ].find(([re]) => re.test(raw));
     if (direct) return direct[1];
-    const m = raw.match(/\b(education|internship|practice|work|project|award|language)s?(?:\s*list|\s*background)?[.\s_-]*(?:\[\s*)?(\d+)(?:\s*\])?[.\s_-]*([a-z ]{2,40})/i);
+    /* 复数形式逐个列出,而不是统一加 s? —— 「works」是作品集,不是工作经历。
+     * 千寻那页的作品描述框机器路径是 works[0].desc,被 work 的复数式吃掉后
+     * 解析成 work.0.desc:工作经历的描述会被写进「作品描述」。 */
+    const m = raw.match(/\b(educations?|internships?|practices?|work|projects?|awards?|languages?)(?:\s*list|\s*background)?[.\s_-]*(?:\[\s*)?(\d+)(?:\s*\])?[.\s_-]*([a-z ]{2,40})/i);
     if (!m) return null;
-    const def = V2.pathAliases[m[1].toLowerCase()]; if (!def) return null;
+    const root = m[1].toLowerCase();
+    const def = V2.pathAliases[root] || V2.pathAliases[root.replace(/s$/, '')]; if (!def) return null;
     const tail = m[3].trim();
     const field = Object.keys(def[1]).sort((a, b) => b.length - a.length).find((key) => tail.startsWith(key));
     return field ? `${def[0]}.${Number(m[2])}.${def[1][field]}` : null;
@@ -355,7 +363,21 @@
       if (record) (anchored[spec.domain] ||= new Set()).add(record);
     });
     return fields.map((field, i) => {
-      const hit = hits[i]; if (!hit || hit.spec.key || !hit.spec.domain) return hit;
+      const hit = hits[i]; if (!hit) return hit;
+      /* 机器路径自带段号,原来直接返回、不进段号簿 —— 同一块里没有机器路径的字段
+       * 就永远停在第 0 段。千寻那页六个奖项块的名称各就各位(award[6..11]),
+       * 六个「获奖时间」却全部指向 awards.0.date:真写进去就是六行同一个日期,
+       * 而且旁边的奖项名还是空的。登记当前段号,跟随字段才跟着走。 */
+      if (hit.spec.key) {
+        const path = hit.spec.source === 'machine-path' && hit.spec.key.match(/^([a-z]+)\.(\d+)\./);
+        if (path) {
+          const domain = path[1], raw = Number(path[2]);
+          state[domain] ||= { index: 0, seen: new Set() };
+          if (state[domain].index !== raw) { state[domain].index = raw; state[domain].seen.clear(); }
+        }
+        return hit;
+      }
+      if (!hit.spec.domain) return hit;
       const domain = hit.spec.domain; state[domain] ||= { index: 0, seen: new Set() };
       const record = field.el.closest('.ux-standard-form');
       if (record && field.section && anchored[domain] && !anchored[domain].has(record)) return null;

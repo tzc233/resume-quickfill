@@ -1,0 +1,46 @@
+<!doctype html><meta charset="utf-8">
+<!-- 千寻那页:工作经历区块勾了「没有工作经历」是空的,实习经历区块三块都在,
+     但块里字段的机器路径是 internship[n](映射到 work 域)。带机器路径的字段
+     原来直接用路径里的域、绕过「区块标题说了算」,于是整列按工作经历去取;
+     该同学全职 0 段 —— 三块实习一栏都没填上。 -->
+<main id="form"></main>
+<!-- 机器路径由 v2 的 discover() 提供,1.x 读 __RQF_V2_PARTS —— 必须先加载 -->
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script>
+<script src="../content.js"></script>
+<script>
+(async () => {
+  // 两条都是实习:页面同时有「工作经历」「实习经历」两种标题时会分流,
+  // workList 收到 0 段、internList 收到 2 段
+  const profile = { basic: {},
+    work: [
+      { company: '示例科技', title: '算法实习生', desc: '负责示例模型训练。', startTime: '2025-04', endTime: '2026-03' },
+      { company: '示例研究院', title: '研究实习生', desc: '负责示例数据构建。', startTime: '2024-07', endTime: '2024-12' },
+    ],
+  };
+  form.innerHTML = '<div class="sec"><h2>工作经历</h2>'
+    + '<label>没有工作经历<input type="checkbox" checked></label></div>'
+    + '<div class="sec"><h2>实习经历</h2>'
+    + [0, 1].map((n) => '<div class="blk">'
+      + '<label>公司名称<input name="internship[' + n + '].company" data-f="c' + n + '"></label>'
+      + '<label>职位名称<input name="internship[' + n + '].title" data-f="t' + n + '"></label>'
+      + '<label>描述<textarea name="internship[' + n + '].desc" data-f="d' + n + '"></textarea></label>'
+      + '</div>').join('') + '</div>';
+
+  const report = await __RQF.fill(profile);
+  const v = (f) => document.querySelector('[data-f="' + f + '"]').value;
+  const why = (kw) => (report.skipped || []).filter((s) => String(s.reason).includes(kw)).length;
+
+  const checks = {
+    第一块填第一段实习: v('c0') === '示例科技' && v('t0') === '算法实习生',
+    第二块填第二段实习: v('c1') === '示例研究院' && v('t1') === '研究实习生',
+    描述各归各位: v('d0') === '负责示例模型训练。' && v('d1') === '负责示例数据构建。',
+    // 这是这一页的要点:不许再按「工作经历」去取,那一侧是 0 段
+    不再报工作经历零段: why('段工作经历') === 0,
+    没有勾掉那个复选框: document.querySelector('input[type=checkbox]').checked === true,
+  };
+  const fails = Object.keys(checks).filter((k) => !checks[k]);
+  parent.postMessage({ __rqf: true, page: 'feishu-internship.html', version: __RQF.version,
+    pass: !fails.length, total: Object.keys(checks).length, fails,
+    snapshot: [v('c0'), v('t0'), v('c1'), v('t1')], skipped: report.skipped }, '*');
+})();
+</script>

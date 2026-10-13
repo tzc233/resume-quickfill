@@ -1943,8 +1943,13 @@
           if (!hit.occupied) report.skipped.push({ label: hit.label, reason: '项目经历里的这一栏,档案的项目没有对应内容,留空' });
           continue;
         }
-        const dom = Number.isInteger(hit.explicitIndex) ? hit.dom : hit.dom === '*' ? (ambiguousDom(idx, hit) || ctx.domain)
-          : retarget(hit.dom, hit.field, items[idx].sec);
+        /* 带机器路径的字段原来直接用路径里的域,绕过了「区块标题说了算」——
+         * 千寻那页三个实习块的路径是 internship[n](映射到 work 域),区块标题
+         * 明明是「实习经历」,结果整列按工作经历去取;该同学档案里全职 0 段,
+         * 于是三块实习一栏都没填上。段号照用路径里的,域仍要听区块标题。 */
+        const dom = Number.isInteger(hit.explicitIndex) ? retarget(hit.dom, hit.field, items[idx].sec)
+          : hit.dom === '*' ? (ambiguousDom(idx, hit) || ctx.domain)
+            : retarget(hit.dom, hit.field, items[idx].sec);
         if (!dom) continue; // 通篇没有任何经历区块字段,无从判断归属
         // 「自我描述」是区块标题但不是经历列表 —— 它下面的描述位就是自我介绍
         if (!LIST_OF[dom]) {

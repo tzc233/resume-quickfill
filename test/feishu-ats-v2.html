@@ -1,0 +1,60 @@
+<!doctype html><meta charset="utf-8"><title>飞书招聘 atsx</title>
+<!-- 千寻智能(jobs.feishu.cn,atsx 组件)这页暴露四件事:
+       · 作品区的机器路径是 works[0].desc,被 work 的复数式吃掉 → 工作经历的描述
+         会被写进「作品描述」;
+       · 奖项块的名称各自带机器路径(award[n]),块里的「获奖时间」没有路径,
+         段号簿认不到机器路径 → 六个时间全部指向 awards.0.date;
+       · 多选已选项挂在 atsx-select-selection__choice__content、combobox 的值就在
+         搜索输入框里 → 已填的意向城市/学校名称被读成空的,引擎准备重写;
+       · 实习块的路径是 internship[n](映射到 work 域),区块标题却是「实习经历」。 -->
+<style>input,textarea,[role=combobox]{display:block;width:240px;min-height:24px}</style>
+
+<div class="sec"><h2>项目经历</h2>
+  <label>作品链接<input name="works[0].link"></label>
+  <label>描述<textarea name="works[0].desc"></textarea></label>
+</div>
+
+<div class="sec"><h2>获奖</h2>
+  <div class="blk"><label>获奖名称<input name="award[0].title"></label>
+    <label>获奖时间<input data-f="d0"></label></div>
+  <div class="blk"><label>获奖名称<input name="award[1].title"></label>
+    <label>获奖时间<input data-f="d1"></label></div>
+</div>
+
+<!-- 已填的 atsx 控件:多选挂 choice__content,combobox 的值在输入框里 -->
+<div class="sec"><h2>基本信息</h2>
+  <label>意向城市</label>
+  <div class="atsx-select atsx-select-lg" id="city"><div class="atsx-select-selection atsx-select-selection--multiple" role="combobox">
+    <ul><li class="atsx-select-selection__choice"><div class="atsx-select-selection__choice__content">杭州</div></li>
+    <li class="atsx-select-search"><input class="atsx-select-search__field"></li></ul></div></div>
+  <label>学校名称</label>
+  <div class="atsx-select atsx-select-combobox" id="school"><div class="atsx-select-selection atsx-select-selection--single" role="combobox">
+    <ul><li class="atsx-select-search"><input class="atsx-select-search__field" value="示例大学"></li></ul></div></div>
+</div>
+<script src="../engine-v2/schema.js"></script><script src="../engine-v2/discovery.js"></script><script src="../engine-v2/adapters.js"></script><script src="../engine-v2/runtime.js"></script>
+<script>
+window.rqfRun=async()=>{
+  const P=__RQF_V2_PARTS, fields=P.discover(), resolved=P.resolveAll(fields);
+  const keyOf=(el)=>{const i=fields.findIndex(f=>f.el===el);return i<0?undefined:(resolved[i]&&resolved[i].spec.key)};
+  const q=(s)=>document.querySelector(s);
+  const read=(sel)=>{const el=q(sel);const i=fields.findIndex(f=>f.el===el||el.contains(f.el));
+    return i<0?'(未发现)':P.readControlValue(fields[i])};
+  const checks={
+    // 作品不是工作经历:宁可留空,不许把工作描述灌进作品栏
+    作品描述不归工作经历:keyOf(q('[name="works[0].desc"]'))==null,
+    作品链接也不归工作经历:keyOf(q('[name="works[0].link"]'))==null,
+    // 块内没有机器路径的字段要跟着机器路径走,不能全停在第 0 段
+    第一块奖项时间跟着第一块:keyOf(q('[data-f="d0"]'))==='awards.0.date',
+    第二块奖项时间跟着第二块:keyOf(q('[data-f="d1"]'))==='awards.1.date',
+    奖项名称各就各位:keyOf(q('[name="award[0].title"]'))==='awards.0.name'
+      &&keyOf(q('[name="award[1].title"]'))==='awards.1.name',
+    // 已填的 atsx 控件必须读得出来,否则会被当成空的去重写
+    多选已选项读得出:read('#city')==='杭州',
+    combobox已选值读得出:read('#school')==='示例大学',
+  };
+  const fails=Object.keys(checks).filter(k=>!checks[k]);
+  return {page:'feishu-ats-v2.html',version:__RQF_V2.version,pass:!fails.length,
+    total:Object.keys(checks).length,fails,keys:resolved.map(x=>x&&x.spec.key)};
+};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'));
+</script>
