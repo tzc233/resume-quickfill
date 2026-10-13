@@ -1,0 +1,68 @@
+<!doctype html><meta charset="utf-8"><title>云端模型传输层</title>
+<!-- 云端模型只换传输层:提示词、档案栏白名单、validate、计分全部复用本机那一套。
+     这一页钉死的是「发出去的到底是什么」—— 用假端点截下请求体逐条检查:
+     字段的已有值、档案内容、API Key 都不许出现在 prompt 里;
+     被硬规则拦下的字段(验证码等)一个请求都不许发出去;
+     模型乱答(白名单外的键、越界的段号)必须按 none 处理。 -->
+<script src="../ai.js"></script><script src="../ai-eval.js"></script>
+<script>
+window.rqfRun=async()=>{
+  const AI=window.rqfAI;
+  const sent=[];                      // 截下每一次请求
+  const reply=(answers)=>({ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({answers})}}]})});
+  let nextAnswers=null;
+  window.fetch=async(url,init)=>{
+    sent.push({url,headers:init.headers,body:JSON.parse(init.body)});
+    const ids=JSON.parse(init.body).messages[1].content.match(/"id":(\d+)/g).map(x=>+x.split(':')[1]);
+    return reply(nextAnswers ? nextAnswers(ids) : ids.map(id=>({id,key:'none',record:-1})));
+  };
+
+  const KEY='sk-test-DO-NOT-LEAK-0001';
+  const s=AI.createApiSession({provider:'deepseek',apiKey:KEY,lang:'zh'});
+
+  // 刻意塞进「页面已有值」和「档案内容」,它们一个字都不该被发出去
+  const fields=[
+    {id:1,label:'学校',section:'教育经历',group:'教育经历 1',value:'机密学校名',profile:'机密档案值'},
+    {id:2,label:'短信验证码',section:'基本信息',group:''},          // 硬规则拦下
+    {id:3,label:'公司',section:'实习经历',group:'实习经历 2'},
+  ];
+  nextAnswers=(ids)=>ids.map(id=>id===1?{id,key:'education.school',record:0}
+    :id===3?{id,key:'work.company',record:1}:{id,key:'none',record:-1});
+  const got=await AI.resolveFields(s,fields,{chunk:4});
+  // 只看发出去的两段消息:系统提示(里面本来就写着「验证码一律答 none」)与字段清单。
+  // 不能把自己截下的请求头一起串进来查 —— Key 当然在请求头里。
+  const asked=sent.map(r=>r.body.messages[1].content).join('\n');
+  const whole=sent.map(r=>r.body.messages.map(m=>m.content).join('\n')).join('\n');
+
+  // 模型乱答:白名单外的键、越界的段号、不属于这批的 id
+  nextAnswers=(ids)=>[{id:ids[0],key:'basic.bankCard',record:-1},
+    {id:ids[0],key:'education.school',record:99},{id:999,key:'basic.phone',record:-1}];
+  const bad=await AI.resolveFields(s,[{id:7,label:'学校',section:'教育经历',group:'教育经历 1'}],{chunk:4});
+
+  // 计分两种模式:段号算不算
+  const cases=[{id:1,label:'学校',expect:'education.school',record:0}];
+  const wrongRec=new Map([[1,{key:'education.school',record:3}]]);
+
+  const checks={
+    打到了正确的端点: sent[0].url==='https://api.deepseek.com/chat/completions',
+    Key走请求头不进提示词: sent[0].headers.Authorization==='Bearer '+KEY && !whole.includes(KEY),
+    页面已有值不外发: !whole.includes('机密学校名'),
+    档案内容不外发: !whole.includes('机密档案值'),
+    标签照常发出: asked.includes('学校') && asked.includes('公司'),
+    硬规则拦下的字段不进字段清单: !asked.includes('验证码'),
+    验证码直接判不填: got.get(2).key==='none' && got.get(2).guarded===true,
+    正常答案照常采纳: got.get(1).key==='education.school' && got.get(1).record===0
+      && got.get(3).key==='work.company' && got.get(3).record===1,
+    白名单外的键按none处理: bad.get(7).key==='none',
+    不属于这批的id被丢掉: !bad.has(999),
+    含段号计分_段号错算错填: AI.score(cases,wrongRec).wrong===1,
+    忽略段号计分_段号错算正确: AI.score(cases,wrongRec,{ignoreRecord:true}).right===1,
+    评测集仍是71题: window.rqfAIEval.reduce((n,f)=>n+f.cases.length,0)===71,
+  };
+  const fails=Object.keys(checks).filter(k=>!checks[k]);
+  return {page:'ai-api-v2.html',pass:!fails.length,total:Object.keys(checks).length,fails,
+    requests:sent.length};
+};
+if(location.search.includes('run=1'))rqfRun().then(r=>parent.postMessage({__rqf:true,...r},'*'))
+  .catch(e=>parent.postMessage({__rqf:true,page:'ai-api-v2.html',pass:false,total:0,fails:[String(e&&e.message||e)]},'*'));
+</script>

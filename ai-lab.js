@@ -16,12 +16,41 @@ function setReady(ready) {
   $('#run').disabled = !ready;
 }
 
+/* 选了 API 就不用本机模型那一套准备流程:有 Key 即可跑。 */
+const provider = () => $('#provider').value;
+const isApi = () => provider() !== 'local';
+
 async function check() {
+  $('#api-box').hidden = !isApi();
+  $('#local-card').hidden = isApi();
+  if (isApi()) {
+    const def = AI.API_PROVIDERS[provider()];
+    if (!$('#api-model').value) $('#api-model').value = def.model;
+    const ok = !!$('#api-key').value.trim();
+    $('#api-state').textContent = ok ? `已填 Key,将调用 ${def.name}` : '填入 Key 后才能运行';
+    setReady(ok);
+    return;
+  }
   const st = await AI.availability();
   $('#status').textContent = STATUS[st] || `状态:${st}`;
   $('#prepare').hidden = !(st === 'downloadable' || st === 'downloading');
   setReady(st === 'available');
 }
+
+$('#provider').addEventListener('change', check);
+$('#api-key').addEventListener('input', check);
+
+/* Key 存在 chrome.storage.local,和档案分开放,导出备份时不带它 */
+$('#api-save').addEventListener('click', async () => {
+  const cfg = { provider: provider(), model: $('#api-model').value.trim(), apiKey: $('#api-key').value.trim() };
+  $('#api-state').textContent = (await AI.saveApiConfig(cfg)) ? '✓ 已保存到本机' : '保存失败';
+});
+$('#api-clear').addEventListener('click', async () => {
+  await AI.clearApiConfig();
+  $('#api-key').value = '';
+  await check();
+  $('#api-state').textContent = '✓ 已清除';
+});
 
 // 不要在 create 之前 await 任何东西:首次下载必须发生在这次点击的用户手势里
 $('#prepare').addEventListener('click', () => {
@@ -50,14 +79,22 @@ const pct = (r) => (r.total ? Math.round((100 * r.right) / r.total) : 0);
 const line1 = (name, r) => `${name}:准确率 ${pct(r)}%(对 ${r.right} / 共 ${r.total})· 错填 ${r.wrong} · 漏答 ${r.missed} · 用时 ${(r.ms / 1000).toFixed(1)} 秒`;
 
 /* 中文提示和英文提示各跑一遍 —— 官方没声明支持中文,能不能用直接量 */
+async function makeSession(lang, first) {
+  if (!isApi()) return first && SESSION ? SESSION : AI.createSession(null, lang);
+  return AI.createApiSession({ provider: provider(), model: $('#api-model').value.trim(),
+    apiKey: $('#api-key').value.trim(), lang });
+}
+
 async function runOnce(lang, first) {
-  const session = first && SESSION ? SESSION : await AI.createSession(null, lang);
+  const session = await makeSession(lang, first);
+  const chunk = Math.max(1, Math.min(24, Number($('#chunk').value) || 4));
+  const ignoreRecord = $('#ignore-record').checked;
   const t0 = performance.now();
   const rows = [], byForm = [], trace = [];
   for (const [i, f] of window.rqfAIEval.entries()) {
     $('#summary').textContent = `${lang === 'zh' ? '中文' : '英文'}提示:正在识别第 ${i + 1}/${window.rqfAIEval.length} 组 —— ${f.form}…`;
-    const answers = await AI.resolveFields(session, f.cases, { trace });
-    const sc = AI.score(f.cases, answers);
+    const answers = await AI.resolveFields(session, f.cases, { chunk, trace });
+    const sc = AI.score(f.cases, answers, { ignoreRecord });
     byForm.push({ form: f.form, right: sc.right, total: sc.total });
     for (const r of sc.rows) rows.push({ ...r, form: f.form });
   }
@@ -100,7 +137,10 @@ $('#run').addEventListener('click', async () => {
 /* 给维护者的摘要:只有评测集里的标签和模型答案,不含任何个人信息 */
 $('#copy').addEventListener('click', async () => {
   if (!LAST) return;
-  const parts = ['# 本机模型自测结果', navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0] || ''];
+  const who = isApi() ? `${AI.API_PROVIDERS[provider()].name} / ${$('#api-model').value.trim() || AI.API_PROVIDERS[provider()].model}`
+    : '本机 Gemini Nano';
+  const parts = [`# 字段识别自测结果(${who})`, navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0] || '',
+    `每批 ${$('#chunk').value} 个字段 · 计分${$('#ignore-record').checked ? '忽略段号(只看栏位)' : '含段号'}`];
   for (const [lang, name] of LANGS) {
     const { res, rows, byForm, trace } = LAST[lang];
     const line = (r) => `- [${r.form}] ${r.label}(${[r.section, r.group].filter(Boolean).join(' / ')}):`
@@ -121,4 +161,12 @@ $('#copy').addEventListener('click', async () => {
   } catch { $('#copy').textContent = '复制失败'; }
 });
 
-check();
+(async () => {
+  const cfg = await AI.loadApiConfig();
+  if (cfg && cfg.provider) {
+    $('#provider').value = cfg.provider;
+    if (cfg.model) $('#api-model').value = cfg.model;
+    if (cfg.apiKey) $('#api-key').value = cfg.apiKey;
+  }
+  await check();
+})();

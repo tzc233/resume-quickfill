@@ -131,6 +131,76 @@
     return out;
   };
 
+  /* ---- 云端 API 传输层(实验)----------------------------------------------
+   * 本机 Nano 自测没过门槛(2026-10-08:错填 18~19,门槛是错填 0 且 ≥85%)。
+   * 换更大的模型只需要换传输:提示词、档案栏白名单、validate、计分全部复用,
+   * 发出去的仍然只有「标签 / 模块标题 / 组标题 / 下拉选项」——
+   * 页面上已有的值和档案内容一概不发(见文件头)。
+   *
+   * 与本机模式的唯一区别是:这会产生网络请求,把你正在填的那张表的字段标签
+   * 发给模型服务商。默认关闭,必须自己填 API Key 才会启用。
+   *
+   * Key 只存在 chrome.storage.local,不进 trace、不进可复制的结果、不进仓库。
+   * 调用必须发生在扩展自己的页面里(实验页 / 弹窗),绝不能放进内容脚本 ——
+   * 那等于把 Key 交到招聘页的 JS 手上。
+   * ---------------------------------------------------------------------- */
+  const API_PROVIDERS = {
+    deepseek: { name: 'DeepSeek', endpoint: 'https://api.deepseek.com/chat/completions', model: 'deepseek-chat' },
+    qwen: { name: '通义千问(百炼兼容模式)', model: 'qwen-plus',
+      endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions' },
+  };
+
+  /* OpenAI 兼容端点收不了 Prompt API 的 responseConstraint,只能靠 json_object
+   * 加提示里的格式约定。够不够严不重要 —— validate() 本来就把模型输出当不可信输入,
+   * 键不在白名单、段号越界一律按 none 处理。 */
+  const API_FORMAT = [
+    '',
+    'Return JSON only, shaped exactly like this:',
+    '{"answers":[{"id":<integer>,"key":"<profile key or none>","record":<integer -1..9>}]}',
+    'One entry per given id. No prose, no markdown fence.',
+  ].join('\n');
+
+  /** 造一个和 Prompt API 会话同形的对象:只需要 prompt(text)。 */
+  const createApiSession = ({ provider, model, apiKey, lang = 'zh' } = {}) => {
+    const def = API_PROVIDERS[provider];
+    if (!def) throw new Error('不认识的服务商:' + provider);
+    if (!apiKey) throw new Error('没有填 API Key');
+    const system = (lang === 'zh' ? SYSTEM_ZH : SYSTEM) + API_FORMAT;
+    return {
+      provider, model: model || def.model,
+      async prompt(text) {
+        const res = await fetch(def.endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: model || def.model,
+            messages: [{ role: 'system', content: system }, { role: 'user', content: text }],
+            temperature: 0,
+            response_format: { type: 'json_object' },
+          }),
+        });
+        if (!res.ok) {
+          // 别把响应体整个抛出去 —— 有些服务商会把请求头回显在错误里
+          throw new Error(`${def.name} 返回 ${res.status}`);
+        }
+        const data = await res.json();
+        return data?.choices?.[0]?.message?.content || '';
+      },
+    };
+  };
+
+  /* Key 的存取。单独放一个键,导出备份时不带它(备份是要发给别人看的)。 */
+  const API_STORE = 'rqfAiApiConfig';
+  const loadApiConfig = async () => {
+    try { return (await g.chrome?.storage?.local?.get(API_STORE))?.[API_STORE] || null; } catch { return null; }
+  };
+  const saveApiConfig = async (cfg) => {
+    try { await g.chrome?.storage?.local?.set({ [API_STORE]: cfg }); return true; } catch { return false; }
+  };
+  const clearApiConfig = async () => {
+    try { await g.chrome?.storage?.local?.remove(API_STORE); return true; } catch { return false; }
+  };
+
   const api = () => g.LanguageModel || null;
   const OPTS = { expectedInputs: [{ type: 'text', languages: ['en'] }], expectedOutputs: [{ type: 'text', languages: ['en'] }] };
 
@@ -187,12 +257,15 @@
 
   /* 计分:对 = 键对且(列表栏)段号对;错填 = 该答 none 却给了键,或给了别的键 / 别的段;
    * 漏答 = 该有键却答了 none。错填是最要紧的数 —— 它对应真实填表时的错填。 */
-  const score = (cases, answers) => {
+  /* ignoreRecord:段号交给引擎自己算(它本来就有 DOM 结构可依,这一个月还专门修过
+   * 两轮),只量模型认栏位的本事。上次本机自测 19 个错填里约 10~13 个只是段号数错 ——
+   * 两个数都给出来,才看得清模型到底弱在哪一环。 */
+  const score = (cases, answers, { ignoreRecord = false } = {}) => {
     const rows = [];
     let right = 0, wrong = 0, missed = 0;
     for (const c of cases) {
       const got = answers.get(c.id) || { key: 'none', record: -1 };
-      const recOk = !LIST.test(c.expect) || c.record === undefined || got.record === c.record;
+      const recOk = ignoreRecord || !LIST.test(c.expect) || c.record === undefined || got.record === c.record;
       let verdict;
       if (got.key === c.expect && recOk) { verdict = 'right'; right++; }
       else if (got.key === 'none') { verdict = 'missed'; missed++; }
@@ -202,5 +275,6 @@
     return { rows, right, wrong, missed, total: cases.length };
   };
 
-  g.rqfAI = { KEYS, SYSTEM, SYSTEM_ZH, buildPrompt, schema, validate, guarded, availability, createSession, resolveFields, score };
+  g.rqfAI = { KEYS, SYSTEM, SYSTEM_ZH, buildPrompt, schema, validate, guarded, availability, createSession, resolveFields, score,
+    API_PROVIDERS, createApiSession, loadApiConfig, saveApiConfig, clearApiConfig };
 })();

@@ -297,3 +297,11 @@ section.card { scroll-margin-top: 56px; }
 .lab-table tr.wrong td { background: #fef2f2; }
 .lab-table tr.missed td { color: var(--muted); }
 .card:has(.lab-table) { overflow-x: auto; }
+
+/* 自测页的模型选择:服务商、Key、批量、计分开关 */
+.lab-field { display: block; margin: 8px 0; font-size: 13px; color: #334155; }
+.lab-field select, .lab-field input { display: block; width: 100%; max-width: 420px; margin-top: 4px;
+  padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+.lab-field input[type=number] { max-width: 100px; }
+.lab-check { display: block; margin: 10px 0; font-size: 13px; color: #334155; }
+.lab-check input { margin-right: 6px; }
