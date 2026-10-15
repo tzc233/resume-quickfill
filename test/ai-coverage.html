@@ -1,0 +1,84 @@
+<!doctype html><meta charset="utf-8"><title>规则覆盖面</title>
+<!-- 评测集的 71 道题里,规则表本来就认得多少?这决定了模型到底该考什么。
+     生产里模型只该管「规则未命中」的字段 —— 规则认得的那些,模型答什么都不会被采用
+     (1.x 先跑,先匹配者胜)。把 71 道题渲染成真实 DOM 交给 1.x 引擎,
+     让它自己报 unmatched,而不是我凭规则表猜。 -->
+<main id="form"></main>
+<script src="../ai-eval.js"></script><script src="../content.js"></script>
+<script>
+(async () => {
+  // 档案给满,免得「档案中未填写」和「规则没认出来」混在一起
+  const profile = { basic: { fullName: '示例', phone: '13000000000', email: 'a@b.c', wechat: 'wx',
+      birthday: '2002-01-01', politicalStatus: '群众', ethnicity: '汉族', hometown: '示例省示例市',
+      city: '示例市', expectedCity: '示例市', expectedSalary: '面议', idNumber: 'X', idType: '身份证',
+      firstNameEn: 'Yi', lastNameEn: 'Shi', gradYear: '2027', availableDate: '2027-07' },
+    education: [{ school: '示例大学', college: '示例学院', major: '示例专业', degree: '硕士',
+      startTime: '2024-09', endTime: '2027-06', rank: '前10%', gpaScore: '3.8', studyForm: '全日制' },
+      { school: '示例二大', college: '示例二院', major: '示例二专业', degree: '本科',
+        startTime: '2020-09', endTime: '2024-06', rank: '前20%' }],
+    work: [{ company: '示例科技', title: '算法实习生', dept: '示例部门', desc: '示例描述',
+      startTime: '2025-04', endTime: '2026-03' },
+      { company: '示例二科技', title: '研究实习生', dept: '示例二部门', desc: '示例二描述' }],
+    projects: [{ name: '示例项目', role: '负责人', duty: '示例职责', desc: '示例项目描述' }],
+    papers: [{ name: '示例论文', type: '示例会议', authorOrder: '第一作者', date: '2026-01' },
+      { name: '示例二论文', type: '示例期刊', authorOrder: '第二作者', date: '2025-05' }],
+    competitions: [{ name: '示例竞赛', type: '国家级', result: '一等奖', date: '2025-10' }],
+    awards: [{ name: '示例奖学金', type: '校级', result: '一等', date: '2025-10' },
+      { name: '示例二奖学金', type: '院级', result: '二等', date: '2024-10' }],
+    languages: [{ name: '英语', cert: 'CET-6', score: '550' }],
+    family: [{ relation: '父亲', name: '示例父', company: '示例父单位', title: '示例父职务' },
+      { relation: '母亲', name: '示例母', company: '示例母单位', title: '示例母职务' }],
+    intro: '示例自我评价', skills: '示例技能', campusWork: '示例校园经历' };
+
+  /* 按 (section, group) 把同一块的字段聚到一个 div 里,区块标题用 h2 —— 和真实表单同形 */
+  const html = [];
+  for (const f of window.rqfAIEval) {
+    const bySec = new Map();
+    for (const c of f.cases) {
+      const k = c.section || '其他';
+      if (!bySec.has(k)) bySec.set(k, new Map());
+      const g = c.group || '';
+      if (!bySec.get(k).has(g)) bySec.get(k).set(g, []);
+      bySec.get(k).get(g).push(c);
+    }
+    for (const [sec, groups] of bySec) {
+      html.push('<div class="sec"><h2>' + sec + '</h2>');
+      for (const [g, cs] of groups) {
+        html.push('<div class="blk">' + (g ? '<h3>' + g + '</h3>' : '')
+          + cs.map((c) => '<label>' + c.label
+            + (c.options ? '<select data-i="' + c.id + '"><option value=""></option>'
+                + c.options.map((o) => '<option>' + o + '</option>').join('') + '</select>'
+              : '<input data-i="' + c.id + '">')
+            + '</label>').join('') + '</div>');
+      }
+      html.push('</div>');
+    }
+  }
+  form.innerHTML = html.join('');
+
+  const report = await __RQF.fill(profile);
+  // 引擎认不出来的标签(去重后的 label 列表)
+  const miss = new Set((report.unmatched || []).map((u) => u.label));
+  const all = window.rqfAIEval.flatMap((f) => f.cases);
+  const uncovered = all.filter((c) => miss.has(c.label.slice(0, 30)));
+  const byForm = window.rqfAIEval.map((f) => ({ form: f.form,
+    uncovered: f.cases.filter((c) => miss.has(c.label.slice(0, 30))).length, total: f.cases.length }));
+
+  /* 断言这套评测集「已被规则吃透」。这不是在夸规则,而是说明一件事:
+   * 它衡量不了模型的增量价值 —— 规则认得的字段,1.x 先跑、先匹配者胜,
+   * 模型答什么都不会被采用。哪天有人往评测集里加了真正未命中的题,
+   * 这条断言会翻红,届时这套集子才开始能回答「模型值不值得接」。 */
+  const needModel = uncovered.filter((c) => c.expect !== 'none');
+  const checks = {
+    评测集已被规则覆盖: uncovered.length <= 3,
+    未命中的题都不需要档案内容: needModel.length === 0,
+  };
+  const fails = Object.keys(checks).filter((k) => !checks[k]);
+  parent.postMessage({ __rqf: true, page: 'ai-coverage.html', version: __RQF.version,
+    pass: !fails.length, total: Object.keys(checks).length, fails,
+    真正需要模型的题: needModel.map((c) => c.label + '→' + c.expect),
+    共: all.length, 规则未命中: uncovered.length,
+    未命中的标签: [...new Set(uncovered.map((c) => c.label + '→' + c.expect))],
+    分组: byForm, 引擎报的unmatched: [...miss] }, '*');
+})();
+</script>
